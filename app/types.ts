@@ -1,6 +1,9 @@
 export interface Task {
   id: string;
   title: string;
+  location: string;
+  scheduledFor: string;
+  deadline?: string;  // Make deadline optional
 }
 
 export interface KanbanBoard {
@@ -14,3 +17,10 @@ export interface MainQuest {
   progress: string;
   kanban: KanbanBoard;
 }
+
+export interface ChatMessage {
+  sender: string;
+  message: string;
+}
+
+export default {};
