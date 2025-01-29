@@ -1,8 +1,8 @@
 import React, { useState, useRef } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, TextInput, ScrollView, Animated, useWindowDimensions, Platform } from 'react-native';
 import { Card } from 'react-native-paper';
-import  styles from '../styles/global.js';
-import { MainQuest, KanbanBoard, ChatMessage } from '../types';
+import  styles from './styles/global.js';
+import { MainQuest, KanbanBoard, ChatMessage } from './types.js';
 import * as Font from 'expo-font';
 import {
   useFonts,
