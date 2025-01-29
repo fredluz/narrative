@@ -261,13 +261,14 @@ const styles = StyleSheet.create({
     padding: 10,
   },
   mobileNavigation: {
-    flexDirection: 'row',
     height: 60,
     backgroundColor: '#222',
     borderTopWidth: 1,
-    borderTopColor: '#444',
-    justifyContent: 'space-around',
+    borderTopColor: '#333',
+    justifyContent: 'center',
     alignItems: 'center',
+    zIndex: 100,
+    position: 'relative',
   },
   mobileNavButton: {
     padding: 10,
@@ -287,6 +288,19 @@ const styles = StyleSheet.create({
     fontSize: 16,
     textAlign: 'center',
     marginTop: 20,
+  },
+  mobileNavButton: {
+    flex: 1,
+    padding: 10,
+    alignItems: 'center',
+    borderRadius: 8,
+  },
+  mobileNavButtonActive: {
+    backgroundColor: '#333',
+  },
+  mobileNavText: {
+    color: 'white',
+    fontSize: 16,
   },
 });
 

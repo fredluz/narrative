@@ -13,32 +13,12 @@ import {
   Poppins_400Regular,
   Poppins_700Bold,
 } from '@expo-google-fonts/poppins';
+import { HamburgerMenu } from '@/components/ui/HamburgerMenu';
 
 
-
-
-const MobileNavigation: React.FC<{ onPress: (screen: string) => void, activeScreen: string }> = ({ onPress, activeScreen }) => (
+const MobileNavigation: React.FC = () => (
   <View style={styles.mobileNavigation}>
-    <TouchableOpacity 
-      style={[styles.mobileNavButton, activeScreen === 'chat' && styles.mobileNavButtonActive]} 
-      onPress={() => onPress('chat')}>
-      <Text style={styles.mobileNavText}>Chat</Text>
-    </TouchableOpacity>
-    <TouchableOpacity 
-      style={[styles.mobileNavButton, activeScreen === 'tasks' && styles.mobileNavButtonActive]} 
-      onPress={() => onPress('tasks')}>
-      <Text style={styles.mobileNavText}>Tasks</Text>
-    </TouchableOpacity>
-    <TouchableOpacity 
-      style={[styles.mobileNavButton, activeScreen === 'quests' && styles.mobileNavButtonActive]} 
-      onPress={() => onPress('quests')}>
-      <Text style={styles.mobileNavText}>Quests</Text>
-    </TouchableOpacity>
-    <TouchableOpacity 
-      style={[styles.mobileNavButton, activeScreen === 'stats' && styles.mobileNavButtonActive]} 
-      onPress={() => onPress('stats')}>
-      <Text style={styles.mobileNavText}>Stats</Text>
-    </TouchableOpacity>
+    <HamburgerMenu />
   </View>
 );
 
@@ -130,35 +110,10 @@ export default function HomeScreen() {
         </View>
         
         <View style={styles.mobileContent}>
-          {activeScreen === 'chat' && (
-            <ChatInterface themeColor={themeColor} recentMessages={recentMessages} />
-          )}
-          {activeScreen === 'tasks' && (
-            <FlatList
-              data={tasks}
-              keyExtractor={(item) => item.id.toString()}
-              renderItem={({ item }) => (
-                <Card style={[styles.taskCard, { borderColor: themeColor, borderWidth: 2 }]}> 
-                  <Text style={styles.cardTitle}>{item.title}</Text>
-                  <Text style={styles.cardDetails}>Start: {item.scheduledFor}</Text>
-                  {item.deadline && (
-                    <Text style={[styles.cardDetails, { color: '#FF4444' }]}>
-                      Deadline: {item.deadline}
-                    </Text>
-                  )}
-                </Card>
-              )}
-            />
-          )}
-          {activeScreen === 'quests' && (
-            <Text style={styles.placeholderText}>Quests Coming Soon!</Text>
-          )}
-          {activeScreen === 'stats' && (
-            <Text style={styles.placeholderText}>Stats Coming Soon!</Text>
-          )}
+          <ChatInterface themeColor={themeColor} recentMessages={recentMessages} />
         </View>
         
-        <MobileNavigation onPress={setActiveScreen} activeScreen={activeScreen} />
+        <MobileNavigation />
       </View>
     );
   }

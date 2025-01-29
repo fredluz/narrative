@@ -5,7 +5,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import 'react-native-reanimated';
-
+import { HamburgerMenu } from '@/components/ui/HamburgerMenu';
 import { useColorScheme } from '@/hooks/useColorScheme';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
@@ -32,9 +32,9 @@ export default function RootLayout() {
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="index" />
         <Stack.Screen name="landing" />
-
-        {/* Add other screens as needed */}
+        <Stack.Screen name="(app)" options={{ headerShown: false }} />
       </Stack>
+      <HamburgerMenu />
       <StatusBar style="auto" />
     </ThemeProvider>
   );
