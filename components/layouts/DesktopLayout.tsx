@@ -7,9 +7,11 @@ import { useChatData } from '@/hooks/useChatData';
 import { useTaskData } from '@/hooks/useTaskData';
 import { useQuestData } from '@/hooks/useQuestData';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useRouter } from 'expo-router';
 import styles from '@/app/styles/global';
 
 export function DesktopLayout() {
+  const router = useRouter();
   const { themeColor } = useTheme();
   const { messages } = useChatData();
   const { tasks, taskListVisible, animatedHeight, toggleTaskList } = useTaskData();
@@ -32,6 +34,14 @@ export function DesktopLayout() {
         <Card style={[styles.mainQuestCard, { borderColor: themeColor, borderWidth: 2 }]}> 
           <Text style={styles.mainQuestTitle}>{mainQuest.title}</Text>
           <Text style={styles.cardDetails}>Progress: {mainQuest.progress}</Text>
+          <TouchableOpacity 
+            onPress={() => router.push('/quests')}
+            style={[styles.viewAllQuests, { backgroundColor: themeColor }]}
+          >
+            <Text style={[styles.viewAllQuestsText, { color: textColor }]}>
+              View All Quests
+            </Text>
+          </TouchableOpacity>
           <View style={styles.kanbanContainer}>
             {Object.keys(mainQuest.kanban).map((status) => (
               <View key={status} style={styles.kanbanColumn}>

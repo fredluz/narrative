@@ -16,12 +16,12 @@ import { useTheme } from '@/contexts/ThemeContext';
 
 const MENU_ITEMS = [
   { name: 'Notifications', icon: 'bell.fill', route: '/notification' },
-  { name: 'Quests', icon: 'flag', route: '/(app)/quests' },
-  { name: 'Tasks', icon: 'list.bullet', route: '/(app)/tasks' },
-  { name: 'Routine', icon: 'clock', route: '/(app)/routine' },
-  { name: 'Journal', icon: 'book', route: '/(app)/journal' },
-  { name: 'Profile', icon: 'person', route: '/(app)/profile' },
-  { name: 'Settings', icon: 'gear', route: '/(app)/settings' },
+  { name: 'Quests', icon: 'flag', route: '*/app/quests' },
+  { name: 'Tasks', icon: 'list.bullet', route: '*/app/tasks' },
+  { name: 'Routine', icon: 'clock', route: '*/app/routine' },
+  { name: 'Journal', icon: 'book', route: '*/app/journal' },
+  { name: 'Profile', icon: 'person', route: '*/app/profile' },
+  { name: 'Settings', icon: 'gear', route: '*/app/settings' },
 ] as const;
 
 export function HamburgerMenu() {

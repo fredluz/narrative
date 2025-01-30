@@ -1,9 +1,10 @@
 export interface Task {
-  id: string;
+  id: number;  // Changed from string to number
   title: string;
   location: string;
   scheduledFor: string;
-  deadline?: string;  // Make deadline optional
+  deadline?: string;
+  quest?: string;  // Add quest field
 }
 
 export interface KanbanBoard {
@@ -19,8 +20,21 @@ export interface MainQuest {
 }
 
 export interface ChatMessage {
-  sender: string;
+  isUser: boolean;  // Replace sender string with boolean
   message: string;
+}
+
+export interface Quest {
+  id: number;
+  title: string;
+  status: 'Active' | 'On-Hold' | 'Completed';
+  shortDescription: string;
+  questStatus: string;
+  analysis: string; // Add this field for structured XML data
+  progress: string;
+  tasks: Task[];
+  kanban?: KanbanBoard;
+  isMain?: boolean;
 }
 
 export default {};

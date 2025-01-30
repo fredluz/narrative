@@ -27,22 +27,23 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   return (
     <View style={[styles.customChatContainer, { borderColor: themeColor }]}>
       <View style={styles.chatHeader}>
-        <Text style={styles.cardTitle}>Direct Messages</Text>
+        <Text style={styles.cardTitle}>Neural Link</Text>
       </View>
       <ScrollView style={styles.chatScroll}>
         {recentMessages?.map((msg: ChatMessage, index: number) => (
           <View key={index} style={[
-            msg.sender === "You" ? styles.userMessage : styles.aiMessage,
-            msg.sender === "You" && { backgroundColor: themeColor }
+            msg.isUser ? styles.userMessage : styles.aiMessage,
+            msg.isUser && { backgroundColor: themeColor }
           ]}>
-            <Text style={[styles.messageSender, msg.sender === "You" && { color: textColor }]}>{msg.sender}</Text>
-            <Text style={[styles.messageText, msg.sender === "You" && { color: textColor }]}>{msg.message}</Text>
+            <Text style={[styles.messageText, msg.isUser && { color: textColor }]}>
+              {msg.message}
+            </Text>
           </View>
         ))}
       </ScrollView>
       <TextInput 
         style={styles.chatInput} 
-        placeholder='Type a message...' 
+        placeholder="What's on your mind?" 
         placeholderTextColor='#AAA'
       />
     </View>

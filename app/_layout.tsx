@@ -58,13 +58,10 @@ export default function RootLayout() {
           <Stack.Screen name="index" />
           <Stack.Screen name="landing" />
           <Stack.Screen name="notification" />
-          <Stack.Screen name="(app)" options={{ headerShown: false }} />
+          <Stack.Screen name="quests" />
         </Stack>
         <StatusBar style="auto" />
-        <View style={styles.themeSelector}>
-          <Ionicons name="settings" size={24} style={[styles.gearIcon, { color: textColor }]} />
-          <Text style={{ color: textColor }}>Theme Selector</Text>
-        </View>
+        {/* Removed the original theme selector button */}
       </AppThemeProvider>
     </ThemeProvider>
   );

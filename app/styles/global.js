@@ -86,9 +86,11 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-end',
     backgroundColor: '#007BFF', // Accent color (can be customized)
     padding: 12,
+    paddingHorizontal: 20, // Increased horizontal padding
     borderRadius: 16,
     marginVertical: 5,
     maxWidth: '75%',
+    marginHorizontal: 16, // Increased horizontal margin
     // Font recommendations
     fontFamily: 'Inter_400Regular', // Example UI font
   },
@@ -96,9 +98,11 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     backgroundColor: '#444',
     padding: 12,
+    paddingHorizontal: 20, // Increased horizontal padding
     borderRadius: 16,
     marginVertical: 5,
     maxWidth: '75%',
+    marginHorizontal: 8, // Increased horizontal margin
     // Font recommendations
     fontFamily: 'Inter_400Regular', // Example UI font
   },
@@ -345,6 +349,37 @@ const styles = StyleSheet.create({
   hamburgerButtonPressed: {
     opacity: 0.8,
     transform: [{ scale: 0.97 }],
+  },
+
+  viewAllQuests: {
+    padding: 10,
+    borderRadius: 8,
+    marginVertical: 10,
+    alignItems: 'center',
+  },
+  viewAllQuestsText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    fontFamily: 'Inter_700Bold',
+  },
+
+  questTasksContainer: {
+    marginTop: 20,
+    paddingTop: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#444',
+  },
+
+  setMainQuestButton: {
+    padding: 8,
+    borderRadius: 8,
+    marginLeft: 10,
+  },
+  setMainQuestButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+    fontFamily: 'Inter_700Bold',
   },
 });
 

@@ -5,15 +5,14 @@ import { useTheme } from '@/contexts/ThemeContext';
 export function useChatData() {
   const { themeColor } = useTheme();
   const [messages] = useState<ChatMessage[]>([
-    { sender: "Batcomputer", message: "Welcome back, Fred." },
-    { sender: "Batcomputer", message: "You've got technical tasks for today: getting feedback and making the database work. Also, don't forget about your date tonight." },
-    { sender: "Batcomputer", message: "Which task would you like to tackle first?" },
-    { sender: "You", message: "I'm thinking about getting the database running, but I'm worried I'll get distracted and miss my date." },
-    { sender: "System", message: "*reading details for 'Build AI Companion'*" },
-    { sender: "Batcomputer", message: "Don't worry, I'll remind you when it's time to get ready. For now, you can start working on your app." },
+    { isUser: false, message: "Rise and shine, samurai. Another day in this digital hellhole." },
+    { isUser: false, message: "Got your todo list here - feedback loops and database grind. Oh, and try not to ghost your input parameters tonight, got that hot date coming up." },
+    { isUser: false, message: "So what's it gonna be? Gonna dive into the code mines or keep staring at my gorgeous interface?" },
+    { isUser: true, message: "Thinking about tackling the database first, but yeah, can't mess up tonight's plans." },
+    { isUser: false, message: "Database work, huh? Real exciting stuff. Just don't let the corps standardize your thinking patterns. And hey - that date? That's the real quest here. Everything else is just side content." },
+    { isUser: false, message: "I'll keep an eye on the clock for ya. Shoot you a text at 6PM. Can't let you dive so deep into the code that you forget about the real world. You know how that goes." }
   ]);
 
-  // Return messages first to make order clearer
   return {
     messages,
     themeColor,
