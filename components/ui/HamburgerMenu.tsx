@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import React, { useState } from 'react';
-import { Pressable, StyleSheet, Text, View, Platform, useWindowDimensions } from 'react-native';
+import { Pressable, StyleSheet, Text, View, Platform, useWindowDimensions, ViewStyle } from 'react-native';
 import Animated, { 
   useAnimatedStyle, 
   withSpring,
@@ -11,8 +11,11 @@ import Animated, {
 
 import { IconSymbol } from './IconSymbol';
 import { Colors } from '@/constants/Colors';
+import { useThemeColor } from '@/hooks/useThemeColor';
+import { useTheme } from '@/contexts/ThemeContext';
 
 const MENU_ITEMS = [
+  { name: 'Notifications', icon: 'bell.fill', route: '/notification' },
   { name: 'Quests', icon: 'flag', route: '/(app)/quests' },
   { name: 'Tasks', icon: 'list.bullet', route: '/(app)/tasks' },
   { name: 'Routine', icon: 'clock', route: '/(app)/routine' },
@@ -26,6 +29,7 @@ export function HamburgerMenu() {
   const isMobile = Platform.OS === 'ios' || Platform.OS === 'android' || width < 768;
   const [isOpen, setIsOpen] = useState(false);
   const menuAnimation = useSharedValue(0);
+  const { themeColor } = useTheme(); // Fix: correctly destructure from useTheme
 
   const menuStyle = useAnimatedStyle(() => ({
     opacity: withTiming(menuAnimation.value, {
@@ -34,7 +38,7 @@ export function HamburgerMenu() {
     }),
     transform: [
       { 
-        translateY: withSpring(menuAnimation.value * -400, { // Increased from -300
+        translateY: withSpring(menuAnimation.value * -500, { // Increased from -300
           damping: 15,
           stiffness: 100,
         })
@@ -47,6 +51,17 @@ export function HamburgerMenu() {
     menuAnimation.value = isOpen ? 0 : 1;
   };
 
+  const buttonStyle = (pressed: boolean): ViewStyle => ({
+    ...styles.hamburgerButton,
+    ...(isMobile && styles.hamburgerButtonMobile),
+    ...(pressed && styles.hamburgerButtonPressed),
+    backgroundColor: themeColor,
+    shadowColor: themeColor,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 8,
+  });
+
   return (
     <View style={[
       styles.container,
@@ -54,11 +69,7 @@ export function HamburgerMenu() {
     ]}>
       <Pressable 
         onPress={toggleMenu} 
-        style={({ pressed }) => [
-          styles.hamburger,
-          isMobile && styles.hamburgerMobile,
-          pressed && styles.pressed
-        ]}>
+        style={({ pressed }) => buttonStyle(pressed)}>
         <IconSymbol 
           name={isOpen ? "xmark" : "line.3.horizontal"} 
           size={24} 
@@ -102,23 +113,6 @@ const styles = StyleSheet.create({
     top: 20,
     zIndex: 1000,
   },
-  hamburger: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: Colors.light.background,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 3.84,
-    elevation: 5,
-  },
-  pressed: {
-    opacity: 0.8,
-    transform: [{ scale: 0.97 }],
-  },
   menu: {
     position: 'absolute',
     top: 60,
@@ -159,14 +153,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     zIndex: 1000,
   },
-  hamburgerMobile: {
-    width: 40,
-    height: 40,
-    backgroundColor: 'transparent',
-    shadowOpacity: 0,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   menuMobile: {
     position: 'absolute',
     bottom: 120, // Increased from 60
@@ -179,5 +165,23 @@ const styles = StyleSheet.create({
     padding: 8,
     borderRadius: 12,
     zIndex: 2000,
+  },
+  hamburgerButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 5,
+  },
+  hamburgerButtonMobile: {
+    width: 40,
+    height: 40,
+    backgroundColor: 'transparent',
+    shadowOpacity: 0,
+  },
+  hamburgerButtonPressed: {
+    opacity: 0.8,
+    transform: [{ scale: 0.97 }],
   },
 });

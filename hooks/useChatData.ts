@@ -13,8 +13,9 @@ export function useChatData() {
     { sender: "Batcomputer", message: "Don't worry, I'll remind you when it's time to get ready. For now, you can start working on your app." },
   ]);
 
+  // Return messages first to make order clearer
   return {
-    themeColor,
     messages,
+    themeColor,
   };
 }

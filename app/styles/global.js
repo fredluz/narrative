@@ -302,6 +302,44 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
   },
+
+  customChatContainer: {
+    flex: 1,
+    margin: 10,
+    backgroundColor: '#333',
+    borderRadius: 12,
+    borderWidth: 2,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  
+  chatHeader: {
+    padding: 16,
+    backgroundColor: '#2A2A2A',
+    borderBottomWidth: 1,
+    borderBottomColor: '#444',
+  },
+
+  hamburgerButton: {
+    width: Platform.select({ ios: 40, android: 40, default: 48 }),
+    height: Platform.select({ ios: 40, android: 40, default: 48 }),
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 5,
+  },
+  hamburgerButtonMobile: {
+    backgroundColor: 'transparent',
+    shadowOpacity: 0,
+  },
+  hamburgerButtonPressed: {
+    opacity: 0.8,
+    transform: [{ scale: 0.97 }],
+  },
 });
 
 export default styles;

@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context'; // Install if needed
 import { ChatInterface } from '@/components/ChatInterface';
 import { HamburgerMenu } from '@/components/ui/HamburgerMenu';
 import { useChatData } from '@/hooks/useChatData';
@@ -15,17 +16,19 @@ export function MobileLayout() {
   const { messages, themeColor } = useChatData();
 
   return (
-    <View style={[styles.container, { backgroundColor: '#181818' }]}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#181818' }}>
       <View style={styles.mobileHeader}>
         <Text style={styles.mobileHeaderText}>QuestLog</Text>
       </View>
       
       <View style={styles.mobileContent}>
-        <ChatInterface themeColor={themeColor} recentMessages={messages} />
+        <ChatInterface 
+          themeColor={themeColor} 
+          recentMessages={messages}
+        />
       </View>
       
       <MobileNavigation />
-      <HamburgerMenu /> {/* Add this line */}
-    </View>
+    </SafeAreaView>
   );
 }
