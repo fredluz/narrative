@@ -381,6 +381,13 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     fontFamily: 'Inter_700Bold',
   },
+
+  statusTimestamp: {
+    color: '#FFF',
+    fontSize: 12,
+    fontFamily: 'Inter_700Bold',
+    marginBottom: 5,
+  },
 });
 
 export default styles;

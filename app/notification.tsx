@@ -1,4 +1,4 @@
-import React from 'react';
+/*import React from 'react';
 import { View } from 'react-native';
 import { ChatInterface } from '@/components/ChatInterface';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -20,3 +20,4 @@ export default function NotificationScreen() {
     </View>
   );
 }
+*/

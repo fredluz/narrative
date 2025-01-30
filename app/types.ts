@@ -35,6 +35,10 @@ export interface Quest {
   tasks: Task[];
   kanban?: KanbanBoard;
   isMain?: boolean;
+  currentStatus: {
+    timestamp: string;
+    message: string;
+  };
 }
 
 export default {};

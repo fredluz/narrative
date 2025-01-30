@@ -75,8 +75,17 @@ export function QuestsOverview() {
                     <Card style={[
                       styles.taskCard,
                       { 
-                        borderColor: themeColor,
-                        borderWidth: selectedQuest?.id === item.id ? 2 : 0
+                        borderColor: item.isMain ? getQuestCardColor(item) : themeColor,
+                        borderWidth: item.isMain ? 3 : selectedQuest?.id === item.id ? 2 : 0,
+                        backgroundColor: item.isMain ? `${getQuestCardColor(item)}22` : '#444',
+                        // Add shadow for main quest
+                        ...(item.isMain && {
+                          shadowColor: getQuestCardColor(item),
+                          shadowOffset: { width: 0, height: 0 },
+                          shadowOpacity: 0.5,
+                          shadowRadius: 8,
+                          elevation: 6,
+                        })
                       }
                     ]}>
                       <Text style={styles.cardTitle}>{item.title}</Text>
@@ -92,7 +101,7 @@ export function QuestsOverview() {
               {selectedQuest ? (
                 <ScrollView style={{ flex: 1 }} bounces={false}>
                   <Card style={[styles.mainQuestCard, { 
-                    borderColor: getQuestCardColor(selectedQuest), 
+                    borderColor: themeColor, 
                     borderWidth: 2 
                   }]}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -113,9 +122,15 @@ export function QuestsOverview() {
                       </TouchableOpacity>
                     </View>
                     <Text style={styles.cardDetails}>{selectedQuest.shortDescription}</Text>
-                    <Text style={[styles.cardDetails, { marginTop: 20, marginBottom: 20 }]}>
-                      {selectedQuest.questStatus}
-                    </Text>
+                    
+                    <Card style={[styles.taskCard, { borderColor: themeColor, borderWidth: 1 }]}>
+                      <Text style={styles.statusTimestamp}>[{selectedQuest.currentStatus.timestamp}]</Text>
+                      <Text style={styles.cardDetails}>{selectedQuest.currentStatus.message}</Text>
+                    </Card>
+
+                    <Card style={[styles.taskCard, { borderColor: themeColor, borderWidth: 1 }]}>
+                      <Text style={styles.cardDetails}>{selectedQuest.questStatus}</Text>
+                    </Card>
                     
                     <View style={styles.questTasksContainer}>
                       <Text style={[styles.cardTitle, { marginTop: 10 }]}>
