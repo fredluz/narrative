@@ -5,8 +5,8 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import 'react-native-reanimated';
-import { HamburgerMenu } from '@/components/ui/HamburgerMenu';
 import { useColorScheme } from '@/hooks/useColorScheme';
+import { ThemeProvider as AppThemeProvider } from '@/contexts/ThemeContext';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
@@ -29,13 +29,14 @@ export default function RootLayout() {
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="index" />
-        <Stack.Screen name="landing" />
-        <Stack.Screen name="(app)" options={{ headerShown: false }} />
-      </Stack>
-      <HamburgerMenu />
-      <StatusBar style="auto" />
+      <AppThemeProvider>
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="index" />
+          <Stack.Screen name="landing" />
+          <Stack.Screen name="(app)" options={{ headerShown: false }} />
+        </Stack>
+        <StatusBar style="auto" />
+      </AppThemeProvider>
     </ThemeProvider>
   );
 }
