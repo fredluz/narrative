@@ -15,6 +15,17 @@ export function DesktopLayout() {
   const { tasks, taskListVisible, animatedHeight, toggleTaskList } = useTaskData();
   const { mainQuest } = useQuestData();
 
+  const isDarkColor = (color: string) => {
+    const hex = color.replace('#', '');
+    const r = parseInt(hex.substring(0, 2), 16);
+    const g = parseInt(hex.substring(2, 4), 16);
+    const b = parseInt(hex.substring(4, 6), 16);
+    const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+    return brightness < 128;
+  };
+
+  const textColor = isDarkColor(themeColor) ? '#fff' : '#000';
+
   return (
     <View style={[styles.container, { backgroundColor: '#181818' }]}> 
       <View style={styles.column}>
@@ -44,7 +55,7 @@ export function DesktopLayout() {
         <TouchableOpacity 
           onPress={toggleTaskList} 
           style={[styles.toggleButton, { backgroundColor: themeColor }]}>
-          <Text style={styles.toggleButtonText}>
+          <Text style={[styles.toggleButtonText, { color: textColor }]}>
             {taskListVisible ? "Hide Tasks" : "Show Upcoming Tasks"}
           </Text>
         </TouchableOpacity>

@@ -209,6 +209,12 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 10,
     left: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  gearIcon: {
+    marginRight: 5,
+    color: 'white',
   },
   colorInput: {
     backgroundColor: '#222',

@@ -12,14 +12,16 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import 'react-native-reanimated';
-import { useColorScheme } from 'react-native';
-import { ThemeProvider as AppThemeProvider } from '@/contexts/ThemeContext';
-
+import { useColorScheme, View, Text } from 'react-native';
+import { ThemeProvider as AppThemeProvider, useTheme } from '@/contexts/ThemeContext';
+import { Ionicons } from '@expo/vector-icons';
+import styles from './styles/global';
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
+  const { themeColor } = useTheme();
   const [loaded] = useFonts({
     Inter_400Regular,
     Inter_700Bold,
@@ -27,6 +29,17 @@ export default function RootLayout() {
     Poppins_700Bold,
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
   });
+
+  const isDarkColor = (color: string) => {
+    const hex = color.replace('#', '');
+    const r = parseInt(hex.substring(0, 2), 16);
+    const g = parseInt(hex.substring(2, 4), 16);
+    const b = parseInt(hex.substring(4, 6), 16);
+    const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+    return brightness < 128;
+  };
+
+  const textColor = isDarkColor(themeColor) ? '#fff' : '#000';
 
   useEffect(() => {
     if (loaded) {
@@ -48,6 +61,10 @@ export default function RootLayout() {
           <Stack.Screen name="(app)" options={{ headerShown: false }} />
         </Stack>
         <StatusBar style="auto" />
+        <View style={styles.themeSelector}>
+          <Ionicons name="settings" size={24} style={[styles.gearIcon, { color: textColor }]} />
+          <Text style={{ color: textColor }}>Theme Selector</Text>
+        </View>
       </AppThemeProvider>
     </ThemeProvider>
   );

@@ -1,12 +1,23 @@
 import React, { useState } from 'react';
 import { View, Pressable, Text, StyleSheet, Modal } from 'react-native';
 import ColorPicker from 'react-native-wheel-color-picker';
-import { IconSymbol } from './IconSymbol';
+import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
 
 export function SettingsButton() {
   const [isOpen, setIsOpen] = useState(false);
   const { themeColor, setThemeColor } = useTheme();
+
+  const isDarkColor = (color: string) => {
+    const hex = color.replace('#', '');
+    const r = parseInt(hex.substring(0, 2), 16);
+    const g = parseInt(hex.substring(2, 4), 16);
+    const b = parseInt(hex.substring(4, 6), 16);
+    const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+    return brightness < 128;
+  };
+
+  const textColor = isDarkColor(themeColor) ? '#fff' : '#000';
 
   return (
     <View style={styles.container}>
@@ -14,9 +25,14 @@ export function SettingsButton() {
         onPress={() => setIsOpen(!isOpen)}
         style={({ pressed }) => [
           styles.button,
+          { backgroundColor: themeColor },
           pressed && styles.pressed
         ]}>
-        <IconSymbol name="gearshape.fill" size={24} color="#fff" />
+        <Ionicons
+          name="settings"
+          size={24}
+          color={textColor}
+        />
       </Pressable>
       
       <Modal
@@ -34,7 +50,7 @@ export function SettingsButton() {
             onStartShouldSetResponder={() => true}
             onTouchEnd={e => e.stopPropagation()}
           >
-            <Text style={styles.label}>Theme Color</Text>
+            <Text style={[styles.label, { color: textColor }]}>Theme Color</Text>
             <View style={styles.pickerContainer}>
               <ColorPicker
                 color={themeColor}
@@ -46,7 +62,7 @@ export function SettingsButton() {
               />
             </View>
             <View style={styles.currentColor}>
-              <Text style={styles.colorText}>Current: {themeColor}</Text>
+              <Text style={[styles.colorText, { color: textColor }]}>Current: {themeColor}</Text>
               <View style={[styles.colorPreview, { backgroundColor: themeColor }]} />
             </View>
           </View>
