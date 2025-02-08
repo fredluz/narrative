@@ -3,13 +3,13 @@ import { View, Text, TouchableOpacity, FlatList, ScrollView, Dimensions } from '
 import { Card } from 'react-native-paper';
 import { useTheme } from '@/contexts/ThemeContext';
 import styles from '@/app/styles/global';
-import { useQuestData } from '@/hooks/useQuestData';
+import { useQuests } from '@/services/questsService';
 import { Quest } from '@/app/types';
 
 type QuestStatus = 'Active' | 'On-Hold' | 'Completed';
 
 export function QuestsOverview() {
-  const { quests, setQuestAsMain } = useQuestData();
+  const { quests, setQuestAsMain } = useQuests();
   const { themeColor } = useTheme();
   const [activeTab, setActiveTab] = useState<QuestStatus>('Active');
   const [selectedQuest, setSelectedQuest] = useState<Quest | null>(null);
@@ -20,7 +20,7 @@ export function QuestsOverview() {
   const tabs: QuestStatus[] = ['Active', 'On-Hold', 'Completed'];
 
   const getQuestCardColor = (quest: Quest) => {
-    if (quest.isMain) {
+    if (quest.is_main) {  // Changed from isMain
       // Create a less saturated version of themeColor
       const hex = themeColor.replace('#', '');
       const r = parseInt(hex.substring(0, 2), 16);
@@ -75,11 +75,11 @@ export function QuestsOverview() {
                     <Card style={[
                       styles.taskCard,
                       { 
-                        borderColor: item.isMain ? getQuestCardColor(item) : themeColor,
-                        borderWidth: item.isMain ? 3 : selectedQuest?.id === item.id ? 2 : 0,
-                        backgroundColor: item.isMain ? `${getQuestCardColor(item)}22` : '#444',
+                        borderColor: item.is_main ? getQuestCardColor(item) : themeColor,  // Changed from isMain
+                        borderWidth: item.is_main ? 3 : selectedQuest?.id === item.id ? 2 : 0,  // Changed from isMain
+                        backgroundColor: item.is_main ? `${getQuestCardColor(item)}22` : '#444',  // Changed from isMain
                         // Add shadow for main quest
-                        ...(item.isMain && {
+                        ...(item.is_main && {  // Changed from isMain
                           shadowColor: getQuestCardColor(item),
                           shadowOffset: { width: 0, height: 0 },
                           shadowOpacity: 0.5,
@@ -89,8 +89,6 @@ export function QuestsOverview() {
                       }
                     ]}>
                       <Text style={styles.cardTitle}>{item.title}</Text>
-                      <Text style={styles.cardDetails}>Tasks: {item.tasks.length}</Text>
-                      <Text style={styles.cardDetails}>Progress: {item.progress}</Text>
                     </Card>
                   </TouchableOpacity>
                 )}
@@ -111,22 +109,32 @@ export function QuestsOverview() {
                         style={[
                           styles.setMainQuestButton,
                           { 
-                            backgroundColor: selectedQuest.isMain ? '#666' : themeColor,
-                            opacity: selectedQuest.isMain ? 0.7 : 1
+                            backgroundColor: selectedQuest.is_main ? '#666' : themeColor,  // Changed from isMain
+                            opacity: selectedQuest.is_main ? 0.7 : 1  // Changed from isMain
                           }
                         ]}
                       >
                         <Text style={styles.setMainQuestButtonText}>
-                          {selectedQuest.isMain ? 'Main Quest' : 'Set as Main Quest'}
+                          {selectedQuest.is_main ? 'Main Quest' : 'Set as Main Quest'}  // Changed from isMain
                         </Text>
                       </TouchableOpacity>
                     </View>
-                    <Text style={styles.cardDetails}>{selectedQuest.shortDescription}</Text>
+                    <Text style={styles.cardDetails}>{selectedQuest.tagline}</Text>
                     
-                    <Card style={[styles.taskCard, { borderColor: themeColor, borderWidth: 1 }]}>
-                      <Text style={styles.statusTimestamp}>[{selectedQuest.currentStatus.timestamp}]</Text>
-                      <Text style={styles.cardDetails}>{selectedQuest.currentStatus.message}</Text>
-                    </Card>
+                    {selectedQuest?.currentStatus ? (
+                      <Card style={[styles.taskCard, { borderColor: themeColor, borderWidth: 1 }]}>
+                        <Text style={styles.statusTimestamp}>
+                          [{selectedQuest.currentStatus.timestamp}]
+                        </Text>
+                        <Text style={styles.cardDetails}>
+                          {selectedQuest.currentStatus.message}
+                        </Text>
+                      </Card>
+                    ) : (
+                      <Card style={[styles.taskCard, { borderColor: themeColor, borderWidth: 1 }]}>
+                        <Text style={styles.cardDetails}>No current status</Text>
+                      </Card>
+                    )}
 
                     <Card style={[styles.taskCard, { borderColor: themeColor, borderWidth: 1 }]}>
                       <Text style={styles.cardDetails}>{selectedQuest.questStatus}</Text>
@@ -134,16 +142,16 @@ export function QuestsOverview() {
                     
                     <View style={styles.questTasksContainer}>
                       <Text style={[styles.cardTitle, { marginTop: 10 }]}>
-                        Current Tasks ({selectedQuest.tasks.length})
+                        Current Tasks ({selectedQuest.tasks?.length || 0})
                       </Text>
-                      {selectedQuest.tasks.map((task) => (
+                      {selectedQuest.tasks?.map((task) => (
                         <Card 
                           key={task.id} 
                           style={[styles.taskCard, { borderColor: themeColor, borderWidth: 1 }]}
                         >
                           <Text style={styles.cardTitle}>{task.title}</Text>
                           <Text style={styles.cardDetails}>
-                            Start: {task.scheduledFor} ({task.location})
+                            Start: {task.scheduled_for} ({task.location})
                           </Text>
                           {task.deadline && (
                             <Text style={[styles.cardDetails, { color: '#FF4444' }]}>

@@ -382,6 +382,60 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_700Bold',
   },
 
+  desktopHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    backgroundColor: '#181818',
+    borderBottomWidth: 1,
+    borderBottomColor: '#333',
+  },
+  desktopHeaderText: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  errorText: {
+    color: '#FF4444',
+    textAlign: 'center',
+    padding: 20,
+  },
+  
+  kanbanContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 16,
+    gap: 8,
+  },
+  kanbanColumn: {
+    flex: 1,
+    gap: 8,
+  },
+  kanbanTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  kanbanTaskCard: {
+    padding: 8,
+    backgroundColor: '#333',
+  },
+  kanbanTask: {
+    color: '#fff',
+    fontSize: 14,
+  },
+  errorText: {
+    color: '#FF4444',
+    textAlign: 'center',
+    padding: 20,
+    fontSize: 16,
+  },
+  cardQuest: {
+    color: '#aaa',
+    fontSize: 14,
+    marginTop: 4,
+  },
   statusTimestamp: {
     color: '#FFF',
     fontSize: 12,

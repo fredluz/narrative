@@ -8,12 +8,11 @@ export interface BaseEntity {
 export interface Task extends BaseEntity {
   title: string;
   description?: string;
-  scheduled_for: string;  // Changed from scheduledFor
+  scheduledFor: string;
   location: string;
-  quest_id: number;      // Changed from questId
+  questId: number;
   deadline?: string;
-  status: 'ToDo' | 'InProgress' | 'Done';
-  quest?: Quest;         // For joined data
+  quest?: Quest; // For joined data
 }
 
 export interface JournalEntry extends BaseEntity {
@@ -30,20 +29,30 @@ export interface QuestStatus extends BaseEntity {
 
 export interface Quest extends BaseEntity {
   title: string;
-  tagline: string;
-  is_main: boolean;  // Changed from isMain
+  shortDescription: string;
+  isMain: boolean;
   status: 'Active' | 'On-Hold' | 'Completed';
+  progress: string;
   questStatus?: string;
   currentStatus?: QuestStatus;
-  tasks?: Task[];  // Added as optional since it's a joined field
+  tasks: Task[];
+  kanban?: Record<string, string[]>;
   analysis?: string;
-  parent_quest_id?: number;  // Changed from parentQuestId
-  start_date?: string;  // Changed from startDate
-  end_date?: string;   // Changed from endDate
+  parentQuestId?: number;
+  startDate?: string;
+  endDate?: string;
   StatusHistory?: Record<string, QuestStatus>;
 }
 
-export interface ChatMessage extends BaseEntity {
-  message: string;
-  isUser: boolean;
+export interface Memo extends BaseEntity {
+  title: string;
+  content: string;
+  questId: number;
+}
+
+export interface MainQuest {
+  id: number;
+  title: string;
+  progress: string;
+  kanban: Record<string, string[]>;
 }
