@@ -1,7 +1,13 @@
 import React from 'react';
 import { View, Text, FlatList, TouchableOpacity } from 'react-native';
 import { Card } from 'react-native-paper';
-import Animated from 'react-native-reanimated';
+import Animated, { 
+  useAnimatedStyle, 
+  withSpring, 
+  withTiming,
+  Easing,
+  interpolate
+} from 'react-native-reanimated';
 import { useTasks } from '@/services/tasksService';
 import { useTheme } from '@/contexts/ThemeContext';
 import { LoadingSpinner } from './ui/LoadingSpinner';
@@ -9,11 +15,25 @@ import styles from '@/app/styles/global';
 
 export function TaskList() {
   const { themeColor } = useTheme();
-  const { tasks, taskListVisible, animatedHeight, toggleTaskList, loading, error } = useTasks();
+  const { tasks, taskListVisible, setTaskListVisible, loading, error } = useTasks();
 
-  if (loading) return <LoadingSpinner />;
-  if (error) return <Text style={{ color: 'red' }}>{error}</Text>;
-  if (!tasks.length) return null;
+  const animatedStyle = useAnimatedStyle(() => {
+    const progress = taskListVisible ? 1 : 0;
+    
+    return {
+      transform: [{
+        scaleY: withSpring(progress, {
+          damping: 50,
+          stiffness: 90
+        })
+      }],
+      opacity: withSpring(progress, {
+        damping: 55,
+        stiffness: 100
+      }),
+      transformOrigin: 'top',
+    };
+  });
 
   const isDarkColor = (color: string) => {
     const hex = color.replace('#', '');
@@ -26,26 +46,37 @@ export function TaskList() {
 
   const textColor = isDarkColor(themeColor) ? '#fff' : '#000';
 
+  if (loading) {
+    return (
+      <View style={styles.column}>
+        <LoadingSpinner />
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.column}>
+        <Text style={{ color: 'red' }}>{error}</Text>
+      </View>
+    );
+  }
+
+  if (!tasks.length) {
+    return <View style={styles.column} />;
+  }
+
   return (
     <View style={styles.column}>
       <TouchableOpacity 
-        onPress={toggleTaskList} 
+        onPress={() => setTaskListVisible(!taskListVisible)} 
         style={[styles.toggleButton, { backgroundColor: themeColor }]}>
         <Text style={[styles.toggleButtonText, { color: textColor }]}>
           {taskListVisible ? "Hide Tasks" : "Show Upcoming Tasks"}
         </Text>
       </TouchableOpacity>
       
-      <Animated.View style={[
-        styles.taskContainer,
-        {
-          maxHeight: animatedHeight.interpolate({
-            inputRange: [0, 1],
-            outputRange: ['0%', '100%']
-          }),
-          opacity: animatedHeight
-        }
-      ]}>
+      <Animated.View style={[styles.taskContainer, animatedStyle]}>
         <FlatList
           data={tasks}
           keyExtractor={(item) => item.id.toString()}

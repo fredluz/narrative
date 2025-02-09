@@ -3,6 +3,7 @@ import { View, Text } from 'react-native';
 import { Card } from 'react-native-paper';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Task } from '@/app/types';
+import {formatDateTime } from '@/utils/dateFormatters';
 import styles from '@/app/styles/global';
 
 type TaskStatus = 'ToDo' | 'InProgress' | 'Done';
@@ -44,9 +45,12 @@ export function KanbanBoard({ tasks }: KanbanBoardProps) {
               style={[styles.kanbanTaskCard, { borderColor: themeColor, borderWidth: 1 }]}
             >
               <Text style={styles.kanbanTask}>{task.title}</Text>
+              <Text style={[styles.statusTimestamp]}>
+                {formatDateTime(task.scheduled_for, 'compact')}
+              </Text>
               {task.deadline && (
                 <Text style={[styles.cardDetails, { color: '#FF4444', fontSize: 12 }]}>
-                  Due: {task.deadline}
+                  {formatDateTime(task.deadline, 'deadline')}
                 </Text>
               )}
             </Card>

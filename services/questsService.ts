@@ -1,6 +1,23 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import type { Quest } from '@/app/types';
+import { RealtimePostgresChangesPayload } from '@supabase/supabase-js';
+
+// Explicitly define the payload structure
+interface QuestUpdate {
+  id: number;
+  is_main: boolean;
+  title?: string;
+  tagline?: string;
+  status?: string;
+  start_date?: string;
+  end_date?: string;
+  analysis?: string;
+  parent_quest_id?: number;
+  tags?: string[];
+}
+
+type QuestRealtimePayload = RealtimePostgresChangesPayload<QuestUpdate>;
 
 // Database operations
 async function fetchQuests(): Promise<Quest[]> {
@@ -34,31 +51,13 @@ async function fetchQuests(): Promise<Quest[]> {
 }
 
 async function updateMainQuest(questId: number): Promise<void> {
-  console.log('Updating main quest:', questId);
-  
-  // First, unset any existing main quest
-  const { error: error1 } = await supabase
-    .from('quests')
-    .update({ is_main: false })
-    .not('id', 'eq', questId); // Don't update the quest we're setting as main
-
-  if (error1) {
-    console.error('Error unsetting main quest:', error1);
-    throw error1;
+  console.log('Calling RPC to update main quest:', questId);
+  const { error } = await supabase.rpc('update_main_quest', { p_quest_id: questId });
+  if (error) {
+    console.error('Error updating main quest via RPC:', error);
+    throw error;
   }
-
-  // Then set the new main quest
-  const { error: error2 } = await supabase
-    .from('quests')
-    .update({ is_main: true })
-    .eq('id', questId);
-
-  if (error2) {
-    console.error('Error setting main quest:', error2);
-    throw error2;
-  }
-
-  console.log('Successfully updated main quest');
+  console.log('Successfully updated main quest via RPC');
 }
 
 // React Hook
@@ -67,41 +66,46 @@ export function useQuests() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const loadQuests = async () => {
+    try {
+      setLoading(true);
+      const allQuests = await fetchQuests();
+      setQuests(allQuests);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load quests');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     loadQuests();
   }, []);
 
-  async function loadQuests() {
-    try {
-      setLoading(true);
-      const allQuests = await fetchQuests();
-      console.log('Loaded quests:', allQuests);
-      setQuests(allQuests);
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to load quests';
-      console.error('Error loading quests:', errorMessage);
-      setError(errorMessage);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  const mainQuest = quests.find(q => q.is_main) || null;
-  console.log('Current main quest:', mainQuest);
-
   return {
-    mainQuest,
+    mainQuest: quests.find(q => q.is_main) || null,
     quests,
     setQuestAsMain: async (questId: number) => {
       try {
+        // Update local state first (optimistic update)
+        setQuests(currentQuests => 
+          currentQuests.map(quest => ({
+            ...quest,
+            is_main: quest.id === questId
+          }))
+        );
+        
+        // Then update the database
         await updateMainQuest(questId);
-        await loadQuests();
       } catch (err) {
+        // If the update fails, reload from DB to get correct state
+        console.error('Failed to set main quest:', err);
         setError(err instanceof Error ? err.message : 'Failed to update main quest');
+        await loadQuests();
       }
     },
     loading,
     error,
-    reload: loadQuests
+    reload: loadQuests  // Expose reload function
   };
 }

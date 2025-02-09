@@ -6,6 +6,7 @@ import { useFonts, Inter_400Regular, Inter_700Bold } from '@expo-google-fonts/in
 import { Poppins_400Regular, Poppins_700Bold } from '@expo-google-fonts/poppins';
 import { ThemeProvider as AppThemeProvider } from '@/contexts/ThemeContext';
 import { SupabaseProvider, useSupabase } from '@/contexts/SupabaseContext';
+import { QuestUpdateProvider } from '@/contexts/QuestUpdateContext';
 import styles from './styles/global';
 
 // Keep the splash screen visible while we fetch resources
@@ -37,16 +38,18 @@ function RootLayoutContent() {
   return (
     <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
       <AppThemeProvider>
-        <Stack
-          screenOptions={{
-            headerShown: false,
-            contentStyle: { backgroundColor: '#181818' },
-          }}
-        >
-          <Stack.Screen name="index" options={{ headerShown: false }} />
-          <Stack.Screen name="landing" options={{ headerShown: false }} />
-          <Stack.Screen name="quests" options={{ headerShown: false }} />
-        </Stack>
+        <QuestUpdateProvider>
+          <Stack
+            screenOptions={{
+              headerShown: false,
+              contentStyle: { backgroundColor: '#181818' },
+            }}
+          >
+            <Stack.Screen name="index" options={{ headerShown: false }} />
+            <Stack.Screen name="landing" options={{ headerShown: false }} />
+            <Stack.Screen name="quests" options={{ headerShown: false }} />
+          </Stack>
+        </QuestUpdateProvider>
       </AppThemeProvider>
     </View>
   );

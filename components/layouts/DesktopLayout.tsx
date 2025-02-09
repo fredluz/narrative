@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { Card } from 'react-native-paper';
 import { ChatInterface } from '@/components/ChatInterface';
@@ -11,13 +11,32 @@ import { useQuests } from '@/services/questsService';  // Updated import path
 import { useTheme } from '@/contexts/ThemeContext';
 import { useRouter } from 'expo-router';
 import styles from '@/app/styles/global';
+import { formatDateTime } from '@/utils/dateFormatters';
+import { useQuestUpdate } from '@/contexts/QuestUpdateContext';
 
 export function DesktopLayout() {
   const router = useRouter();
   const { themeColor } = useTheme();
   const { messages } = useChatData();
-  const { mainQuest, loading, error } = useQuests();  // Updated hook name
-  
+  const { mainQuest, loading, error, reload } = useQuests();  // Updated hook name and added reload
+  const { shouldUpdate, resetUpdate } = useQuestUpdate();
+
+  console.log("DesktopLayout mainQuest:", mainQuest); // Add log to check main quest
+
+  // Simple mount-time load
+  useEffect(() => {
+    reload();
+  }, []);
+
+  // Add effect to check for updates
+  useEffect(() => {
+    if (shouldUpdate) {
+      console.log('Update triggered, reloading quests');
+      reload();
+      resetUpdate();
+    }
+  }, [shouldUpdate]);
+
   const isDarkColor = (color: string) => {
     const hex = color.replace('#', '');
     const r = parseInt(hex.substring(0, 2), 16);
@@ -52,6 +71,16 @@ export function DesktopLayout() {
           ) : (
             <>
               <Text style={styles.mainQuestTitle}>{mainQuest.title}</Text>
+              {mainQuest.start_date && (
+                <Text style={[styles.cardDetails, { color: '#AAA' }]}>
+                  Started: {formatDateTime(mainQuest.start_date)}
+                </Text>
+              )}
+              {mainQuest.end_date && (
+                <Text style={[styles.cardDetails, { color: '#AAA' }]}>
+                  Target completion: {formatDateTime(mainQuest.end_date)}
+                </Text>
+              )}
               <TouchableOpacity 
                 onPress={() => router.push('/quests')}
                 style={[styles.viewAllQuests, { backgroundColor: themeColor }]}

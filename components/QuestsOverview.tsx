@@ -8,8 +8,13 @@ import { Quest } from '@/app/types';
 
 type QuestStatus = 'Active' | 'On-Hold' | 'Completed';
 
-export function QuestsOverview() {
-  const { quests, setQuestAsMain } = useQuests();
+interface QuestsOverviewProps {
+  quests: Quest[];
+  onSelectQuest: (questId: number) => void;
+  currentMainQuest: Quest | null;
+}
+
+export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: QuestsOverviewProps) {
   const { themeColor } = useTheme();
   const [activeTab, setActiveTab] = useState<QuestStatus>('Active');
   const [selectedQuest, setSelectedQuest] = useState<Quest | null>(null);
@@ -105,17 +110,17 @@ export function QuestsOverview() {
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                       <Text style={styles.mainQuestTitle}>{selectedQuest.title}</Text>
                       <TouchableOpacity 
-                        onPress={() => setQuestAsMain(selectedQuest.id)}
+                        onPress={() => onSelectQuest(selectedQuest.id)}
                         style={[
                           styles.setMainQuestButton,
                           { 
-                            backgroundColor: selectedQuest.is_main ? '#666' : themeColor,  // Changed from isMain
-                            opacity: selectedQuest.is_main ? 0.7 : 1  // Changed from isMain
+                            backgroundColor: selectedQuest.id === currentMainQuest?.id ? '#666' : themeColor,
+                            opacity: selectedQuest.id === currentMainQuest?.id ? 0.7 : 1
                           }
                         ]}
                       >
                         <Text style={styles.setMainQuestButtonText}>
-                          {selectedQuest.is_main ? 'Main Quest' : 'Set as Main Quest'}  // Changed from isMain
+                          {selectedQuest.id === currentMainQuest?.id ? 'Main Quest' : 'Set as Main Quest'}
                         </Text>
                       </TouchableOpacity>
                     </View>

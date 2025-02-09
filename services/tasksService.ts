@@ -1,5 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
-import { Animated } from 'react-native';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import type { Task } from '@/app/types';
 
@@ -48,7 +47,6 @@ export function useTasks() {
   const [taskListVisible, setTaskListVisible] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const animatedHeight = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     loadTasks();
@@ -69,22 +67,10 @@ export function useTasks() {
     }
   }
 
-  const toggleTaskList = () => {
-    const toValue = taskListVisible ? 0 : 1;
-    setTaskListVisible(!taskListVisible);
-    
-    Animated.timing(animatedHeight, {
-      toValue,
-      duration: 300,
-      useNativeDriver: false,
-    }).start();
-  };
-
   return {
     tasks,
     taskListVisible,
-    animatedHeight,
-    toggleTaskList,
+    setTaskListVisible,
     loading,
     error,
     reload: loadTasks
