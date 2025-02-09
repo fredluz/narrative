@@ -10,9 +10,10 @@ import { useChatData } from '@/hooks/useChatData';
 import { useQuests } from '@/services/questsService';  // Updated import path
 import { useTheme } from '@/contexts/ThemeContext';
 import { useRouter } from 'expo-router';
-import styles from '@/app/styles/global';
+import styles, { colors } from '@/app/styles/global';
 import { formatDateTime } from '@/utils/dateFormatters';
 import { useQuestUpdate } from '@/contexts/QuestUpdateContext';
+import { JournalPanel } from '@/components/JournalPanel';
 
 export function DesktopLayout() {
   const router = useRouter();
@@ -49,27 +50,28 @@ export function DesktopLayout() {
   const textColor = isDarkColor(themeColor) ? '#fff' : '#000';
 
   return (
-    <View style={[styles.container, { backgroundColor: '#181818' }]}> 
+    <View style={[styles.container]}> 
       <View style={styles.column}>
-        <Card style={[styles.mainQuestCard, { borderColor: themeColor, borderWidth: 2 }]}> 
-          {loading ? (
-            <LoadingSpinner />
-          ) : error ? (
-            <Text style={[styles.errorText, { color: '#FF4444' }]}>{error}</Text>
-          ) : !mainQuest ? (
-            <View>
-              <Text style={styles.mainQuestTitle}>No main quest selected</Text>
-              <TouchableOpacity 
-                onPress={() => router.push('/quests')}
-                style={[styles.viewAllQuests, { backgroundColor: themeColor }]}
-              >
-                <Text style={[styles.viewAllQuestsText, { color: textColor }]}>
-                  Select Main Quest
-                </Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <>
+        {loading ? (
+          <LoadingSpinner />
+        ) : error ? (
+          <Text style={[styles.errorText]}>{error}</Text>
+        ) : !mainQuest ? (
+          <View>
+            <Text style={styles.mainQuestTitle}>No main quest selected</Text>
+            <TouchableOpacity 
+              onPress={() => router.push('/quests')}
+              style={[styles.viewAllQuests, { backgroundColor: themeColor }]}
+            >
+              <Text style={[styles.viewAllQuestsText, { color: textColor }]}>
+                Select Main Quest
+              </Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <>
+            <Card style={[styles.mainQuestCard, { borderColor: themeColor, borderWidth: 2 }]}>
+              {/* Main quest header section */}
               <Text style={styles.mainQuestTitle}>{mainQuest.title}</Text>
               {mainQuest.start_date && (
                 <Text style={[styles.cardDetails, { color: '#AAA' }]}>
@@ -90,9 +92,12 @@ export function DesktopLayout() {
                 </Text>
               </TouchableOpacity>
               <KanbanBoard tasks={mainQuest.tasks || []} />
-            </>
-          )}
-        </Card>
+            </Card>
+
+            {/* Journal panel as separate card */}
+            <JournalPanel themeColor={themeColor} textColor={textColor} />
+          </>
+        )}
       </View>
 
       <View style={styles.column}>

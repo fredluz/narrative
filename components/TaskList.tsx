@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, FlatList, TouchableOpacity } from 'react-native';
+import { formatDateTime } from '@/utils/dateFormatters';
 import { Card } from 'react-native-paper';
 import Animated, { 
   useAnimatedStyle, 
@@ -84,11 +85,11 @@ export function TaskList() {
             <Card style={[styles.taskCard, { borderColor: themeColor, borderWidth: 2 }]}> 
               <Text style={styles.cardTitle}>{item.title}</Text>
               <Text style={styles.cardDetails}>
-                Start: {item.scheduled_for} ({item.location})
+                Start: {formatDateTime(item.scheduled_for) }({item.location})
               </Text>
               {item.deadline && (
                 <Text style={[styles.cardDetails, { color: '#FF4444' }]}>
-                  Deadline: {item.deadline}
+                  Deadline:{formatDateTime(item.deadline)}
                 </Text>
               )}
               <Text style={styles.cardQuest}>

@@ -1,5 +1,45 @@
 import { StyleSheet, Platform } from 'react-native';
 
+// Cyberpunk-inspired color palette
+export const colors = {
+  // Base colors
+  background: '#181818',
+  surface: '#222222',
+  surfaceLight: '#333333',
+  surfaceLighter: '#444444',
+  
+  // Text colors
+  textPrimary: '#FFFFFF',
+  textSecondary: '#BBBBBB',
+  textMuted: '#888888',
+  textDanger: '#FF4444',
+  
+  // Border colors
+  borderDark: '#333333',
+  borderLight: '#444444',
+  
+  // Overlay/Modal colors
+  overlay: 'rgba(0, 0, 0, 0.5)',
+  modalBackground: '#222222',
+  
+  // Status colors
+  success: '#00CC66',
+  warning: '#FFB020',
+  error: '#FF4444',
+  info: '#0088FF',
+};
+
+// Update the shared card styles to use consistent colors
+const commonCardStyle = {
+  backgroundColor: colors.surface, // All main sections use the same surface color
+  borderRadius: 12,
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 2 },
+  shadowOpacity: 0.2,
+  shadowRadius: 4,
+  elevation: 3,
+};
+
 /**
  * A refined dark theme leveraging subtle gradients, rounded corners, 
  * modern font pairings, soft shadows, and increased spacing to improve 
@@ -21,7 +61,7 @@ const styles = StyleSheet.create({
       android: 'column',
       default: 'row'
     }),
-    backgroundColor: '#1E1E1E', // Base dark background
+    backgroundColor: colors.background, // Base dark background
     padding: Platform.select({
       ios: 10,
       android: 10,
@@ -36,7 +76,7 @@ const styles = StyleSheet.create({
   chatCard: {
     flex: 1,
     padding: 16,
-    backgroundColor: '#333',
+    backgroundColor: colors.surfaceLight,
     borderRadius: 12,          // Subtle rounded corners
     margin: Platform.select({
       ios: 10,
@@ -70,15 +110,8 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   mainQuestCard: {
+    ...commonCardStyle,
     padding: 20,
-    backgroundColor: '#222',
-    borderRadius: 16,
-    // Slightly stronger shadow for main quest
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 4,
   },
 
   // Modern chat bubble styling
@@ -96,7 +129,7 @@ const styles = StyleSheet.create({
   },
   aiMessage: {
     alignSelf: 'flex-start',
-    backgroundColor: '#444',
+    backgroundColor: colors.surfaceLighter,
     padding: 12,
     paddingHorizontal: 20, // Increased horizontal padding
     borderRadius: 16,
@@ -108,36 +141,29 @@ const styles = StyleSheet.create({
   },
   messageSender: {
     fontWeight: 'bold',
-    color: '#FFF',
+    color: colors.textPrimary,
     fontFamily: 'Poppins_700Bold', // Example heading font
   },
   messageText: {
-    color: '#FFF',
+    color: colors.textPrimary,
     fontFamily: 'Inter_400Regular',
   },
   chatMessage: {
-    color: '#FFF',
+    color: colors.textPrimary,
     fontStyle: 'italic',
     fontFamily: 'Inter_400Regular',
   },
 
   // Kanban-related styles
   kanbanTaskCard: {
+    ...commonCardStyle,
     padding: 10,
-    backgroundColor: '#333',
     marginVertical: 5,
-    borderRadius: 12,
-    // Soft shadow
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
   },
   mainQuestTitle: {
     fontSize: 22,
     fontWeight: 'bold',
-    color: '#FFF',
+    color: colors.textPrimary,
     marginBottom: 10,
     fontFamily: 'Poppins_700Bold',
   },
@@ -153,12 +179,12 @@ const styles = StyleSheet.create({
   kanbanTitle: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#AAA',
+    color: colors.textSecondary,
     fontFamily: 'Poppins_700Bold',
   },
   kanbanTask: {
     fontSize: 14,
-    color: '#CCC',
+    color: colors.textMuted,
     marginVertical: 3,
     fontFamily: 'Inter_400Regular',
   },
@@ -169,32 +195,25 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   taskCard: {
+    ...commonCardStyle,
     padding: 15,
-    backgroundColor: '#444',
     marginBottom: 10,
-    borderRadius: 12,
-    // Soft shadow
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
   },
   cardTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#FFF',
+    color: colors.textPrimary,
     marginBottom: 5,
     fontFamily: 'Poppins_700Bold',
   },
   cardDetails: {
     fontSize: 14,
-    color: '#BBB',
+    color: colors.textSecondary,
     marginBottom: 5,
     fontFamily: 'Inter_400Regular',
   },
   cardQuest: {
-    color: '#FFF',
+    color: colors.textPrimary,
     fontSize: 14,
     fontStyle: 'italic',
     fontFamily: 'Inter_400Regular',
@@ -202,8 +221,8 @@ const styles = StyleSheet.create({
 
   // Chat input & theme selector
   chatInput: {
-    backgroundColor: '#222',
-    color: 'white',
+    backgroundColor: colors.surface,
+    color: colors.textPrimary,
     marginVertical: 10,
     padding: 10,
     borderRadius: 12,
@@ -218,11 +237,11 @@ const styles = StyleSheet.create({
   },
   gearIcon: {
     marginRight: 5,
-    color: 'white',
+    color: colors.textPrimary,
   },
   colorInput: {
-    backgroundColor: '#222',
-    color: 'white',
+    backgroundColor: colors.surface,
+    color: colors.textPrimary,
     padding: 5,
     borderRadius: 12,
     fontFamily: 'Inter_400Regular',
@@ -235,7 +254,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   toggleButton: {
-    backgroundColor: '#444',
+    backgroundColor: colors.surfaceLighter,
     padding: 12,
     borderRadius: 12,
     marginBottom: 10,
@@ -247,7 +266,7 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   toggleButtonText: {
-    color: 'white',
+    color: colors.textPrimary,
     fontSize: 16,
     fontFamily: 'Inter_400Regular',
   },
@@ -255,14 +274,14 @@ const styles = StyleSheet.create({
   // Mobile-specific styles
   mobileHeader: {
     height: 50,
-    backgroundColor: '#222',
+    backgroundColor: colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
     borderBottomWidth: 1,
-    borderBottomColor: '#444',
+    borderBottomColor: colors.borderLight,
   },
   mobileHeaderText: {
-    color: '#FFF',
+    color: colors.textPrimary,
     fontSize: 20,
     fontWeight: 'bold',
   },
@@ -272,9 +291,9 @@ const styles = StyleSheet.create({
   },
   mobileNavigation: {
     height: 60,
-    backgroundColor: '#222',
+    backgroundColor: colors.surface,
     borderTopWidth: 1,
-    borderTopColor: '#333',
+    borderTopColor: colors.borderDark,
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 100,
@@ -287,14 +306,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   mobileNavButtonActive: {
-    backgroundColor: '#444',
+    backgroundColor: colors.surfaceLighter,
   },
   mobileNavText: {
-    color: '#FFF',
+    color: colors.textPrimary,
     fontSize: 14,
   },
   placeholderText: {
-    color: '#888',
+    color: colors.textMuted,
     fontSize: 16,
     textAlign: 'center',
     marginTop: 20,
@@ -306,32 +325,26 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   mobileNavButtonActive: {
-    backgroundColor: '#333',
+    backgroundColor: colors.surfaceLight,
   },
   mobileNavText: {
-    color: 'white',
+    color: colors.textPrimary,
     fontSize: 16,
   },
 
   customChatContainer: {
+    ...commonCardStyle,
     flex: 1,
     margin: 10,
-    backgroundColor: '#333',
-    borderRadius: 12,
     borderWidth: 2,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 5,
   },
   
   chatHeader: {
     padding: 16,
-    backgroundColor: '#2A2A2A',
+    backgroundColor: colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: '#444',
+    borderBottomColor: colors.borderLight,
   },
 
   hamburgerButton: {
@@ -367,7 +380,7 @@ const styles = StyleSheet.create({
     marginTop: 20,
     paddingTop: 20,
     borderTopWidth: 1,
-    borderTopColor: '#444',
+    borderTopColor: colors.borderLight,
   },
 
   setMainQuestButton: {
@@ -376,7 +389,7 @@ const styles = StyleSheet.create({
     marginLeft: 10,
   },
   setMainQuestButtonText: {
-    color: '#fff',
+    color: colors.textPrimary,
     fontSize: 12,
     fontWeight: 'bold',
     fontFamily: 'Inter_700Bold',
@@ -387,17 +400,17 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 20,
-    backgroundColor: '#181818',
+    backgroundColor: colors.background,
     borderBottomWidth: 1,
-    borderBottomColor: '#333',
+    borderBottomColor: colors.borderDark,
   },
   desktopHeaderText: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#fff',
+    color: colors.textPrimary,
   },
   errorText: {
-    color: '#FF4444',
+    color: colors.textDanger,
     textAlign: 'center',
     padding: 20,
   },
@@ -419,28 +432,37 @@ const styles = StyleSheet.create({
   },
   kanbanTaskCard: {
     padding: 8,
-    backgroundColor: '#333',
+    backgroundColor: colors.surfaceLight,
   },
   kanbanTask: {
-    color: '#fff',
+    color: colors.textPrimary,
     fontSize: 14,
   },
   errorText: {
-    color: '#FF4444',
+    color: colors.textDanger,
     textAlign: 'center',
     padding: 20,
     fontSize: 16,
   },
   cardQuest: {
-    color: '#aaa',
+    color: colors.textPrimary,
     fontSize: 14,
     marginTop: 4,
   },
   statusTimestamp: {
-    color: '#FFF',
+    color: colors.textPrimary,
     fontSize: 12,
     fontFamily: 'Inter_700Bold',
     marginBottom: 5,
+  },
+
+  aiEntryText: {
+    fontSize: 14,
+    color: colors.textMuted,
+    fontStyle: 'italic',
+    fontFamily: 'Inter_400Regular',
+    marginTop: 8,
+    lineHeight: 20,
   },
 });
 
