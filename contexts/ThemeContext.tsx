@@ -7,13 +7,13 @@ interface ThemeContextType {
 }
 
 const ThemeContext = createContext<ThemeContextType>({
-  themeColor: '#00008B',
+  themeColor: '#2c8c0f',
   setThemeColor: () => {},
   textColor: '#fff',
 });
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [themeColor, setThemeColor] = useState('#00008B');
+  const [themeColor, setThemeColor] = useState('#2c8c0f');
   const isDark = useMemo(() => {
     const hex = themeColor.replace('#', '');
     const rgb = parseInt(hex, 16);
