@@ -14,6 +14,7 @@ import styles, { colors } from '@/app/styles/global';
 import { formatDateTime } from '@/utils/dateFormatters';
 import { useQuestUpdate } from '@/contexts/QuestUpdateContext';
 import { JournalPanel } from '@/components/JournalPanel';
+import { questStyles } from '@/app/styles/questStyles';
 
 export function DesktopLayout() {
   const router = useRouter();
@@ -58,36 +59,36 @@ export function DesktopLayout() {
           <Text style={[styles.errorText]}>{error}</Text>
         ) : !mainQuest ? (
           <View>
-            <Text style={styles.mainQuestTitle}>No main quest selected</Text>
+            <Text style={questStyles.mainQuestTitle}>No main quest selected</Text>
             <TouchableOpacity 
               onPress={() => router.push('/quests')}
-              style={[styles.viewAllQuests, { backgroundColor: themeColor }]}
+              style={[questStyles.viewAllQuests, { backgroundColor: themeColor }]}
             >
-              <Text style={[styles.viewAllQuestsText, { color: textColor }]}>
+              <Text style={[questStyles.viewAllQuestsText, { color: textColor }]}>
                 Select Main Quest
               </Text>
             </TouchableOpacity>
           </View>
         ) : (
           <>
-            <Card style={[styles.mainQuestCard, { borderColor: themeColor, borderWidth: 2 }]}>
+            <Card style={[questStyles.mainQuestCard, { borderColor: themeColor, borderWidth: 2 }]}>
               {/* Main quest header section */}
-              <Text style={styles.mainQuestTitle}>{mainQuest.title}</Text>
+              <Text style={questStyles.mainQuestTitle}>{mainQuest.title}</Text>
               {mainQuest.start_date && (
-                <Text style={[styles.cardDetails, { color: '#AAA' }]}>
+                <Text style={questStyles.questDetails}>
                   Started: {formatDateTime(mainQuest.start_date)}
                 </Text>
               )}
               {mainQuest.end_date && (
-                <Text style={[styles.cardDetails, { color: '#AAA' }]}>
+                <Text style={questStyles.questDetails}>
                   Target completion: {formatDateTime(mainQuest.end_date)}
                 </Text>
               )}
               <TouchableOpacity 
                 onPress={() => router.push('/quests')}
-                style={[styles.viewAllQuests, { backgroundColor: themeColor }]}
+                style={[questStyles.viewAllQuests, { backgroundColor: themeColor }]}
               >
-                <Text style={[styles.viewAllQuestsText, { color: textColor }]}>
+                <Text style={[questStyles.viewAllQuestsText, { color: textColor }]}>
                   View All Quests
                 </Text>
               </TouchableOpacity>

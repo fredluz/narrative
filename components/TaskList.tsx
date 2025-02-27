@@ -1,40 +1,31 @@
 import React from 'react';
 import { View, Text, FlatList, TouchableOpacity } from 'react-native';
-import { formatDateTime } from '@/utils/dateFormatters';
 import { Card } from 'react-native-paper';
-import Animated, { 
-  useAnimatedStyle, 
-  withSpring, 
-  withTiming,
-  Easing,
-  interpolate
-} from 'react-native-reanimated';
+import Animated, { useAnimatedStyle, withSpring } from 'react-native-reanimated';
+import { formatDateTime } from '@/utils/dateFormatters';
 import { useTasks } from '@/services/tasksService';
 import { useTheme } from '@/contexts/ThemeContext';
 import { LoadingSpinner } from './ui/LoadingSpinner';
+import { taskStyles } from '@/app/styles/taskStyles';
 import styles from '@/app/styles/global';
 
 export function TaskList() {
   const { themeColor } = useTheme();
   const { tasks, taskListVisible, setTaskListVisible, loading, error } = useTasks();
 
-  const animatedStyle = useAnimatedStyle(() => {
-    const progress = taskListVisible ? 1 : 0;
-    
-    return {
-      transform: [{
-        scaleY: withSpring(progress, {
-          damping: 50,
-          stiffness: 90
-        })
-      }],
-      opacity: withSpring(progress, {
-        damping: 55,
-        stiffness: 100
-      }),
-      transformOrigin: 'top',
-    };
-  });
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{
+      scaleY: withSpring(taskListVisible ? 1 : 0, {
+        damping: 50,
+        stiffness: 90
+      })
+    }],
+    opacity: withSpring(taskListVisible ? 1 : 0, {
+      damping: 55,
+      stiffness: 100
+    }),
+    transformOrigin: 'top',
+  }));
 
   const isDarkColor = (color: string) => {
     const hex = color.replace('#', '');
@@ -57,8 +48,8 @@ export function TaskList() {
 
   if (error) {
     return (
-      <View style={styles.column}>
-        <Text style={{ color: 'red' }}>{error}</Text>
+      <View style={[styles.column, taskStyles.errorContainer]}>
+        <Text style={taskStyles.errorText}>{error}</Text>
       </View>
     );
   }
@@ -71,28 +62,30 @@ export function TaskList() {
     <View style={styles.column}>
       <TouchableOpacity 
         onPress={() => setTaskListVisible(!taskListVisible)} 
-        style={[styles.toggleButton, { backgroundColor: themeColor }]}>
-        <Text style={[styles.toggleButtonText, { color: textColor }]}>
+        style={[taskStyles.toggleButton, { backgroundColor: themeColor }]}
+      >
+        <Text style={[taskStyles.toggleButtonText, { color: textColor }]}>
           {taskListVisible ? "Hide Tasks" : "Show Upcoming Tasks"}
         </Text>
       </TouchableOpacity>
       
-      <Animated.View style={[styles.taskContainer, animatedStyle]}>
+      <Animated.View style={[taskStyles.container, animatedStyle]}>
         <FlatList
           data={tasks}
           keyExtractor={(item) => item.id.toString()}
           renderItem={({ item }) => (
-            <Card style={[styles.taskCard, { borderColor: themeColor, borderWidth: 2 }]}> 
-              <Text style={styles.cardTitle}>{item.title}</Text>
-              <Text style={styles.cardDetails}>
-                Start: {formatDateTime(item.scheduled_for) }({item.location})
+            <Card style={[taskStyles.taskCard, { borderColor: themeColor, borderWidth: 2 }]}> 
+              <Text style={taskStyles.cardTitle}>{item.title}</Text>
+              <Text style={taskStyles.cardDetails}>
+                Start: {formatDateTime(item.scheduled_for)}
               </Text>
+              <Text style={taskStyles.location}>Location: {item.location}</Text>
               {item.deadline && (
-                <Text style={[styles.cardDetails, { color: '#FF4444' }]}>
-                  Deadline:{formatDateTime(item.deadline)}
+                <Text style={taskStyles.deadline}>
+                  Deadline: {formatDateTime(item.deadline)}
                 </Text>
               )}
-              <Text style={styles.cardQuest}>
+              <Text style={taskStyles.questReference}>
                 Quest: {item.quest?.title || 'No Quest Assigned'}
               </Text>
             </Card>

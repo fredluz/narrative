@@ -2,36 +2,45 @@ import { StyleSheet, Platform } from 'react-native';
 
 // Cyberpunk-inspired color palette
 export const colors = {
-  // Base colors
-  background: '#181818',
-  surface: '#222222',
-  surfaceLight: '#333333',
-  surfaceLighter: '#444444',
-  
-  // Text colors
-  textPrimary: '#FFFFFF',
-  textSecondary: '#BBBBBB',
-  textMuted: '#888888',
-  textDanger: '#FF4444',
-  
-  // Border colors
-  borderDark: '#333333',
-  borderLight: '#444444',
-  
-  // Overlay/Modal colors
-  overlay: 'rgba(0, 0, 0, 0.5)',
-  modalBackground: '#222222',
-  
-  // Status colors
-  success: '#00CC66',
-  warning: '#FFB020',
-  error: '#FF4444',
-  info: '#0088FF',
+  background: '#0A0A0A',
+  backgroundSecondary: '#151515',
+  card: '#1A1A1A',
+  cardDark: '#121212',
+  text: '#F0F0F0',
+  textMuted: '#999999',
+  border: 'rgba(255, 255, 255, 0.1)',
+  error: '#FF6B6B',
+  success: '#50FA7B',
+  warning: '#FFB86C',
+  info: '#8BE9FD',
+  accent1: '#FF0055', // Neon pink/red
+  accent2: '#0092FF', // Neon blue
+  accent3: '#50FA7B', // Neon green
+  accent4: '#BD93F9', // Neon purple
+  accent5: '#FFB86C', // Neon orange
+  overlay: 'rgba(12, 12, 15, 0.8)',
+};
+
+// Common shadow styles for the cyberpunk UI elements
+const cyberpunkShadow = {
+  shadowColor: '#000',
+  shadowOffset: {
+    width: 0,
+    height: 3,
+  },
+  shadowOpacity: 0.5,
+  shadowRadius: 5,
+  elevation: 8,
+};
+
+const neonBorderEffect = {
+  borderWidth: 1,
+  borderRadius: 4,
 };
 
 // Update the shared card styles to use consistent colors
 const commonCardStyle = {
-  backgroundColor: colors.surface, // All main sections use the same surface color
+  backgroundColor: colors.card, // All main sections use the same surface color
   borderRadius: 12,
   shadowColor: '#000',
   shadowOffset: { width: 0, height: 2 },
@@ -76,7 +85,7 @@ const styles = StyleSheet.create({
   chatCard: {
     flex: 1,
     padding: 16,
-    backgroundColor: colors.surfaceLight,
+    backgroundColor: colors.card,
     borderRadius: 12,          // Subtle rounded corners
     margin: Platform.select({
       ios: 10,
@@ -104,20 +113,18 @@ const styles = StyleSheet.create({
   chatContainer: {
     flex: 1,
     marginBottom: 10,
-  },
-  mainQuestContainer: {
-    flex: 2,
-    marginBottom: 10,
-  },
-  mainQuestCard: {
-    ...commonCardStyle,
-    padding: 20,
+    backgroundColor: colors.backgroundSecondary,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    overflow: 'hidden',
+    ...cyberpunkShadow,
   },
 
   // Modern chat bubble styling
   userMessage: {
     alignSelf: 'flex-end',
-    backgroundColor: '#007BFF', // Accent color (can be customized)
+    backgroundColor: colors.accent2, // Accent color (can be customized)
     padding: 12,
     paddingHorizontal: 20, // Increased horizontal padding
     borderRadius: 16,
@@ -129,7 +136,7 @@ const styles = StyleSheet.create({
   },
   aiMessage: {
     alignSelf: 'flex-start',
-    backgroundColor: colors.surfaceLighter,
+    backgroundColor: colors.cardDark,
     padding: 12,
     paddingHorizontal: 20, // Increased horizontal padding
     borderRadius: 16,
@@ -141,54 +148,30 @@ const styles = StyleSheet.create({
   },
   messageSender: {
     fontWeight: 'bold',
-    color: colors.textPrimary,
+    color: colors.text,
     fontFamily: 'Poppins_700Bold', // Example heading font
   },
   messageText: {
-    color: colors.textPrimary,
+    color: colors.text,
     fontFamily: 'Inter_400Regular',
   },
   chatMessage: {
-    color: colors.textPrimary,
+    color: colors.text,
     fontStyle: 'italic',
     fontFamily: 'Inter_400Regular',
   },
+  
 
-  // Kanban-related styles
-  kanbanTaskCard: {
-    ...commonCardStyle,
-    padding: 10,
-    marginVertical: 5,
+  updateButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 4,
   },
-  mainQuestTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: colors.textPrimary,
-    marginBottom: 10,
-    fontFamily: 'Poppins_700Bold',
-  },
-  kanbanContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 10,
-  },
-  kanbanColumn: {
-    flex: 1,
-    marginHorizontal: 5,
-  },
-  kanbanTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: colors.textSecondary,
-    fontFamily: 'Poppins_700Bold',
-  },
-  kanbanTask: {
+
+  updateButtonText: {
     fontSize: 14,
-    color: colors.textMuted,
-    marginVertical: 3,
-    fontFamily: 'Inter_400Regular',
+    fontWeight: '500',
   },
-
   // Task-related styles
   taskContainer: {
     flex: 1,
@@ -198,31 +181,27 @@ const styles = StyleSheet.create({
     ...commonCardStyle,
     padding: 15,
     marginBottom: 10,
+    ...cyberpunkShadow,
   },
   cardTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: colors.textPrimary,
+    color: colors.text,
     marginBottom: 5,
     fontFamily: 'Poppins_700Bold',
   },
   cardDetails: {
     fontSize: 14,
-    color: colors.textSecondary,
+    color: colors.textMuted,
     marginBottom: 5,
     fontFamily: 'Inter_400Regular',
   },
-  cardQuest: {
-    color: colors.textPrimary,
-    fontSize: 14,
-    fontStyle: 'italic',
-    fontFamily: 'Inter_400Regular',
-  },
+ 
 
   // Chat input & theme selector
   chatInput: {
-    backgroundColor: colors.surface,
-    color: colors.textPrimary,
+    backgroundColor: 'rgba(30, 30, 30, 0.7)',
+    color: colors.text,
     marginVertical: 10,
     padding: 10,
     borderRadius: 12,
@@ -237,11 +216,11 @@ const styles = StyleSheet.create({
   },
   gearIcon: {
     marginRight: 5,
-    color: colors.textPrimary,
+    color: colors.text,
   },
   colorInput: {
-    backgroundColor: colors.surface,
-    color: colors.textPrimary,
+    backgroundColor: colors.card,
+    color: colors.text,
     padding: 5,
     borderRadius: 12,
     fontFamily: 'Inter_400Regular',
@@ -254,7 +233,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   toggleButton: {
-    backgroundColor: colors.surfaceLighter,
+    backgroundColor: colors.cardDark,
     padding: 12,
     borderRadius: 12,
     marginBottom: 10,
@@ -266,7 +245,7 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   toggleButtonText: {
-    color: colors.textPrimary,
+    color: colors.text,
     fontSize: 16,
     fontFamily: 'Inter_400Regular',
   },
@@ -274,14 +253,14 @@ const styles = StyleSheet.create({
   // Mobile-specific styles
   mobileHeader: {
     height: 50,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.card,
     justifyContent: 'center',
     alignItems: 'center',
     borderBottomWidth: 1,
-    borderBottomColor: colors.borderLight,
+    borderBottomColor: colors.border,
   },
   mobileHeaderText: {
-    color: colors.textPrimary,
+    color: colors.text,
     fontSize: 20,
     fontWeight: 'bold',
   },
@@ -291,9 +270,9 @@ const styles = StyleSheet.create({
   },
   mobileNavigation: {
     height: 60,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.card,
     borderTopWidth: 1,
-    borderTopColor: colors.borderDark,
+    borderTopColor: colors.border,
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 100,
@@ -306,10 +285,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   mobileNavButtonActive: {
-    backgroundColor: colors.surfaceLighter,
+    backgroundColor: colors.cardDark,
   },
   mobileNavText: {
-    color: colors.textPrimary,
+    color: colors.text,
     fontSize: 14,
   },
   placeholderText: {
@@ -325,10 +304,10 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   mobileNavButtonActive: {
-    backgroundColor: colors.surfaceLight,
+    backgroundColor: colors.cardDark,
   },
   mobileNavText: {
-    color: colors.textPrimary,
+    color: colors.text,
     fontSize: 16,
   },
 
@@ -342,9 +321,9 @@ const styles = StyleSheet.create({
   
   chatHeader: {
     padding: 16,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.card,
     borderBottomWidth: 1,
-    borderBottomColor: colors.borderLight,
+    borderBottomColor: colors.border,
   },
 
   hamburgerButton: {
@@ -364,36 +343,6 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.97 }],
   },
 
-  viewAllQuests: {
-    padding: 10,
-    borderRadius: 8,
-    marginVertical: 10,
-    alignItems: 'center',
-  },
-  viewAllQuestsText: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    fontFamily: 'Inter_700Bold',
-  },
-
-  questTasksContainer: {
-    marginTop: 20,
-    paddingTop: 20,
-    borderTopWidth: 1,
-    borderTopColor: colors.borderLight,
-  },
-
-  setMainQuestButton: {
-    padding: 8,
-    borderRadius: 8,
-    marginLeft: 10,
-  },
-  setMainQuestButtonText: {
-    color: colors.textPrimary,
-    fontSize: 12,
-    fontWeight: 'bold',
-    fontFamily: 'Inter_700Bold',
-  },
 
   desktopHeader: {
     flexDirection: 'row',
@@ -402,55 +351,22 @@ const styles = StyleSheet.create({
     padding: 20,
     backgroundColor: colors.background,
     borderBottomWidth: 1,
-    borderBottomColor: colors.borderDark,
+    borderBottomColor: colors.border,
   },
   desktopHeaderText: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: colors.textPrimary,
+    color: colors.text,
   },
   errorText: {
-    color: colors.textDanger,
-    textAlign: 'center',
-    padding: 20,
-  },
-  
-  kanbanContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 16,
-    gap: 8,
-  },
-  kanbanColumn: {
-    flex: 1,
-    gap: 8,
-  },
-  kanbanTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 8,
-  },
-  kanbanTaskCard: {
-    padding: 8,
-    backgroundColor: colors.surfaceLight,
-  },
-  kanbanTask: {
-    color: colors.textPrimary,
-    fontSize: 14,
-  },
-  errorText: {
-    color: colors.textDanger,
+    color: colors.error,
     textAlign: 'center',
     padding: 20,
     fontSize: 16,
-  },
-  cardQuest: {
-    color: colors.textPrimary,
-    fontSize: 14,
-    marginTop: 4,
+    fontStyle: 'italic',
   },
   statusTimestamp: {
-    color: colors.textPrimary,
+    color: colors.text,
     fontSize: 12,
     fontFamily: 'Inter_700Bold',
     marginBottom: 5,
@@ -458,11 +374,56 @@ const styles = StyleSheet.create({
 
   aiEntryText: {
     fontSize: 14,
-    color: colors.textMuted,
+    color: colors.text,
     fontStyle: 'italic',
     fontFamily: 'Inter_400Regular',
     marginTop: 8,
     lineHeight: 20,
+    backgroundColor: colors.overlay,
+    padding: 15,
+    borderRadius: 6,
+    borderLeftWidth: 2,
+    marginVertical: 10,
+  },
+
+  // Cyberpunk UI elements
+  neonText: {
+    // Text with neon glow effect
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 4,
+    fontWeight: 'bold',
+  },
+
+  glitchContainer: {
+    position: 'relative',
+    overflow: 'hidden',
+  },
+
+  verticalAccent: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    width: 3,
+    left: 0,
+  },
+
+  horizontalDivider: {
+    height: 1,
+    width: '100%',
+    backgroundColor: colors.border,
+    marginVertical: 15,
+  },
+
+  scanlines: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    opacity: 0.07,
+    backgroundColor: 'transparent',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.1)',
   },
 });
 

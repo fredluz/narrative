@@ -3,8 +3,8 @@ import { View, Text } from 'react-native';
 import { Card } from 'react-native-paper';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Task } from '@/app/types';
-import {formatDateTime } from '@/utils/dateFormatters';
-import styles from '@/app/styles/global';
+import { formatDateTime } from '@/utils/dateFormatters';
+import { questStyles } from '@/app/styles/questStyles';
 
 type TaskStatus = 'ToDo' | 'InProgress' | 'Done';
 
@@ -33,23 +33,23 @@ export function KanbanBoard({ tasks }: KanbanBoardProps) {
   });
 
   return (
-    <View style={styles.kanbanContainer}>
+    <View style={questStyles.kanbanContainer}>
       {(Object.keys(groupedTasks) as TaskStatus[]).map((status) => (
-        <View key={status} style={styles.kanbanColumn}>
-          <Text style={[styles.kanbanTitle, { color: 'white' }]}>
+        <View key={status} style={questStyles.kanbanColumn}>
+          <Text style={questStyles.kanbanTitle}>
             {status.replace(/([A-Z])/g, ' $1').trim()}
           </Text>
           {groupedTasks[status].map((task) => (
             <Card 
               key={task.id} 
-              style={[styles.kanbanTaskCard, { borderColor: themeColor, borderWidth: 1 }]}
+              style={[questStyles.kanbanTaskCard, { borderColor: themeColor, borderWidth: 1 }]}
             >
-              <Text style={styles.kanbanTask}>{task.title}</Text>
-              <Text style={[styles.statusTimestamp]}>
+              <Text style={questStyles.kanbanTask}>{task.title}</Text>
+              <Text style={questStyles.statusTimestamp}>
                 {formatDateTime(task.scheduled_for, 'compact')}
               </Text>
               {task.deadline && (
-                <Text style={[styles.cardDetails, { color: '#FF4444', fontSize: 12 }]}>
+                <Text style={questStyles.deadline}>
                   {formatDateTime(task.deadline, 'deadline')}
                 </Text>
               )}
