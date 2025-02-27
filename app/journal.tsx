@@ -147,13 +147,8 @@ const JournalScreen: React.FC = () => {
   const secondaryColor = getSecondaryColor(themeColor);
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#0A0A0A', height: windowHeight }}>
-      {/* Replaced LinearGradient with a simple View */}
-      <View style={{ 
-        flex: 1, 
-        height: windowHeight,
-        backgroundColor: '#121212',
-      }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#0A0A0A' }}>
+      <View style={{ flex: 1, backgroundColor: '#121212' }}>
         <View style={[journalStyles.container, { backgroundColor: 'transparent' }]}>
           <View style={journalStyles.header}>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>

@@ -27,21 +27,42 @@ export function useJournal() {
       const startDate = formatDate(sevenDaysAgo);
       const endDate = formatDate(today);
       
+      console.log('Fetching entries from', startDate, 'to', endDate);
       const journalEntries = await journalService.getEntries(startDate, endDate);
+      console.log('Fetched entries:', journalEntries);
       
       // Convert to our local format
       const entriesRecord: Record<string, JournalEntry> = {};
-      const localEntriesRecord: Record<string, string> = {};
-      
       journalEntries.forEach((entry: JournalEntry) => {
         if (entry.date) {
+          console.log(`Adding entry for date ${entry.date} to local records:`, entry);
           entriesRecord[entry.date] = entry;
-          localEntriesRecord[entry.date] = entry.user_entry;
         }
       });
       
       setEntries(entriesRecord);
-      setLocalEntries(localEntriesRecord);
+      console.log('Updated entries state:', entriesRecord);
+      
+      // Keep any unsaved changes in localEntries
+      const todayString = formatDate(today);
+      if (!entriesRecord[todayString] && !localEntries[todayString]) {
+        console.log(`No entry found for today (${todayString}), creating empty local entry`);
+        setLocalEntries(prev => ({
+          ...prev,
+          [todayString]: ''
+        }));
+      }
+      
+      // Check if current date entry exists but has no local counterpart
+      const currentDateStr = formatDate(currentDate);
+      if (entriesRecord[currentDateStr] && localEntries[currentDateStr] === undefined) {
+        console.log(`Found entry for current date ${currentDateStr} but no local entry, initializing local state`);
+        // This is important - initialize local entry with the database value
+        setLocalEntries(prev => ({
+          ...prev,
+          [currentDateStr]: entriesRecord[currentDateStr].user_entry || ''
+        }));
+      }
     } catch (err: any) {
       const errorMessage = err?.message || "Failed to load journal entries";
       setError(errorMessage);
@@ -49,69 +70,77 @@ export function useJournal() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [currentDate]);
 
-  // Load entries when component mounts
+  // Load entries whenever currentDate changes
   useEffect(() => {
+    console.log('Current date changed to', formatDate(currentDate), '- refreshing entries');
     fetchRecentEntries();
-  }, [fetchRecentEntries]);
+  }, [fetchRecentEntries, currentDate]);
 
-  const getEntry = (date: Date) => {
+  const getEntry = useCallback((date: Date) => {
     const dateStr = formatDate(date);
+    
     // First check local entries (for unsaved changes)
     if (localEntries[dateStr] !== undefined) {
+      console.log('Returning local entry for', dateStr, 'length:', localEntries[dateStr]?.length || 0);
       return localEntries[dateStr];
     }
+    
     // Then check saved entries
     const entry = entries[dateStr];
+    console.log('Returning saved entry for', dateStr, 'exists:', !!entry, 'length:', entry?.user_entry?.length || 0);
     return entry ? entry.user_entry : '';
-  };
+  }, [entries, localEntries]);
 
-  const getAiAnalysis = (date: Date) => {
+  const getAiAnalysis = useCallback((date: Date) => {
     const dateStr = formatDate(date);
     const entry = entries[dateStr];
     return entry ? entry.ai_analysis : '';
-  };
+  }, [entries]);
 
   // Update local entry text without saving to database
-  const updateLocalEntry = (date: Date, text: string) => {
+  const updateLocalEntry = useCallback((date: Date, text: string) => {
     const dateStr = formatDate(date);
     setLocalEntries(prev => ({
       ...prev,
       [dateStr]: text
     }));
-  };
+  }, []);
 
   // Save entry to the database
   const saveEntry = async (date: Date) => {
     const dateStr = formatDate(date);
-    const text = localEntries[dateStr] || '';
+    let text = localEntries[dateStr];
     
     try {
       setLoading(true);
-      setError(null); // Clear any previous errors
-      console.log(`Attempting to save entry for ${dateStr} with content length: ${text.length}`);
+      setError(null);
+      console.log(`Attempting to save entry for ${dateStr} with content:`, text);
       
-      const savedEntry = await journalService.saveEntry(dateStr, text);
+      const savedEntry = await journalService.saveEntry(dateStr, text || '');
+      console.log('Successfully saved entry:', savedEntry);
       
-      // If the entry doesn't have an AI analysis yet, generate one
-      if (!savedEntry.ai_analysis && text.trim()) {
-        const aiAnalysis = await journalService.generateAnalysis(savedEntry.id, text);
-        savedEntry.ai_analysis = aiAnalysis;
-      }
-      
+      // Update entries with the saved entry
       setEntries(prev => ({
         ...prev,
         [dateStr]: savedEntry
       }));
       
+      // Don't clear local entries - keep the current text
+      setLocalEntries(prev => ({
+        ...prev,
+        [dateStr]: text || ''
+      }));
+      
       // Trigger app-wide update notification
       triggerUpdate();
-      console.log(`Successfully saved entry for ${dateStr}`);
+      
     } catch (err: any) {
       const errorMessage = err?.message || "Failed to update journal entry";
       setError(errorMessage);
       console.error("Error in saveEntry:", err);
+      throw err; // Re-throw to handle in component
     } finally {
       setLoading(false);
     }
@@ -133,10 +162,6 @@ export function useJournal() {
     }
   };
 
-  const refreshEntries = () => {
-    fetchRecentEntries();
-  };
-
   return {
     currentDate,
     getEntry,
@@ -147,6 +172,6 @@ export function useJournal() {
     goToNextDay,
     loading,
     error,
-    refreshEntries
+    refreshEntries: fetchRecentEntries
   };
 }

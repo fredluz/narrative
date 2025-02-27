@@ -76,6 +76,7 @@ export const journalStyles = StyleSheet.create({
 
   entryContainer: {
     flex: 1,
+    minHeight: 200, // added minimum height for visibility
     padding: 20,
     borderRadius: 8,
     position: 'relative',

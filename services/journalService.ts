@@ -45,6 +45,8 @@ export const journalService = {
     const startDateTime = `${startDate}T00:00:00`;
     const endDateTime = `${endDate}T23:59:59`;
     
+    console.log(`journalService: Getting entries from ${startDateTime} to ${endDateTime}`);
+    
     const { data, error } = await supabase
       .from('journal_entries')
       .select('*')
@@ -58,13 +60,20 @@ export const journalService = {
     }
 
     // Add date field to each entry for easier access
-    return (data || []).map(entry => {
+    const processedEntries = (data || []).map(entry => {
       const dateStr = new Date(entry.created_at).toISOString().split('T')[0];
       return {
         ...entry,
         date: dateStr
       };
     });
+    
+    console.log(`journalService: Found ${processedEntries.length} entries in date range`);
+    processedEntries.forEach(entry => {
+      console.log(`journalService: Entry for ${entry.date}, content length: ${entry.user_entry?.length || 0}`);
+    });
+    
+    return processedEntries;
   },
 
   // Create or update a journal entry

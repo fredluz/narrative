@@ -1,16 +1,14 @@
-import React, { useCallback, useState } from 'react';
-import { View, TextInput, TouchableOpacity, Text, ActivityIndicator } from 'react-native';
+import React, { useCallback, useState, useEffect } from 'react';
+import { View, TextInput, TouchableOpacity, Text, ActivityIndicator, Platform } from 'react-native';
 import { Card } from 'react-native-paper';
 import { useRouter } from 'expo-router';
 import { ThemedText } from './ThemedText';
-import { IconSymbol } from './ui/IconSymbol';
 import { MaterialIcons } from '@expo/vector-icons';
 import styles from '@/app/styles/global';
 import { useJournal } from '@/hooks/useJournal';
 import { journalStyles } from '@/app/styles/journalStyles';
 import { questStyles } from '@/app/styles/questStyles';
-import { journalService } from '@/services/journalService';
-
+import { journalService, JournalEntry } from '@/services/journalService';
 interface Props {
   themeColor: string;
   textColor: string;
@@ -23,6 +21,7 @@ export function JournalPanel({ themeColor, textColor }: Props) {
     getEntry, 
     getAiAnalysis,
     updateLocalEntry,
+    saveEntry,
     refreshEntries,
     goToPreviousDay, 
     goToNextDay
@@ -30,15 +29,32 @@ export function JournalPanel({ themeColor, textColor }: Props) {
   
   const [localLoading, setLocalLoading] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
+  const [localEntry, setLocalEntry] = useState<string>('');
 
+  // Format date display
   const formattedDate = currentDate.toLocaleDateString('en-US', { 
     weekday: 'long', 
     month: 'long', 
     day: 'numeric' 
   });
 
-  const entry = getEntry(currentDate);
-  const aiAnalysis = getAiAnalysis(currentDate);
+  // Load current entry whenever date changes or after refresh
+  useEffect(() => {
+    const entry = getEntry(currentDate);
+    console.log('JournalPanel: Loading entry for date:', currentDate.toISOString().split('T')[0], 'Entry length:', entry?.length || 0);
+    setLocalEntry(entry);
+  }, [currentDate, getEntry]);
+
+  // Refresh entries initially to make sure we have the latest data
+  useEffect(() => {
+    console.log('JournalPanel: Initial load, fetching entries...');
+    refreshEntries().then(() => {
+      // After refreshing, get the entry again to ensure we have the latest data
+      const entry = getEntry(currentDate);
+      console.log('JournalPanel: After refresh, entry length:', entry?.length || 0);
+      setLocalEntry(entry);
+    });
+  }, []);
 
   // Derive a secondary color from the theme color
   const getSecondaryColor = (baseColor: string) => {
@@ -77,36 +93,54 @@ export function JournalPanel({ themeColor, textColor }: Props) {
   
   const brightAccent = getBrightAccent(themeColor);
 
-  // Directly use journalService instead of going through the useJournal hook
+  // Handle entry text changes - remove immediate update
+  const handleEntryChange = useCallback((text: string) => {
+    setLocalEntry(text);
+    // Removed the immediate updateLocalEntry call
+  }, []);
+
+  // Modified save handler to update local entries before saving
   const handleSaveEntry = useCallback(async () => {
+    if (!localEntry) return;
+    
     try {
       setLocalLoading(true);
       setLocalError(null);
-      console.log('JournalPanel: Save button clicked');
       
-      // Format the date as YYYY-MM-DD
-      const dateString = currentDate.toISOString().split('T')[0];
-      console.log('JournalPanel: Saving entry for date:', dateString);
+      // Update local entries right before saving
+      updateLocalEntry(currentDate, localEntry);
       
-      // Directly call the journalService
-      await journalService.saveEntry(dateString, entry);
-      console.log('JournalPanel: Save successful');
+      // First save the entry
+      await journalService.saveEntry(
+        currentDate.toISOString().split('T')[0],
+        localEntry,
+        'Journal Entry' // Can add title support later if needed
+      );
       
-      // Refresh the entries list
-      refreshEntries();
+      // Then refresh the entries list
+      await refreshEntries();
+      
     } catch (err: any) {
       console.error('JournalPanel: Error in handleSaveEntry:', err);
       setLocalError(err?.message || 'Failed to update journal entry');
     } finally {
       setLocalLoading(false);
     }
-  }, [currentDate, entry, refreshEntries]);
+  }, [currentDate, localEntry, updateLocalEntry, refreshEntries]);
 
   const loading = localLoading;
   const error = localError;
+  const aiAnalysis = getAiAnalysis(currentDate);
 
   return (
-    <Card style={[styles.taskCard, { overflow: 'hidden', borderColor: themeColor, borderWidth: 1, borderLeftWidth: 3, marginTop: 20 }]}>
+    <Card style={[styles.taskCard, { 
+      overflow: 'hidden', 
+      borderColor: themeColor, 
+      borderWidth: 1, 
+      borderLeftWidth: 3, 
+      marginTop: 20,
+      minHeight: 300 // Ensure card has minimum height
+    }]}>
       {/* Background with subtle gradient effect */}
       <View style={{ 
         position: 'absolute', 
@@ -222,7 +256,6 @@ export function JournalPanel({ themeColor, textColor }: Props) {
               borderColor: themeColor,
               marginRight: 10,
               paddingVertical: 6,
-              // Add subtle glow effect
               shadowColor: themeColor,
               shadowOffset: { width: 0, height: 0 },
               shadowOpacity: 0.5,
@@ -288,41 +321,52 @@ export function JournalPanel({ themeColor, textColor }: Props) {
         </View>
       ) : (
         <>
-          <TextInput
-            style={[styles.chatInput, { 
-              height: 100, 
-              margin: 15,
-              marginTop: 5,
-              color: '#F0F0F0',
-              backgroundColor: 'rgba(20, 20, 20, 0.7)',
-              opacity: loading ? 0.7 : 1,
-              borderLeftWidth: 2,
-              borderLeftColor: themeColor,
-              borderRadius: 4,
-              padding: 12,
-            }]}
-            multiline
-            value={entry}
-            onChangeText={(text) => {
-              updateLocalEntry(currentDate, text);
-            }}
-            placeholder="How's your day going, samurai?"
-            placeholderTextColor="#666"
-            editable={!loading}
-            blurOnSubmit={false}
-          />
+          <View style={{
+            margin: 15,
+            marginTop: 5,
+            backgroundColor: 'rgba(20, 20, 20, 0.9)',
+            borderWidth: 1,
+            borderColor: themeColor,
+            borderLeftWidth: 2,
+            borderLeftColor: themeColor,
+            borderRadius: 4,
+            padding: 0, // Remove padding that might affect input visibility
+            position: 'relative', // Ensure proper stacking context
+          }}>
+            <TextInput
+              style={{
+                height: 100,
+                color: '#FFFFFF',
+                padding: 12,
+                fontSize: 16,
+                fontWeight: 'normal', // Try normal weight
+                textAlignVertical: 'top',
+              }}
+              multiline={true}
+              value={localEntry}
+              onChangeText={handleEntryChange}
+              placeholder="How's your day going, samurai?"
+              placeholderTextColor="#666"
+              editable={!loading}
+              key={`journal-input-${currentDate.toISOString().split('T')[0]}`}
+            />
+          </View>
 
-          <ThemedText style={[journalStyles.aiEntryText, {
+          <ThemedText style={{
+            fontSize: 15,
+            color: '#BBB',
+            fontStyle: 'italic',
+            backgroundColor: 'rgba(15, 15, 15, 0.6)',
+            padding: 12,
             margin: 15,
             marginTop: 0,
+            borderRadius: 5,
+            borderLeftWidth: 2,
             borderColor: secondaryColor,
-            backgroundColor: 'rgba(12, 12, 15, 0.8)',
-            color: '#DDD',
-            // Add subtle text effect
             textShadowColor: secondaryColor,
             textShadowOffset: { width: 0, height: 0 },
             textShadowRadius: 3
-          }]}>
+          }}>
             [SILVERHAND]: {aiAnalysis || "Keep typing, choom. Your story's writing itself."}
           </ThemedText>
         </>
