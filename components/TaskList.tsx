@@ -4,32 +4,31 @@ import {
   Text, 
   TouchableOpacity, 
   ScrollView,
-  ActivityIndicator 
+  ActivityIndicator,
+  Dimensions,
+  LayoutChangeEvent
 } from 'react-native';
-import { Card, Checkbox } from 'react-native-paper';
+import { Card } from 'react-native-paper';
 import { MaterialIcons } from '@expo/vector-icons';
 import styles, { colors } from '@/app/styles/global';
-import { useTasks } from '@/services/tasksService';
+import { useTasks, updateTaskStatus, getNextStatus, TaskStatus } from '@/services/tasksService';
 import { useQuestUpdate } from '@/contexts/QuestUpdateContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { taskStyles } from '@/app/styles/taskStyles';
 import type { Task } from '@/app/types';
 
-// Add a taskService for operations that don't fit in the useTasks hook
-const taskService = {
-  updateTaskStatus: async (taskId: number, newStatus: 'ToDo' | 'InProgress' | 'Done'): Promise<void> => {
-    // This would normally update the task in your database
-    console.log(`Updating task ${taskId} to ${newStatus}`);
-    return Promise.resolve();
-  }
-};
+interface TaskListProps {
+  compactMode?: boolean;
+}
 
-export function TaskList() {
+export function TaskList({ compactMode = false }: TaskListProps) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { shouldUpdate, resetUpdate } = useQuestUpdate();
   const { themeColor, secondaryColor } = useTheme();
+  const [containerHeight, setContainerHeight] = useState<number>(0);
+  const [availableSpace, setAvailableSpace] = useState<number>(0);
   
   // Get tasks from the hook
   const { tasks: hookTasks, loading: hookLoading, error: hookError, reload: loadTasks } = useTasks();
@@ -41,7 +40,6 @@ export function TaskList() {
     if (hookError) setError(hookError);
   }, [hookTasks, hookLoading, hookError]);
   
-
   // Make text more visible against dark backgrounds
   const getBrightAccent = (baseColor: string) => {
     const hex = baseColor.replace('#', '');
@@ -77,22 +75,10 @@ export function TaskList() {
     }
   }, [shouldUpdate]);
 
-  const getNextStatus = (currentStatus: string): 'ToDo' | 'InProgress' | 'Done' => {
-    switch (currentStatus) {
-      case 'ToDo':
-        return 'InProgress';
-      case 'InProgress':
-        return 'Done';
-      case 'Done':
-      default:
-        return 'ToDo';
-    }
-  };
-
   const toggleTaskCompletion = async (taskId: number, currentStatus: string) => {
     try {
       const newStatus = getNextStatus(currentStatus);
-      await taskService.updateTaskStatus(taskId, newStatus);
+      await updateTaskStatus(taskId, newStatus);
       
       // Update the local state
       const updatedTasks = tasks.map(task => 
@@ -106,189 +92,221 @@ export function TaskList() {
     }
   };
 
-  return (
-    <View style={styles.column}>
-      <Card style={{ borderLeftWidth: 3, borderLeftColor: themeColor, overflow: 'hidden' }}>
-        {/* Background with cyberpunk elements */}
-        <View style={{ 
-          position: 'absolute', 
-          width: '100%', 
-          height: '100%',
-          backgroundColor: '#151515',
-        }} />
-        
-        {/* Digital noise effect */}
-        <View style={{
-          position: 'absolute',
-          top: 0,
-          height: '100%',
-          width: 40,
-          right: 20,
-          opacity: 0.05,
-          backgroundColor: themeColor,
-        }} />
+  const windowHeight = Dimensions.get('window').height;
+  const maxTaskListHeight = compactMode ? windowHeight * 0.25 : windowHeight * 0.6; 
 
-        {/* Glitch line - very cyberpunk */}
-        <View style={{
-          position: 'absolute',
-          top: '70%',
-          left: -10,
-          width: '120%',
-          height: 1,
-          backgroundColor: secondaryColor,
-          opacity: 0.15,
-          transform: [{ rotate: '-1deg' }],
-        }} />
+  // Measure parent container to determine available space
+  const onContainerLayout = (event: LayoutChangeEvent) => {
+    const height = event.nativeEvent.layout.height;
+    setContainerHeight(height);
+    
+    // Calculate available space for the task list itself (minus header)
+    const headerHeight = compactMode ? 50 : 60; // Approximate header height
+    setAvailableSpace(Math.max(0, height - headerHeight));
+  };
+
+  return (
+    <Card 
+      style={[
+        compactMode ? { flex: 1 } : styles.column, 
+        { 
+          borderLeftWidth: 3, 
+          borderLeftColor: themeColor, 
+          overflow: 'hidden',
+          marginTop: compactMode ? 10 : 0,
+        }
+      ]}
+      onLayout={onContainerLayout}
+    >
+      {/* Background with cyberpunk elements */}
+      <View style={{ 
+        position: 'absolute', 
+        width: '100%', 
+        height: '100%',
+        backgroundColor: '#151515',
+      }} />
+      
+      {/* Digital noise effect */}
+      <View style={{
+        position: 'absolute',
+        top: 0,
+        height: '100%',
+        width: 40,
+        right: 20,
+        opacity: 0.05,
+        backgroundColor: themeColor,
+      }} />
+
+      {/* Glitch line - very cyberpunk */}
+      <View style={{
+        position: 'absolute',
+        top: '70%',
+        left: -10,
+        width: '120%',
+        height: 1,
+        backgroundColor: secondaryColor,
+        opacity: 0.15,
+        transform: [{ rotate: '-1deg' }],
+      }} />
+      
+      <View style={{ 
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: compactMode ? 5 : 10,
+        paddingHorizontal: compactMode ? 10 : 15,
+        paddingVertical: compactMode ? 10 : 15,
+        borderBottomWidth: 1,
+        borderBottomColor: 'rgba(255, 255, 255, 0.1)'
+      }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <Text style={{ 
+            fontSize: compactMode ? 16 : 18,
+            fontWeight: 'bold',
+            color: '#FFFFFF',
+            textShadowColor: themeColor,
+            textShadowOffset: { width: 1, height: 1 },
+            textShadowRadius: 4
+          }}>
+            ACTIVE TASKS
+          </Text>
+          <View style={{
+            height: 3,
+            width: 20,
+            backgroundColor: themeColor,
+            marginLeft: 8,
+            borderRadius: 2,
+          }} />
+        </View>
         
+        <TouchableOpacity 
+          onPress={loadTasks}
+          style={{
+            padding: compactMode ? 6 : 8,
+            borderRadius: 4,
+            backgroundColor: 'rgba(30, 30, 30, 0.9)',
+            borderWidth: 1,
+            borderColor: themeColor,
+          }}
+        >
+          <MaterialIcons name="refresh" size={compactMode ? 18 : 20} color={brightAccent} />
+        </TouchableOpacity>
+      </View>
+
+      {loading ? (
+        <View style={{ padding: compactMode ? 10 : 20, alignItems: 'center' }}>
+          <ActivityIndicator size={compactMode ? "small" : "large"} color={themeColor} />
+        </View>
+      ) : error ? (
         <View style={{ 
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          marginBottom: 10,
-          paddingHorizontal: 15,
-          paddingVertical: 15,
-          borderBottomWidth: 1,
-          borderBottomColor: 'rgba(255, 255, 255, 0.1)'
+          margin: compactMode ? 10 : 15,
+          padding: compactMode ? 8 : 10, 
+          backgroundColor: 'rgba(200, 0, 0, 0.1)', 
+          borderRadius: 5,
+          borderLeftWidth: 2,
+          borderLeftColor: colors.error,
         }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Text style={{ 
-              fontSize: 18,
-              fontWeight: 'bold',
-              color: '#FFFFFF',
-              textShadowColor: themeColor,
-              textShadowOffset: { width: 1, height: 1 },
-              textShadowRadius: 4
-            }}>
-              ACTIVE TASKS
+          <Text style={{ color: colors.error, fontSize: compactMode ? 14 : 16 }}>{error}</Text>
+          <TouchableOpacity onPress={loadTasks}>
+            <Text style={{ color: colors.error, textDecorationLine: 'underline', marginTop: compactMode ? 3 : 5, fontSize: compactMode ? 13 : 14 }}>
+              Try again
             </Text>
-            <View style={{
-              height: 3,
-              width: 20,
-              backgroundColor: themeColor,
-              marginLeft: 8,
-              borderRadius: 2,
-            }} />
-          </View>
-          
-          <TouchableOpacity 
-            onPress={loadTasks}
-            style={{
-              padding: 8,
-              borderRadius: 4,
-              backgroundColor: 'rgba(30, 30, 30, 0.9)',
-              borderWidth: 1,
-              borderColor: themeColor,
-            }}
-          >
-            <MaterialIcons name="refresh" size={20} color={brightAccent} />
           </TouchableOpacity>
         </View>
-
-        {loading ? (
-          <View style={{ padding: 20, alignItems: 'center' }}>
-            <ActivityIndicator size="large" color={themeColor} />
-          </View>
-        ) : error ? (
-          <View style={{ 
-            margin: 15,
-            padding: 10, 
-            backgroundColor: 'rgba(200, 0, 0, 0.1)', 
-            borderRadius: 5,
-            borderLeftWidth: 2,
-            borderLeftColor: colors.error,
-          }}>
-            <Text style={{ color: colors.error }}>{error}</Text>
-            <TouchableOpacity onPress={loadTasks}>
-              <Text style={{ color: colors.error, textDecorationLine: 'underline', marginTop: 5 }}>
-                Try again
-              </Text>
-            </TouchableOpacity>
-          </View>
-        ) : tasks.length === 0 ? (
-          <View style={{ padding: 20, alignItems: 'center' }}>
-            <MaterialIcons name="check-circle-outline" size={40} color="rgba(255,255,255,0.1)" />
-            <Text style={{ fontSize: 16, color: '#999', textAlign: 'center' }}>No active tasks</Text>
-          </View>
-        ) : (
-          <ScrollView style={{ padding: 10 }}>
-            {tasks.map((task) => (
-              <View 
-                key={task.id} 
-                style={{ 
-                  backgroundColor: 'rgba(25, 25, 25, 0.7)',
-                  borderLeftWidth: 2,
-                  borderLeftColor: task.status === 'Done' ? secondaryColor : 
-                                  task.status === 'InProgress' ? themeColor : '#666',
-                  marginBottom: 8,
-                  padding: 10,
-                  borderRadius: 4,
-                }}
-              >
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <TouchableOpacity
-                    onPress={() => toggleTaskCompletion(task.id, task.status)}
-                    style={{ padding: 8 }}
-                  >
-                    <MaterialIcons 
-                      name={
-                        task.status === 'Done' ? 'check-circle' :
-                        task.status === 'InProgress' ? 'timelapse' :
-                        'radio-button-unchecked'
-                      }
-                      size={24}
-                      color={
-                        task.status === 'Done' ? secondaryColor :
-                        task.status === 'InProgress' ? themeColor :
-                        '#666'
-                      }
-                    />
-                  </TouchableOpacity>
-                  <View style={{ marginLeft: 8, flex: 1 }}>
+      ) : tasks.length === 0 ? (
+        <View style={{ padding: compactMode ? 10 : 20, alignItems: 'center' }}>
+          <MaterialIcons name="check-circle-outline" size={compactMode ? 30 : 40} color="rgba(255,255,255,0.1)" />
+          <Text style={{ fontSize: compactMode ? 14 : 16, color: '#999', textAlign: 'center' }}>No active tasks</Text>
+        </View>
+      ) : (
+        <ScrollView 
+          style={{ 
+            padding: compactMode ? 5 : 10,
+            height: availableSpace > 0 ? availableSpace : undefined,
+            flexGrow: 1
+          }}
+          contentContainerStyle={{
+            paddingBottom: 5
+          }}
+        >
+          {tasks.map((task) => (
+            <View 
+              key={task.id} 
+              style={{ 
+                backgroundColor: 'rgba(25, 25, 25, 0.7)',
+                borderLeftWidth: 2,
+                borderLeftColor: task.status === 'Done' ? secondaryColor : 
+                              task.status === 'InProgress' ? themeColor : '#666',
+                marginBottom: compactMode ? 5 : 8,
+                padding: compactMode ? 8 : 10,
+                borderRadius: 4,
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <TouchableOpacity
+                  onPress={() => toggleTaskCompletion(task.id, task.status)}
+                  style={{ padding: compactMode ? 4 : 8 }}
+                >
+                  <MaterialIcons 
+                    name={
+                      task.status === 'Done' ? 'check-circle' :
+                      task.status === 'InProgress' ? 'timelapse' :
+                      'radio-button-unchecked'
+                    }
+                    size={compactMode ? 18 : 24}
+                    color={
+                      task.status === 'Done' ? secondaryColor :
+                      task.status === 'InProgress' ? themeColor :
+                      '#666'
+                    }
+                  />
+                </TouchableOpacity>
+                <View style={{ marginLeft: compactMode ? 4 : 8, flex: 1 }}>
+                  <Text style={{ 
+                    fontSize: compactMode ? 16 : 18,  // Increased from 14/16
+                    color: task.status === 'Done' ? '#AAA' : '#FFF',
+                    textDecorationLine: task.status === 'Done' ? 'line-through' : 'none',
+                    opacity: task.status === 'Done' ? 0.7 : 1,
+                    fontWeight: '600',  // Added to match KanbanBoard style
+                  }}>
+                    {task.title}
+                  </Text>
+                  {!compactMode && task.description ? (
                     <Text style={{ 
-                      fontSize: 16,
-                      color: task.status === 'Done' ? '#AAA' : '#FFF',
-                      textDecorationLine: task.status === 'Done' ? 'line-through' : 'none',
-                      opacity: task.status === 'Done' ? 0.7 : 1,
+                      fontSize: 15, // Increased from 14
+                      color: '#999',
+                      marginTop: 4,
+                      opacity: task.status === 'Done' ? 0.5 : 0.8, 
                     }}>
-                      {task.title}
+                      {task.description}
                     </Text>
-                    {task.description ? (
+                  ) : null}
+                  {task.quest?.title ? (
+                    <View style={{ 
+                      flexDirection: 'row', 
+                      alignItems: 'center', 
+                      marginTop: compactMode ? 2 : 3 
+                    }}>
+                      <MaterialIcons 
+                        name="assignment" 
+                        size={compactMode ? 12 : 14} // Increased from 10/12
+                        color={task.status === 'Done' ? '#888' : secondaryColor} 
+                        style={{ marginRight: 4 }} 
+                      />
                       <Text style={{ 
-                        fontSize: 14,
-                        color: '#999',
-                        marginTop: 4,
-                        opacity: task.status === 'Done' ? 0.5 : 0.8, 
+                        fontSize: compactMode ? 12 : 14, // Increased from 10/12
+                        color: task.status === 'Done' ? '#888' : secondaryColor,
                       }}>
-                        {task.description}
+                        {task.quest.title}
                       </Text>
-                    ) : null}
-                    {task.quest?.title ? (
-                      <View style={{ 
-                        flexDirection: 'row', 
-                        alignItems: 'center', 
-                        marginTop: 3 
-                      }}>
-                        <MaterialIcons 
-                          name="assignment" 
-                          size={12} 
-                          color={task.status === 'Done' ? '#888' : secondaryColor} 
-                          style={{ marginRight: 4 }} 
-                        />
-                        <Text style={{ 
-                          fontSize: 12,
-                          color: task.status === 'Done' ? '#888' : secondaryColor,
-                        }}>
-                          {task.quest.title}
-                        </Text>
-                      </View>
-                    ) : null}
-                  </View>
+                    </View>
+                  ) : null}
                 </View>
               </View>
-            ))}
-          </ScrollView>
-        )}
-      </Card>
-    </View>
+            </View>
+          ))}
+        </ScrollView>
+      )}
+    </Card>
   );
 }

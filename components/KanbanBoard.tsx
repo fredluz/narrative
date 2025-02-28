@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Platform } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, Platform, ActivityIndicator } from 'react-native';
 import { Card } from 'react-native-paper';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -7,6 +7,7 @@ import { questStyles } from '@/app/styles/questStyles';
 import { Task, Quest } from '@/app/types';
 import { useRouter } from 'expo-router';
 import { formatDateTime } from '@/utils/dateFormatters';
+import { updateTaskStatus, getNextStatus } from '@/services/tasksService';
 
 interface KanbanProps {
   mainQuest: Quest | null;
@@ -19,6 +20,7 @@ export function KanbanBoard({ mainQuest, onViewAllQuests }: KanbanProps) {
   const router = useRouter();
   const { themeColor, secondaryColor } = useTheme();
   const [activeColumn, setActiveColumn] = useState<TaskStatus | 'all'>('all');
+  const [updatingTaskId, setUpdatingTaskId] = useState<number | null>(null);
 
   // Make text more visible against dark backgrounds
   const getBrightAccent = (baseColor: string) => {
@@ -36,8 +38,7 @@ export function KanbanBoard({ mainQuest, onViewAllQuests }: KanbanProps) {
     const brightB = Math.min(255, b + 100);
 
     return `#${brightR.toString(16).padStart(2, '0')}${brightG
-      .toString(16)
-      .padStart(2, '0')}${brightB.toString(16).padStart(2, '0')}`;
+      .toString(16).padStart(2, '0')}${brightB.toString(16).padStart(2, '0')}`;
   };
 
   const brightAccent = getBrightAccent(themeColor);
@@ -105,6 +106,29 @@ export function KanbanBoard({ mainQuest, onViewAllQuests }: KanbanProps) {
       </View>
     );
   }
+
+  // Add function to handle task status toggle
+  const toggleTaskCompletion = async (task: Task) => {
+    try {
+      setUpdatingTaskId(task.id);
+      const newStatus = getNextStatus(task.status);
+      await updateTaskStatus(task.id, newStatus);
+      
+      // Update local state
+      if (mainQuest && mainQuest.tasks) {
+        mainQuest.tasks = mainQuest.tasks.map(t => 
+          t.id === task.id ? { ...t, status: newStatus } : t
+        );
+      }
+      
+      // Force a re-render
+      setActiveColumn(prev => prev);
+    } catch (error) {
+      console.error('Failed to update task status:', error);
+    } finally {
+      setUpdatingTaskId(null);
+    }
+  };
 
   // Extract tasks from mainQuest
   const tasks = mainQuest?.tasks || [];
@@ -616,15 +640,21 @@ export function KanbanBoard({ mainQuest, onViewAllQuests }: KanbanProps) {
                       </View>
                     </View>
 
-                    <View style={questStyles.taskStatusIcon}>
-                      {task.status === 'Done' ? (
+                    <TouchableOpacity 
+                      style={questStyles.taskStatusIcon}
+                      onPress={() => toggleTaskCompletion(task)}
+                      disabled={updatingTaskId === task.id}
+                    >
+                      {updatingTaskId === task.id ? (
+                        <ActivityIndicator size="small" color={task.status === 'Done' ? secondaryColor : themeColor} />
+                      ) : task.status === 'Done' ? (
                         <MaterialIcons name="check-circle" size={20} color={secondaryColor} />
                       ) : task.status === 'InProgress' ? (
                         <MaterialIcons name="timelapse" size={20} color={themeColor} />
                       ) : (
                         <MaterialIcons name="radio-button-unchecked" size={20} color="#666" />
                       )}
-                    </View>
+                    </TouchableOpacity>
                   </View>
                 </Card>
               ))

@@ -1,5 +1,5 @@
 import React, { useCallback, useState, useEffect } from 'react';
-import { View, TextInput, TouchableOpacity, Text, ActivityIndicator, Platform } from 'react-native';
+import { View, TextInput, TouchableOpacity, Text, ActivityIndicator, Platform, ScrollView } from 'react-native';
 import { Card } from 'react-native-paper';
 import { useRouter } from 'expo-router';
 import { ThemedText } from './ThemedText';
@@ -14,9 +14,10 @@ import { useTheme } from '@/contexts/ThemeContext';
 interface JournalPanelProps {
   themeColor: string;
   textColor: string;
+  fullColumnMode?: boolean; // Add new prop to indicate full column mode
 }
 
-export function JournalPanel({ themeColor, textColor }: JournalPanelProps) {
+export function JournalPanel({ themeColor, textColor, fullColumnMode = false }: JournalPanelProps) {
   const { secondaryColor } = useTheme();
   const router = useRouter();
   const { 
@@ -33,6 +34,9 @@ export function JournalPanel({ themeColor, textColor }: JournalPanelProps) {
   const [localLoading, setLocalLoading] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
   const [localEntry, setLocalEntry] = useState<string>('');
+  const [originalEntry, setOriginalEntry] = useState<string>('');
+  const [aiResponse, setAiResponse] = useState<string | null>(null);
+  const [aiAnalysisAvailable, setAiAnalysisAvailable] = useState(true);
 
   // Format date display
   const formattedDate = currentDate.toLocaleDateString('en-US', { 
@@ -46,6 +50,7 @@ export function JournalPanel({ themeColor, textColor }: JournalPanelProps) {
     const entry = getEntry(currentDate);
     console.log('JournalPanel: Loading entry for date:', currentDate.toISOString().split('T')[0], 'Entry length:', entry?.length || 0);
     setLocalEntry(entry);
+    setOriginalEntry(entry); // Store the original entry for comparison
   }, [currentDate, getEntry]);
 
   // Refresh entries initially to make sure we have the latest data
@@ -56,9 +61,18 @@ export function JournalPanel({ themeColor, textColor }: JournalPanelProps) {
       const entry = getEntry(currentDate);
       console.log('JournalPanel: After refresh, entry length:', entry?.length || 0);
       setLocalEntry(entry);
+      setOriginalEntry(entry);
     });
   }, []);
   
+  useEffect(() => {
+    // Check if getAiAnalysis is a function
+    if (typeof getAiAnalysis !== 'function') {
+      console.error('JournalPanel: getAiAnalysis is not a function');
+      setAiAnalysisAvailable(false);
+    }
+  }, [getAiAnalysis]);
+
   // Generate a bright accent color for cyberpunk text effect
   const getBrightAccent = (baseColor: string) => {
     // For dark colors, create a bright neon variant
@@ -90,7 +104,41 @@ export function JournalPanel({ themeColor, textColor }: JournalPanelProps) {
     // Removed the immediate updateLocalEntry call
   }, []);
 
-  // Modified save handler to update local entries before saving
+  // Generate AI response based on changes between original and updated entry
+  const generateAiResponse = useCallback(async (originalText: string, updatedText: string) => {
+    if (originalText === updatedText) {
+      setAiResponse("No changes detected in today's entry.");
+      return;
+    }
+
+    try {
+      // Simulate an API call for AI response generation
+      // In a real app, you would send originalText and updatedText to your backend
+      setAiResponse("Analyzing your journal update...");
+      
+      // Simulate delay for API call
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      
+      // Example response - in a real app this would come from your API/backend
+      const responses = [
+        "I notice you're focusing more on your long-term goals today. That's a positive shift from yesterday's entry.",
+        "You seem to be in a more reflective mood today. Take the time you need to process your thoughts.",
+        "Your progress is notable. Each step forward, no matter how small, is still progress worth celebrating.",
+        "I see you're concerned about that upcoming deadline. Remember to break it down into manageable tasks.",
+        "There's a more optimistic tone in your writing today - keep nurturing that perspective."
+      ];
+      
+      // Randomly select a response
+      const randomResponse = responses[Math.floor(Math.random() * responses.length)];
+      setAiResponse(randomResponse);
+      
+    } catch (err) {
+      console.error('Failed to generate AI response:', err);
+      setAiResponse("I couldn't analyze your journal update at this time.");
+    }
+  }, []);
+
+  // Modified save handler to update local entries before saving and generate AI response
   const handleSaveEntry = useCallback(async () => {
     if (!localEntry) return;
     
@@ -110,6 +158,12 @@ export function JournalPanel({ themeColor, textColor }: JournalPanelProps) {
       
       // Then refresh the entries list
       await refreshEntries();
+
+      // Generate AI response based on the changes
+      await generateAiResponse(originalEntry, localEntry);
+      
+      // Update the original entry to the new version
+      setOriginalEntry(localEntry);
       
     } catch (err: any) {
       console.error('JournalPanel: Error in handleSaveEntry:', err);
@@ -117,11 +171,23 @@ export function JournalPanel({ themeColor, textColor }: JournalPanelProps) {
     } finally {
       setLocalLoading(false);
     }
-  }, [currentDate, localEntry, updateLocalEntry, refreshEntries]);
+  }, [currentDate, localEntry, originalEntry, updateLocalEntry, refreshEntries, generateAiResponse]);
+
+  // Safely get AI analysis with error handling
+  const getSafeAiAnalysis = useCallback((date: Date): string | null => {
+    if (!aiAnalysisAvailable) return null;
+    
+    try {
+      return getAiAnalysis(date);
+    } catch (err) {
+      console.error('Error getting AI analysis:', err);
+      return null;
+    }
+  }, [getAiAnalysis, aiAnalysisAvailable]);
 
   const loading = localLoading;
   const error = localError;
-  const aiAnalysis = getAiAnalysis(currentDate);
+  const aiAnalysis = getSafeAiAnalysis(currentDate);
 
   return (
     <Card style={[styles.taskCard, { 
@@ -129,8 +195,9 @@ export function JournalPanel({ themeColor, textColor }: JournalPanelProps) {
       borderColor: themeColor, 
       borderWidth: 1, 
       borderLeftWidth: 3, 
-      marginTop: 20,
-      minHeight: 300 // Ensure card has minimum height
+      height: fullColumnMode ? '100%' : 'auto',
+      flex: fullColumnMode ? 1 : undefined, // Changed 'auto' to undefined
+      marginTop: fullColumnMode ? 0 : 20,
     }]}>
       {/* Background with subtle gradient effect */}
       <View style={{ 
@@ -284,84 +351,109 @@ export function JournalPanel({ themeColor, textColor }: JournalPanelProps) {
         </View>
       </View>
 
-      <ThemedText style={[styles.cardDetails, { 
-        paddingLeft: 15,
-        paddingTop: 10,
-        paddingBottom: 5,
-        borderLeftWidth: 3,
-        borderLeftColor: 'rgba(255, 255, 255, 0.1)',
-        marginLeft: 15,
-        fontSize: 12,
-        color: '#AAA',
-      }]}>
-        {formattedDate}
-      </ThemedText>
-      
-      {error ? (
-        <View style={{ 
-          margin: 15,
-          padding: 10, 
-          backgroundColor: 'rgba(200, 0, 0, 0.1)', 
-          borderRadius: 5,
-          borderLeftWidth: 2,
-          borderLeftColor: '#D81159',
-        }}>
-          <ThemedText style={[styles.errorText, { color: '#FF6B6B' }]}>
-            {error}. <Text style={{textDecorationLine: 'underline', color: '#FF6B6B'}} onPress={() => { setLocalError(null); refreshEntries(); }}>Try again</Text>
-          </ThemedText>
-        </View>
-      ) : (
-        <>
-          <View style={{
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1 }}>
+        <ThemedText style={[styles.cardDetails, { 
+          paddingLeft: 15,
+          paddingTop: 10,
+          paddingBottom: 5,
+          borderLeftWidth: 3,
+          borderLeftColor: 'rgba(255, 255, 255, 0.1)',
+          marginLeft: 15,
+          fontSize: 14,
+          color: '#AAA',
+        }]}>
+          {formattedDate}
+        </ThemedText>
+        
+        {error ? (
+          <View style={{ 
             margin: 15,
-            marginTop: 5,
-            backgroundColor: 'rgba(20, 20, 20, 0.9)',
-            borderWidth: 1,
-            borderColor: themeColor,
-            borderLeftWidth: 2,
-            borderLeftColor: themeColor,
-            borderRadius: 4,
-            padding: 0, // Remove padding that might affect input visibility
-            position: 'relative', // Ensure proper stacking context
-          }}>
-            <TextInput
-              style={{
-                height: 100,
-                color: '#FFFFFF',
-                padding: 12,
-                fontSize: 16,
-                fontWeight: 'normal', // Try normal weight
-                textAlignVertical: 'top',
-              }}
-              multiline={true}
-              value={localEntry}
-              onChangeText={handleEntryChange}
-              placeholder="How's your day going, samurai?"
-              placeholderTextColor="#666"
-              editable={!loading}
-              key={`journal-input-${currentDate.toISOString().split('T')[0]}`}
-            />
-          </View>
-
-          <ThemedText style={{
-            fontSize: 15,
-            color: '#BBB',
-            fontStyle: 'italic',
-            backgroundColor: 'rgba(15, 15, 15, 0.6)',
-            padding: 12,
-            margin: 15,
-            marginTop: 0,
+            padding: 10, 
+            backgroundColor: 'rgba(200, 0, 0, 0.1)', 
             borderRadius: 5,
             borderLeftWidth: 2,
-            borderColor: secondaryColor,
-            textShadowColor: secondaryColor,
-            textShadowOffset: { width: 0, height: 0 },
-            textShadowRadius: 3
+            borderLeftColor: '#D81159',
           }}>
-            [SILVERHAND]: {aiAnalysis || "Keep typing, choom. Your story's writing itself."}
-          </ThemedText>
-        </>
-      )}
+            <ThemedText style={[styles.errorText, { color: '#FF6B6B' }]}>
+              {error}. <Text style={{textDecorationLine: 'underline', color: '#FF6B6B'}} onPress={() => { setLocalError(null); refreshEntries(); }}>Try again</Text>
+            </ThemedText>
+          </View>
+        ) : (
+          <>
+            <View style={{
+              margin: 15,
+              marginTop: 5,
+              backgroundColor: 'rgba(20, 20, 20, 0.9)',
+              borderWidth: 1,
+              borderColor: themeColor,
+              borderLeftWidth: 2,
+              borderLeftColor: themeColor,
+              borderRadius: 4,
+              padding: 0, // Remove padding that might affect input visibility
+              position: 'relative', // Ensure proper stacking context
+            }}>
+              <TextInput
+                style={{
+                  height: fullColumnMode ? 200 : 100, // Increase height in full column mode
+                  color: '#FFFFFF',
+                  padding: 12,
+                  fontSize: fullColumnMode ? 18 : 16, // Larger font in full column mode
+                  fontWeight: 'normal',
+                  textAlignVertical: 'top',
+                }}
+                multiline={true}
+                value={localEntry}
+                onChangeText={handleEntryChange}
+                placeholder="How's your day going, samurai?"
+                placeholderTextColor="#666"
+                editable={!loading}
+                key={`journal-input-${currentDate.toISOString().split('T')[0]}`}
+              />
+            </View>
+
+            {/* AI response section - more prominent in full column mode */}
+            <View style={{
+              margin: 15,
+              marginTop: 5,
+              marginBottom: 15,
+              padding: 15,
+              backgroundColor: 'rgba(15, 15, 15, 0.8)',
+              borderRadius: 5,
+              borderLeftWidth: 3,
+              borderColor: secondaryColor,
+            }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                <MaterialIcons 
+                  name="psychology" 
+                  size={20} 
+                  color={secondaryColor} 
+                  style={{ marginRight: 8 }} 
+                />
+                <Text style={{
+                  fontSize: 16,
+                  fontWeight: 'bold',
+                  color: secondaryColor,
+                }}>
+                  SILVERHAND
+                </Text>
+              </View>
+              
+              <ThemedText style={{
+                fontSize: fullColumnMode ? 18 : 15,
+                color: '#BBB',
+                fontStyle: 'italic',
+                textShadowColor: secondaryColor,
+                textShadowOffset: { width: 0, height: 0 },
+                textShadowRadius: 3
+              }}>
+                {loading ? "Thinking..." : (aiResponse || aiAnalysis || "Keep typing, choom. Your story's writing itself.")}
+              </ThemedText>
+            </View>
+            
+            {/* Removed the patterns & insights section */}
+          </>
+        )}
+      </ScrollView>
     </Card>
   );
 }

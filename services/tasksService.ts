@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import type { Task } from '@/app/types';
 
+// Define types for status
+export type TaskStatus = 'ToDo' | 'InProgress' | 'Done';
+
 // Database operations
 async function fetchTasks(): Promise<Task[]> {
   console.log('Fetching tasks...');
@@ -39,6 +42,36 @@ async function fetchTasksByQuest(questId: number): Promise<Task[]> {
 
   if (error) throw error;
   return data || [];
+}
+
+// New function to update task status in Supabase
+export async function updateTaskStatus(taskId: number, newStatus: TaskStatus): Promise<void> {
+  console.log(`Updating task ${taskId} to ${newStatus} in Supabase`);
+  
+  const { error } = await supabase
+    .from('tasks')
+    .update({ status: newStatus, updated_at: new Date().toISOString() })
+    .eq('id', taskId);
+  
+  if (error) {
+    console.error('Error updating task status:', error);
+    throw new Error(`Failed to update task status: ${error.message}`);
+  }
+  
+  return Promise.resolve();
+}
+
+// Helper function to get the next status in the cycle
+export function getNextStatus(currentStatus: string): TaskStatus {
+  switch (currentStatus) {
+    case 'ToDo':
+      return 'InProgress';
+    case 'InProgress':
+      return 'Done';
+    case 'Done':
+    default:
+      return 'ToDo';
+  }
 }
 
 // React Hook

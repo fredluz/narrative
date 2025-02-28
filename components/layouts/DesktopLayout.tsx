@@ -132,8 +132,8 @@ export function DesktopLayout() {
               onViewAllQuests={() => router.push('/quests')}
             />
 
-            {/* Journal panel as separate card */}
-            <JournalPanel themeColor={themeColor} textColor={textColor} />
+            {/* TaskList now appears in the first column after KanbanBoard */}
+            <TaskList compactMode={true} />
           </>
         )}
       </View>
@@ -142,7 +142,11 @@ export function DesktopLayout() {
         <ChatInterface themeColor={themeColor} recentMessages={messages} />
       </View>
       
-      <TaskList />
+      {/* JournalPanel moved to its own column for more vertical space */}
+      <View style={styles.column}>
+        <JournalPanel themeColor={themeColor} textColor={textColor} fullColumnMode={true} />
+      </View>
+      
       <SettingsButton />
     </View>
   );
