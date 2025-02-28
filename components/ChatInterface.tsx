@@ -12,6 +12,7 @@ import { Card } from 'react-native-paper';
 import { MaterialIcons } from '@expo/vector-icons';
 import styles, { colors } from '@/app/styles/global';
 import { ChatMessage } from '@/app/types';
+import { useTheme } from '@/contexts/ThemeContext';
 
 interface Props {
   recentMessages: ChatMessage[];
@@ -21,17 +22,7 @@ interface Props {
 export function ChatInterface({ recentMessages, themeColor }: Props) {
   const [message, setMessage] = useState('');
   
-  // Generate a secondary color for cyberpunk UI elements
-  const getSecondaryColor = (baseColor: string) => {
-    // If the color is red-ish, make secondary color blue-ish
-    if (baseColor.includes('f') || baseColor.includes('e') || baseColor.includes('d')) {
-      return '#1D64AB';
-    }
-    // Otherwise, make secondary color red-ish
-    return '#D81159';
-  };
-  
-  const secondaryColor = getSecondaryColor(themeColor);
+  const { secondaryColor } = useTheme();
   
   // Make text more visible against dark backgrounds
   const getBrightAccent = (baseColor: string) => {

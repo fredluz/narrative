@@ -9,12 +9,15 @@ import { useJournal } from '@/hooks/useJournal';
 import { journalStyles } from '@/app/styles/journalStyles';
 import { questStyles } from '@/app/styles/questStyles';
 import { journalService, JournalEntry } from '@/services/journalService';
-interface Props {
+import { useTheme } from '@/contexts/ThemeContext';
+
+interface JournalPanelProps {
   themeColor: string;
   textColor: string;
 }
 
-export function JournalPanel({ themeColor, textColor }: Props) {
+export function JournalPanel({ themeColor, textColor }: JournalPanelProps) {
+  const { secondaryColor } = useTheme();
   const router = useRouter();
   const { 
     currentDate, 
@@ -55,18 +58,6 @@ export function JournalPanel({ themeColor, textColor }: Props) {
       setLocalEntry(entry);
     });
   }, []);
-
-  // Derive a secondary color from the theme color
-  const getSecondaryColor = (baseColor: string) => {
-    // If the color is red-ish, make secondary color blue-ish
-    if (baseColor.includes('f') || baseColor.includes('e') || baseColor.includes('d')) {
-      return '#1D64AB';
-    }
-    // Otherwise, make secondary color red-ish
-    return '#D81159';
-  };
-  
-  const secondaryColor = getSecondaryColor(themeColor);
   
   // Generate a bright accent color for cyberpunk text effect
   const getBrightAccent = (baseColor: string) => {

@@ -1,5 +1,29 @@
-import { StyleSheet } from 'react-native';
-import { colors } from './global';
+import { StyleSheet, Platform } from 'react-native';
+import { colors, colorMappings } from './global';
+
+// Define fallback fonts based on platform
+const fontFamilies = {
+  regular: Platform.select({
+    ios: 'System',
+    android: 'Roboto',
+    default: 'Inter_400Regular'
+  }),
+  medium: Platform.select({
+    ios: 'System',
+    android: 'Roboto',
+    default: 'Inter_500Regular'
+  }),
+  semiBold: Platform.select({
+    ios: 'System',
+    android: 'Roboto-Medium',
+    default: 'Poppins_600SemiBold'
+  }),
+  bold: Platform.select({
+    ios: 'System',
+    android: 'Roboto-Bold',
+    default: 'Poppins_700Bold'
+  })
+};
 
 export const questStyles = StyleSheet.create({
   mainQuestContainer: {
@@ -8,7 +32,7 @@ export const questStyles = StyleSheet.create({
   },
 
   mainQuestCard: {
-    backgroundColor: colors.surface,
+    backgroundColor: colors.background,
     borderRadius: 12,
     padding: 20,
     shadowColor: '#000',
@@ -21,16 +45,16 @@ export const questStyles = StyleSheet.create({
   mainQuestTitle: {
     fontSize: 22,
     fontWeight: 'bold',
-    color: colors.textPrimary,
+    color: colors.text,
     marginBottom: 10,
-    fontFamily: 'Poppins_700Bold',
+    fontFamily: fontFamilies.bold,
   },
 
   questDetails: {
     fontSize: 14,
-    color: colors.textSecondary,
+    color: colors.textMuted,
     marginBottom: 5,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: fontFamilies.regular,
   },
 
   viewAllQuests: {
@@ -43,14 +67,14 @@ export const questStyles = StyleSheet.create({
   viewAllQuestsText: {
     fontSize: 14,
     fontWeight: 'bold',
-    fontFamily: 'Inter_700Bold',
+    fontFamily: fontFamilies.bold,
   },
 
   questTasksContainer: {
     marginTop: 20,
     paddingTop: 20,
     borderTopWidth: 1,
-    borderTopColor: colors.borderLight,
+    borderTopColor: colors.border,
   },
 
   setMainQuestButton: {
@@ -60,10 +84,10 @@ export const questStyles = StyleSheet.create({
   },
 
   setMainQuestButtonText: {
-    color: colors.textPrimary,
+    color: colors.text,
     fontSize: 12,
     fontWeight: 'bold',
-    fontFamily: 'Inter_700Bold',
+    fontFamily: fontFamilies.bold,
   },
 
   // Kanban styles for quest tasks
@@ -83,33 +107,121 @@ export const questStyles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     marginBottom: 8,
-    color: colors.textSecondary,
-    fontFamily: 'Poppins_700Bold',
+    color: colors.textMuted,
+    fontFamily: fontFamilies.bold,
   },
 
   kanbanTaskCard: {
     padding: 8,
-    backgroundColor: colors.surfaceLight,
+    backgroundColor: colors.background,
     borderRadius: 8,
   },
 
   kanbanTask: {
-    color: colors.textPrimary,
+    color: colors.text,
     fontSize: 14,
     marginVertical: 3,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: fontFamilies.regular,
   },
 
   statusTimestamp: {
-    color: colors.textPrimary,
+    color: colors.text,
     fontSize: 12,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: fontFamilies.bold,
     marginBottom: 5,
   },
 
   deadline: {
-    color: colors.textDanger,
+    color: colors.error,
     fontSize: 12,
-    fontFamily: 'Inter_400Regular',
-  }
+    fontFamily: fontFamilies.regular,
+  },
+  
+  // Add missing Kanban board styles referenced in KanbanBoard.tsx
+  emptyBoard: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+    backgroundColor: 'rgba(20, 20, 20, 0.7)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginVertical: 10,
+  },
+  
+  emptyBoardText: {
+    color: colors.textMuted,
+    marginTop: 10,
+    fontSize: 16,
+    fontStyle: 'italic',
+    fontFamily: fontFamilies.regular,
+  },
+  
+  columnFilter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    marginRight: 10,
+  },
+  
+  columnFilterText: {
+    fontSize: 14,
+    fontFamily: fontFamilies.medium,
+  },
+  
+  emptyColumn: {
+    padding: 20,
+    alignItems: 'center',
+    backgroundColor: 'rgba(20, 20, 20, 0.5)',
+    borderRadius: 8,
+    marginVertical: 5,
+  },
+  
+  emptyColumnText: {
+    color: colors.textMuted,
+    fontStyle: 'italic',
+    fontSize: 14,
+    fontFamily: fontFamilies.regular,
+  },
+  
+  taskItem: {
+    padding: 12,
+    marginBottom: 8,
+    borderRadius: 8,
+  },
+  
+  taskTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: colors.text,
+    fontFamily: fontFamilies.semiBold,
+    marginBottom: 4,
+  },
+  
+  taskDescription: {
+    fontSize: 14,
+    color: colors.textMuted,
+    fontFamily: fontFamilies.regular,
+    marginBottom: 6,
+  },
+  
+  taskStatusIcon: {
+    marginLeft: 10,
+    justifyContent: 'center',
+  },
+
+  cardHeader: {
+    padding: 16, 
+    borderBottomWidth: 1,
+  },
+  
+  questTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: colors.text,
+    fontFamily: fontFamilies.bold,
+  },
 });

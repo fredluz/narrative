@@ -2,8 +2,8 @@ import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useCallback } from 'react';
 import { View, Text } from 'react-native';
-import { useFonts, Inter_400Regular, Inter_700Bold } from '@expo-google-fonts/inter';
-import { Poppins_400Regular, Poppins_700Bold } from '@expo-google-fonts/poppins';
+import { useFonts, Inter_400Regular, Inter_500Medium, Inter_700Bold } from '@expo-google-fonts/inter';
+import { Poppins_400Regular, Poppins_600SemiBold, Poppins_700Bold } from '@expo-google-fonts/poppins';
 import { ThemeProvider as AppThemeProvider } from '@/contexts/ThemeContext';
 import { SupabaseProvider, useSupabase } from '@/contexts/SupabaseContext';
 import { QuestUpdateProvider } from '@/contexts/QuestUpdateContext';
@@ -16,8 +16,10 @@ function RootLayoutContent() {
   const { isLoading: isSupabaseLoading } = useSupabase();
   const [fontsLoaded] = useFonts({
     Inter_400Regular,
+    Inter_500Medium,
     Inter_700Bold,
     Poppins_400Regular,
+    Poppins_600SemiBold,
     Poppins_700Bold,
   });
 

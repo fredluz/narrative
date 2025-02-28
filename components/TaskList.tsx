@@ -17,10 +17,9 @@ import type { Task } from '@/app/types';
 
 // Add a taskService for operations that don't fit in the useTasks hook
 const taskService = {
-  updateTaskStatus: async (taskId: number, completed: boolean): Promise<void> => {
+  updateTaskStatus: async (taskId: number, newStatus: 'ToDo' | 'InProgress' | 'Done'): Promise<void> => {
     // This would normally update the task in your database
-    console.log(`Updating task ${taskId} to ${completed ? 'completed' : 'not completed'}`);
-    // For now this is a mock implementation
+    console.log(`Updating task ${taskId} to ${newStatus}`);
     return Promise.resolve();
   }
 };
@@ -30,7 +29,7 @@ export function TaskList() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { shouldUpdate, resetUpdate } = useQuestUpdate();
-  const { themeColor } = useTheme();
+  const { themeColor, secondaryColor } = useTheme();
   
   // Get tasks from the hook
   const { tasks: hookTasks, loading: hookLoading, error: hookError, reload: loadTasks } = useTasks();
@@ -42,17 +41,6 @@ export function TaskList() {
     if (hookError) setError(hookError);
   }, [hookTasks, hookLoading, hookError]);
   
-  // Generate a secondary color for our cyberpunk UI
-  const getSecondaryColor = (baseColor: string) => {
-    // If the color is red-ish, make secondary color blue-ish
-    if (baseColor.includes('f') || baseColor.includes('e') || baseColor.includes('d')) {
-      return '#1D64AB';
-    }
-    // Otherwise, make secondary color red-ish
-    return '#D81159';
-  };
-  
-  const secondaryColor = getSecondaryColor(themeColor);
 
   // Make text more visible against dark backgrounds
   const getBrightAccent = (baseColor: string) => {
@@ -89,13 +77,26 @@ export function TaskList() {
     }
   }, [shouldUpdate]);
 
-  const toggleTaskCompletion = async (taskId: number, currentState: boolean) => {
+  const getNextStatus = (currentStatus: string): 'ToDo' | 'InProgress' | 'Done' => {
+    switch (currentStatus) {
+      case 'ToDo':
+        return 'InProgress';
+      case 'InProgress':
+        return 'Done';
+      case 'Done':
+      default:
+        return 'ToDo';
+    }
+  };
+
+  const toggleTaskCompletion = async (taskId: number, currentStatus: string) => {
     try {
-      await taskService.updateTaskStatus(taskId, !currentState);
+      const newStatus = getNextStatus(currentStatus);
+      await taskService.updateTaskStatus(taskId, newStatus);
       
       // Update the local state
       const updatedTasks = tasks.map(task => 
-        task.id === taskId ? { ...task, completed: !currentState } : task
+        task.id === taskId ? { ...task, status: newStatus } : task
       );
       
       setTasks(updatedTasks);
@@ -216,24 +217,38 @@ export function TaskList() {
                 style={{ 
                   backgroundColor: 'rgba(25, 25, 25, 0.7)',
                   borderLeftWidth: 2,
-                  borderLeftColor: task.completed ? secondaryColor : themeColor,
+                  borderLeftColor: task.status === 'Done' ? secondaryColor : 
+                                  task.status === 'InProgress' ? themeColor : '#666',
                   marginBottom: 8,
                   padding: 10,
                   borderRadius: 4,
                 }}
               >
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <Checkbox
-                    status={task.completed ? 'checked' : 'unchecked'}
-                    onPress={() => toggleTaskCompletion(task.id, task.completed)}
-                    color={task.completed ? secondaryColor : themeColor}
-                  />
+                  <TouchableOpacity
+                    onPress={() => toggleTaskCompletion(task.id, task.status)}
+                    style={{ padding: 8 }}
+                  >
+                    <MaterialIcons 
+                      name={
+                        task.status === 'Done' ? 'check-circle' :
+                        task.status === 'InProgress' ? 'timelapse' :
+                        'radio-button-unchecked'
+                      }
+                      size={24}
+                      color={
+                        task.status === 'Done' ? secondaryColor :
+                        task.status === 'InProgress' ? themeColor :
+                        '#666'
+                      }
+                    />
+                  </TouchableOpacity>
                   <View style={{ marginLeft: 8, flex: 1 }}>
                     <Text style={{ 
                       fontSize: 16,
-                      color: task.completed ? '#AAA' : '#FFF',
-                      textDecorationLine: task.completed ? 'line-through' : 'none',
-                      opacity: task.completed ? 0.7 : 1,
+                      color: task.status === 'Done' ? '#AAA' : '#FFF',
+                      textDecorationLine: task.status === 'Done' ? 'line-through' : 'none',
+                      opacity: task.status === 'Done' ? 0.7 : 1,
                     }}>
                       {task.title}
                     </Text>
@@ -242,7 +257,7 @@ export function TaskList() {
                         fontSize: 14,
                         color: '#999',
                         marginTop: 4,
-                        opacity: task.completed ? 0.5 : 0.8, 
+                        opacity: task.status === 'Done' ? 0.5 : 0.8, 
                       }}>
                         {task.description}
                       </Text>
@@ -256,12 +271,12 @@ export function TaskList() {
                         <MaterialIcons 
                           name="assignment" 
                           size={12} 
-                          color={task.completed ? '#888' : secondaryColor} 
+                          color={task.status === 'Done' ? '#888' : secondaryColor} 
                           style={{ marginRight: 4 }} 
                         />
                         <Text style={{ 
                           fontSize: 12,
-                          color: task.completed ? '#888' : secondaryColor,
+                          color: task.status === 'Done' ? '#888' : secondaryColor,
                         }}>
                           {task.quest.title}
                         </Text>

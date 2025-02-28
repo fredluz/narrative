@@ -425,6 +425,33 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: 'rgba(255,255,255,0.1)',
   },
+  
+  // Adding commonly mapped colors to solve inconsistencies
+  kanbanStyles: {
+    emptyBoard: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 20,
+      backgroundColor: 'rgba(20, 20, 20, 0.7)',
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      marginVertical: 10,
+    },
+  },
 });
+
+// Add these color mappings to fix inconsistencies between files
+export const colorMappings = {
+  // Color mappings to standardize names across files
+  surface: colors.card,
+  surfaceLight: colors.backgroundSecondary,
+  surfaceLighter: colors.cardDark,
+  textPrimary: colors.text,
+  textSecondary: colors.textMuted,
+  textDanger: colors.error,
+  borderLight: colors.border,
+};
 
 export default styles;

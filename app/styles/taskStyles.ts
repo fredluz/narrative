@@ -1,8 +1,8 @@
 import { StyleSheet } from 'react-native';
-import { colors } from './global';
+import { colors, colorMappings } from './global';
 
 const commonCardStyle = {
-  backgroundColor: colors.surface,
+  backgroundColor: colors.card, // Changed from colors.surface to colors.card
   borderRadius: 12,
   shadowColor: '#000',
   shadowOffset: { width: 0, height: 2 },
@@ -26,27 +26,27 @@ export const taskStyles = StyleSheet.create({
   cardTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: colors.textPrimary,
+    color: colors.text, // Changed from colors.textPrimary to colors.text
     marginBottom: 5,
     fontFamily: 'Poppins_700Bold',
   },
 
   cardDetails: {
     fontSize: 14,
-    color: colors.textSecondary,
+    color: colors.textMuted, // Changed from colors.textSecondary to colors.textMuted
     marginBottom: 5,
     fontFamily: 'Inter_400Regular',
   },
 
   deadline: {
     fontSize: 14,
-    color: colors.textDanger,
+    color: colors.error, // Changed from colors.textDanger to colors.error
     marginBottom: 5,
     fontFamily: 'Inter_400Regular',
   },
 
   questReference: {
-    color: colors.textPrimary,
+    color: colors.text,
     fontSize: 14,
     marginTop: 4,
     fontStyle: 'italic',
@@ -60,7 +60,7 @@ export const taskStyles = StyleSheet.create({
   },
 
   toggleButton: {
-    backgroundColor: colors.surfaceLighter,
+    backgroundColor: colors.cardDark, // Changed from colors.surfaceLighter to colors.cardDark
     padding: 12,
     borderRadius: 12,
     marginBottom: 10,
@@ -72,14 +72,14 @@ export const taskStyles = StyleSheet.create({
   },
 
   toggleButtonText: {
-    color: colors.textPrimary,
+    color: colors.text, // Changed from colors.textPrimary to colors.text
     fontSize: 16,
     fontFamily: 'Inter_400Regular',
   },
 
   location: {
     fontSize: 14,
-    color: colors.textSecondary,
+    color: colors.textMuted, // Changed from colors.textSecondary to colors.textMuted
     fontStyle: 'italic',
     marginBottom: 5,
     fontFamily: 'Inter_400Regular',
@@ -99,7 +99,7 @@ export const taskStyles = StyleSheet.create({
   },
 
   errorText: {
-    color: colors.textDanger,
+    color: colors.error, // Changed from colors.textDanger to colors.error
     fontSize: 16,
     textAlign: 'center',
     fontFamily: 'Inter_400Regular',

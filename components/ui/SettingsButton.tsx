@@ -1,23 +1,12 @@
 import React, { useState } from 'react';
 import { View, Pressable, Text, StyleSheet, Modal } from 'react-native';
-import ColorPicker from 'react-native-wheel-color-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
+import { ColorPicker } from './ColorPicker';
 
 export function SettingsButton() {
   const [isOpen, setIsOpen] = useState(false);
-  const { themeColor, setThemeColor } = useTheme();
-
-  const isDarkColor = (color: string) => {
-    const hex = color.replace('#', '');
-    const r = parseInt(hex.substring(0, 2), 16);
-    const g = parseInt(hex.substring(2, 4), 16);
-    const b = parseInt(hex.substring(4, 6), 16);
-    const brightness = (r * 299 + g * 587 + b * 114) / 1000;
-    return brightness < 128;
-  };
-
-  const textColor = isDarkColor(themeColor) ? '#fff' : '#000';
+  const { themeColor, secondaryColor, setThemeColor, setSecondaryColor, textColor } = useTheme();
 
   return (
     <View style={styles.container}>
@@ -28,11 +17,7 @@ export function SettingsButton() {
           { backgroundColor: themeColor },
           pressed && styles.pressed
         ]}>
-        <Ionicons
-          name="settings"
-          size={24}
-          color={textColor}
-        />
+        <Ionicons name="settings" size={24} color={textColor} />
       </Pressable>
       
       <Modal
@@ -50,21 +35,18 @@ export function SettingsButton() {
             onStartShouldSetResponder={() => true}
             onTouchEnd={e => e.stopPropagation()}
           >
-            <Text style={[styles.label, { color: textColor }]}>Theme Color</Text>
-            <View style={styles.pickerContainer}>
-              <ColorPicker
-                color={themeColor}
-                onColorChange={setThemeColor}
-                thumbSize={30}
-                sliderSize={20}
-                noSnap={true}
-                row={false}
-              />
-            </View>
-            <View style={styles.currentColor}>
-              <Text style={[styles.colorText, { color: textColor }]}>Current: {themeColor}</Text>
-              <View style={[styles.colorPreview, { backgroundColor: themeColor }]} />
-            </View>
+            <ColorPicker
+              color={themeColor}
+              onColorChange={setThemeColor}
+              label="Primary Theme Color"
+              textColor={textColor}
+            />
+            <ColorPicker
+              color={secondaryColor}
+              onColorChange={setSecondaryColor}
+              label="Secondary Theme Color"
+              textColor={textColor}
+            />
           </View>
         </Pressable>
       </Modal>
