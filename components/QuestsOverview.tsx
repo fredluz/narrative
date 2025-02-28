@@ -586,8 +586,8 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
                             fontSize: 22,
                             color: '#FFF',
                             fontWeight: 'bold',
-                            textShadowColor: themeColor,
-                            textShadowOffset: { width: 1, height: 1 },
+                            textShadowColor: secondaryColor,
+                            textShadowOffset: { width: 0, height: 0 },
                             textShadowRadius: 3
                           }}>
                             {selectedQuest.title}
@@ -657,10 +657,13 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
                         
                         {selectedQuest.tagline && (
                           <Text style={{ 
+                            fontSize: 18,
                             color: '#BBB',
-                            fontSize: 15,
                             marginBottom: 15,
-                            fontStyle: 'italic'
+                            fontStyle: 'italic',
+                            textShadowColor: secondaryColor,
+                            textShadowOffset: { width: 0, height: 0 },
+                            textShadowRadius: 3
                           }}>
                             {selectedQuest.tagline}
                           </Text>
@@ -679,8 +682,12 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
                             borderLeftColor: themeColor,
                           }}>
                             <Text style={{ 
-                              color: '#DDD', 
-                              fontSize: 14,
+                              fontSize: 15,
+                              color: '#BBB',
+                              fontStyle: 'italic',
+                              textShadowColor: secondaryColor,
+                              textShadowOffset: { width: 0, height: 0 },
+                              textShadowRadius: 3,
                               lineHeight: 20
                             }}>
                               {selectedQuest.current_description.message}

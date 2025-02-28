@@ -8,6 +8,7 @@ export interface JournalEntry {
   title: string;
   user_entry: string;
   ai_analysis: string;
+  ai_response: string; // Add new field for Johnny's response
   date?: string; // We'll add this for convenience
 }
 
@@ -77,30 +78,24 @@ export const journalService = {
   },
 
   // Create or update a journal entry
-  async saveEntry(date: string, content: string, title: string = ''): Promise<JournalEntry> {
+  async saveEntry(date: string, content: string, title: string = '', tags: string[] = []): Promise<JournalEntry> {
     try {
-      // First check if entry exists
       const existingEntry = await this.getEntry(date);
 
       if (existingEntry) {
         // Update existing entry
-        console.log('Updating existing entry for date:', date, 'with ID:', existingEntry.id);
         const { data, error } = await supabase
           .from('journal_entries')
           .update({ 
             user_entry: content,
-            title: title || existingEntry.title, 
-            updated_at: new Date().toISOString() 
+            title: title || existingEntry.title,
+            tags: tags,
+            updated_at: new Date().toISOString()
           })
           .eq('id', existingEntry.id);
 
-        if (error) {
-          console.error('Error updating journal entry:', error.message, error.details, error.hint);
-          throw new Error(`Failed to update journal entry: ${error.message}`);
-        }
+        if (error) throw error;
 
-        // For update operations, Supabase might not return data even if successful
-        // In this case, we'll fetch the updated entry
         const updatedEntry = await this.getEntry(date);
         if (!updatedEntry) {
           throw new Error('Failed to retrieve updated journal entry');
@@ -108,10 +103,8 @@ export const journalService = {
 
         return updatedEntry;
       } else {
-        // Create new entry with the date's timestamp
-        console.log('Creating new entry for date:', date);
+        // Create new entry
         const entryDate = new Date(date);
-        // Set time to noon of the selected day to ensure correct date handling
         entryDate.setHours(12, 0, 0, 0);
         
         const { data, error } = await supabase
@@ -121,17 +114,13 @@ export const journalService = {
             updated_at: new Date().toISOString(),
             user_entry: content,
             title: title || `Journal Entry - ${date}`,
-            tags: [],
-            ai_analysis: ''
+            tags: tags,
+            ai_analysis: '',
+            ai_response: ''
           }]);
 
-        if (error) {
-          console.error('Error creating journal entry:', error.message, error.details, error.hint);
-          throw new Error(`Failed to create journal entry: ${error.message}`);
-        }
+        if (error) throw error;
 
-        // For insert operations, Supabase might not return data even if successful
-        // Fetch the newly created entry
         const newEntry = await this.getEntry(date);
         if (!newEntry) {
           throw new Error('Failed to retrieve newly created journal entry');
@@ -171,5 +160,52 @@ export const journalService = {
     }
     
     return aiResponse;
+  },
+
+  // Update AI responses
+  async updateAIResponses(id: string, response: string, analysis: string): Promise<void> {
+    const { error } = await supabase
+      .from('journal_entries')
+      .update({ 
+        ai_response: response,
+        ai_analysis: analysis,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', id);
+      
+    if (error) {
+      console.error('Error saving AI responses:', error);
+      throw new Error('Failed to save AI responses');
+    }
+  },
+
+  // Generate both AI responses
+  async generateAIResponses(id: string, userEntry: string): Promise<{ response: string, analysis: string }> {
+    // Silverhand's responses are more personal and emotional
+    const silverhandResponses = [
+      "Living the corpo life, huh? Just remember who you really are beneath all that chrome.",
+      "Taking risks, making moves... that's what I like to see. Keep that fire burning, samurai.",
+      "Sounds like you're starting to see through the matrix they've built. Good. Question everything.",
+      "The city's trying to break you down? Let it try. You're stronger than their systems.",
+      "Now that's what I call sticking it to the man. Keep pushing those boundaries, choom."
+    ];
+    
+    // Analysis responses are more structured and logical
+    const analysisResponses = [
+      "Pattern analysis indicates increased focus on long-term objectives. Recommend maintaining current trajectory while monitoring stress levels.",
+      "Detected recurring theme of project deadlines. Suggest implementing time-blocking techniques and establishing clearer boundaries.",
+      "Analysis shows positive trend in problem-solving approaches. Continue leveraging creative solutions while documenting methodologies.",
+      "Risk assessment indicates potential burnout markers. Recommend scheduling strategic breaks and reassessing task prioritization.",
+      "Communication patterns show improved stakeholder engagement. Consider documenting successful interaction models for future reference."
+    ];
+
+    // In a real implementation, these would come from an AI service
+    const response = silverhandResponses[Math.floor(Math.random() * silverhandResponses.length)];
+    const analysis = analysisResponses[Math.floor(Math.random() * analysisResponses.length)];
+    
+    // Save both responses
+    await this.updateAIResponses(id, response, analysis);
+    
+    return { response, analysis };
   }
 };

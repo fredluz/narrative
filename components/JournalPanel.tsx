@@ -11,6 +11,155 @@ import { questStyles } from '@/app/styles/questStyles';
 import { journalService, JournalEntry } from '@/services/journalService';
 import { useTheme } from '@/contexts/ThemeContext';
 
+// JournalEntry component for user input
+const JournalEntryInput: React.FC<{
+  value: string;
+  tagsValue: string;
+  onChangeText: (text: string) => void;
+  onChangeTags: (text: string) => void;
+  loading: boolean;
+  fullColumnMode?: boolean;
+  themeColor: string;
+}> = ({ value, tagsValue, onChangeText, onChangeTags, loading, fullColumnMode, themeColor }) => (
+  <View style={{ flex: 4, display: 'flex', flexDirection: 'column' }}>
+    {/* Main text input */}
+    <TextInput
+      style={{
+        flex: 1,
+        backgroundColor: 'rgba(20, 20, 20, 0.9)',
+        borderWidth: 1,
+        borderColor: themeColor,
+        borderLeftWidth: 2,
+        borderLeftColor: themeColor,
+        borderRadius: 4,
+        marginBottom: 5,
+        color: '#FFFFFF',
+        padding: 12,
+        fontSize: fullColumnMode ? 18 : 16,
+        fontWeight: 'normal',
+        textAlignVertical: 'top',
+        minHeight: fullColumnMode ? 260 : 160,
+      }}
+      multiline={true}
+      value={value}
+      onChangeText={onChangeText}
+      placeholder="How's your day going, samurai?"
+      placeholderTextColor="#666"
+      editable={!loading}
+    />
+    
+    {/* Tags input */}
+    <TextInput
+      style={{
+        height: 40,
+        backgroundColor: 'rgba(20, 20, 20, 0.9)',
+        borderWidth: 1,
+        borderColor: themeColor,
+        borderLeftWidth: 2,
+        borderLeftColor: themeColor,
+        borderRadius: 4,
+        color: '#FFFFFF',
+        padding: 12,
+        fontSize: 14,
+        fontWeight: 'normal',
+      }}
+      value={tagsValue}
+      onChangeText={onChangeTags}
+      placeholder="Add tags (comma separated) e.g. work, meeting, idea"
+      placeholderTextColor="#666"
+      editable={!loading}
+    />
+  </View>
+);
+
+// AIResponse component for Johnny's in-character response
+const AIResponse: React.FC<{
+  response: string | null;
+  loading: boolean;
+  fullColumnMode?: boolean;
+  secondaryColor: string;
+}> = ({ response, loading, fullColumnMode, secondaryColor }) => (
+  <View style={{
+    flex: 0.8,
+    backgroundColor: 'rgba(15, 15, 15, 0.8)',
+    borderRadius: 5,
+    borderLeftWidth: 3,
+    borderColor: secondaryColor,
+    padding: 15,
+    marginTop: 10,
+  }}>
+    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+      <MaterialIcons 
+        name="psychology" 
+        size={20} 
+        color={secondaryColor} 
+        style={{ marginRight: 8 }} 
+      />
+      <Text style={{
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: secondaryColor,
+      }}>
+        SILVERHAND
+      </Text>
+    </View>
+    
+    <ThemedText style={{
+      fontSize: fullColumnMode ? 18 : 15,
+      color: '#BBB',
+      fontStyle: 'italic',
+      textShadowColor: secondaryColor,
+      textShadowOffset: { width: 0, height: 0 },
+      textShadowRadius: 3
+    }}>
+      {loading ? "Thinking..." : (response || "Keep typing, choom. Your story's writing itself.")}
+    </ThemedText>
+  </View>
+);
+
+// AIAnalysis component for logical analysis
+const AIAnalysis: React.FC<{
+  analysis: string | null;
+  loading: boolean;
+  fullColumnMode?: boolean;
+  themeColor: string;
+}> = ({ analysis, loading, fullColumnMode, themeColor }) => (
+  <View style={{
+    flex: 0.8,
+    backgroundColor: 'rgba(15, 15, 15, 0.8)',
+    borderRadius: 5,
+    borderLeftWidth: 3,
+    borderColor: themeColor,
+    padding: 15,
+    marginTop: 10,
+  }}>
+    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+      <MaterialIcons 
+        name="analytics" 
+        size={20} 
+        color={themeColor} 
+        style={{ marginRight: 8 }} 
+      />
+      <Text style={{
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: themeColor,
+      }}>
+        STRATEGIC ANALYSIS
+      </Text>
+    </View>
+    
+    <ThemedText style={{
+      fontSize: fullColumnMode ? 18 : 15,
+      color: '#BBB',
+      fontStyle: 'normal',
+      lineHeight: 22,
+    }}>
+      {loading ? "Analyzing patterns..." : (analysis || "Awaiting data for analysis.")}
+    </ThemedText>
+  </View>
+);
+
 interface JournalPanelProps {
   themeColor: string;
   textColor: string;
@@ -23,7 +172,7 @@ export function JournalPanel({ themeColor, textColor, fullColumnMode = false }: 
   const { 
     currentDate, 
     getEntry, 
-    getAiAnalysis,
+    getAiResponses,
     updateLocalEntry,
     saveEntry,
     refreshEntries,
@@ -35,8 +184,9 @@ export function JournalPanel({ themeColor, textColor, fullColumnMode = false }: 
   const [localError, setLocalError] = useState<string | null>(null);
   const [localEntry, setLocalEntry] = useState<string>('');
   const [originalEntry, setOriginalEntry] = useState<string>('');
+  const [localTags, setLocalTags] = useState<string>('');
   const [aiResponse, setAiResponse] = useState<string | null>(null);
-  const [aiAnalysisAvailable, setAiAnalysisAvailable] = useState(true);
+  const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
 
   // Format date display
   const formattedDate = currentDate.toLocaleDateString('en-US', { 
@@ -48,10 +198,14 @@ export function JournalPanel({ themeColor, textColor, fullColumnMode = false }: 
   // Load current entry whenever date changes or after refresh
   useEffect(() => {
     const entry = getEntry(currentDate);
-    console.log('JournalPanel: Loading entry for date:', currentDate.toISOString().split('T')[0], 'Entry length:', entry?.length || 0);
-    setLocalEntry(entry);
-    setOriginalEntry(entry); // Store the original entry for comparison
-  }, [currentDate, getEntry]);
+    const aiResponses = getAiResponses(currentDate);
+    
+    setLocalEntry(entry?.user_entry || '');
+    setOriginalEntry(entry?.user_entry || '');
+    setLocalTags(entry?.tags?.join(', ') || '');
+    setAiResponse(aiResponses.response);
+    setAiAnalysis(aiResponses.analysis);
+  }, [currentDate, getEntry, getAiResponses]);
 
   // Refresh entries initially to make sure we have the latest data
   useEffect(() => {
@@ -59,19 +213,18 @@ export function JournalPanel({ themeColor, textColor, fullColumnMode = false }: 
     refreshEntries().then(() => {
       // After refreshing, get the entry again to ensure we have the latest data
       const entry = getEntry(currentDate);
-      console.log('JournalPanel: After refresh, entry length:', entry?.length || 0);
-      setLocalEntry(entry);
-      setOriginalEntry(entry);
+      console.log('JournalPanel: After refresh, entry length:', entry?.user_entry?.length || 0);
+      setLocalEntry(entry?.user_entry || '');
+      setOriginalEntry(entry?.user_entry || '');
     });
   }, []);
   
   useEffect(() => {
     // Check if getAiAnalysis is a function
-    if (typeof getAiAnalysis !== 'function') {
-      console.error('JournalPanel: getAiAnalysis is not a function');
-      setAiAnalysisAvailable(false);
+    if (typeof getAiResponses !== 'function') {
+      console.error('JournalPanel: getAiResponses is not a function');
     }
-  }, [getAiAnalysis]);
+  }, [getAiResponses]);
 
   // Generate a bright accent color for cyberpunk text effect
   const getBrightAccent = (baseColor: string) => {
@@ -104,38 +257,9 @@ export function JournalPanel({ themeColor, textColor, fullColumnMode = false }: 
     // Removed the immediate updateLocalEntry call
   }, []);
 
-  // Generate AI response based on changes between original and updated entry
-  const generateAiResponse = useCallback(async (originalText: string, updatedText: string) => {
-    if (originalText === updatedText) {
-      setAiResponse("No changes detected in today's entry.");
-      return;
-    }
-
-    try {
-      // Simulate an API call for AI response generation
-      // In a real app, you would send originalText and updatedText to your backend
-      setAiResponse("Analyzing your journal update...");
-      
-      // Simulate delay for API call
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      // Example response - in a real app this would come from your API/backend
-      const responses = [
-        "I notice you're focusing more on your long-term goals today. That's a positive shift from yesterday's entry.",
-        "You seem to be in a more reflective mood today. Take the time you need to process your thoughts.",
-        "Your progress is notable. Each step forward, no matter how small, is still progress worth celebrating.",
-        "I see you're concerned about that upcoming deadline. Remember to break it down into manageable tasks.",
-        "There's a more optimistic tone in your writing today - keep nurturing that perspective."
-      ];
-      
-      // Randomly select a response
-      const randomResponse = responses[Math.floor(Math.random() * responses.length)];
-      setAiResponse(randomResponse);
-      
-    } catch (err) {
-      console.error('Failed to generate AI response:', err);
-      setAiResponse("I couldn't analyze your journal update at this time.");
-    }
+  // Handle tags changes
+  const handleTagsChange = useCallback((text: string) => {
+    setLocalTags(text);
   }, []);
 
   // Modified save handler to update local entries before saving and generate AI response
@@ -146,21 +270,30 @@ export function JournalPanel({ themeColor, textColor, fullColumnMode = false }: 
       setLocalLoading(true);
       setLocalError(null);
       
+      // Process tags - split by commas and trim whitespace
+      const processedTags = localTags
+        .split(',')
+        .map(tag => tag.trim())
+        .filter(tag => tag.length > 0);
+      
       // Update local entries right before saving
       updateLocalEntry(currentDate, localEntry);
       
-      // First save the entry
+      // First save the entry with tags
       await journalService.saveEntry(
         currentDate.toISOString().split('T')[0],
         localEntry,
-        'Journal Entry' // Can add title support later if needed
+        'Journal Entry',
+        processedTags
       );
       
       // Then refresh the entries list
       await refreshEntries();
 
-      // Generate AI response based on the changes
-      await generateAiResponse(originalEntry, localEntry);
+      // The AI responses will be updated by the saveEntry function
+      const aiResponses = getAiResponses(currentDate);
+      setAiResponse(aiResponses.response);
+      setAiAnalysis(aiResponses.analysis);
       
       // Update the original entry to the new version
       setOriginalEntry(localEntry);
@@ -171,23 +304,10 @@ export function JournalPanel({ themeColor, textColor, fullColumnMode = false }: 
     } finally {
       setLocalLoading(false);
     }
-  }, [currentDate, localEntry, originalEntry, updateLocalEntry, refreshEntries, generateAiResponse]);
-
-  // Safely get AI analysis with error handling
-  const getSafeAiAnalysis = useCallback((date: Date): string | null => {
-    if (!aiAnalysisAvailable) return null;
-    
-    try {
-      return getAiAnalysis(date);
-    } catch (err) {
-      console.error('Error getting AI analysis:', err);
-      return null;
-    }
-  }, [getAiAnalysis, aiAnalysisAvailable]);
+  }, [currentDate, localEntry, localTags, updateLocalEntry, refreshEntries, getAiResponses]);
 
   const loading = localLoading;
   const error = localError;
-  const aiAnalysis = getSafeAiAnalysis(currentDate);
 
   return (
     <Card style={[styles.taskCard, { 
@@ -351,7 +471,13 @@ export function JournalPanel({ themeColor, textColor, fullColumnMode = false }: 
         </View>
       </View>
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1 }}>
+      <ScrollView 
+        style={{ flex: 1 }} 
+        contentContainerStyle={{ 
+          flexGrow: 1,
+          padding: 15,
+        }}
+      >
         <ThemedText style={[styles.cardDetails, { 
           paddingLeft: 15,
           paddingTop: 10,
@@ -379,79 +505,31 @@ export function JournalPanel({ themeColor, textColor, fullColumnMode = false }: 
             </ThemedText>
           </View>
         ) : (
-          <>
-            <View style={{
-              margin: 15,
-              marginTop: 5,
-              backgroundColor: 'rgba(20, 20, 20, 0.9)',
-              borderWidth: 1,
-              borderColor: themeColor,
-              borderLeftWidth: 2,
-              borderLeftColor: themeColor,
-              borderRadius: 4,
-              padding: 0, // Remove padding that might affect input visibility
-              position: 'relative', // Ensure proper stacking context
-            }}>
-              <TextInput
-                style={{
-                  height: fullColumnMode ? 200 : 100, // Increase height in full column mode
-                  color: '#FFFFFF',
-                  padding: 12,
-                  fontSize: fullColumnMode ? 18 : 16, // Larger font in full column mode
-                  fontWeight: 'normal',
-                  textAlignVertical: 'top',
-                }}
-                multiline={true}
-                value={localEntry}
-                onChangeText={handleEntryChange}
-                placeholder="How's your day going, samurai?"
-                placeholderTextColor="#666"
-                editable={!loading}
-                key={`journal-input-${currentDate.toISOString().split('T')[0]}`}
-              />
-            </View>
-
-            {/* AI response section - more prominent in full column mode */}
-            <View style={{
-              margin: 15,
-              marginTop: 5,
-              marginBottom: 15,
-              padding: 15,
-              backgroundColor: 'rgba(15, 15, 15, 0.8)',
-              borderRadius: 5,
-              borderLeftWidth: 3,
-              borderColor: secondaryColor,
-            }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                <MaterialIcons 
-                  name="psychology" 
-                  size={20} 
-                  color={secondaryColor} 
-                  style={{ marginRight: 8 }} 
-                />
-                <Text style={{
-                  fontSize: 16,
-                  fontWeight: 'bold',
-                  color: secondaryColor,
-                }}>
-                  SILVERHAND
-                </Text>
-              </View>
-              
-              <ThemedText style={{
-                fontSize: fullColumnMode ? 18 : 15,
-                color: '#BBB',
-                fontStyle: 'italic',
-                textShadowColor: secondaryColor,
-                textShadowOffset: { width: 0, height: 0 },
-                textShadowRadius: 3
-              }}>
-                {loading ? "Thinking..." : (aiResponse || aiAnalysis || "Keep typing, choom. Your story's writing itself.")}
-              </ThemedText>
-            </View>
+          <View style={{ flex: 1, flexDirection: 'column', gap: 10 }}>
+            <JournalEntryInput
+              value={localEntry}
+              tagsValue={localTags}
+              onChangeText={handleEntryChange}
+              onChangeTags={handleTagsChange}
+              loading={loading}
+              fullColumnMode={fullColumnMode}
+              themeColor={themeColor}
+            />
             
-            {/* Removed the patterns & insights section */}
-          </>
+            <AIResponse
+              response={aiResponse}
+              loading={loading}
+              fullColumnMode={fullColumnMode}
+              secondaryColor={secondaryColor}
+            />
+            
+            <AIAnalysis
+              analysis={aiAnalysis}
+              loading={loading}
+              fullColumnMode={fullColumnMode}
+              themeColor={themeColor}
+            />
+          </View>
         )}
       </ScrollView>
     </Card>

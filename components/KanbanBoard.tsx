@@ -19,7 +19,7 @@ type TaskStatus = 'ToDo' | 'InProgress' | 'Done';
 export function KanbanBoard({ mainQuest, onViewAllQuests }: KanbanProps) {
   const router = useRouter();
   const { themeColor, secondaryColor } = useTheme();
-  const [activeColumn, setActiveColumn] = useState<TaskStatus | 'all'>('all');
+  const [activeColumn, setActiveColumn] = useState<TaskStatus | 'all' | 'active'>('active');
   const [updatingTaskId, setUpdatingTaskId] = useState<number | null>(null);
 
   // Make text more visible against dark backgrounds
@@ -134,8 +134,10 @@ export function KanbanBoard({ mainQuest, onViewAllQuests }: KanbanProps) {
   const tasks = mainQuest?.tasks || [];
 
   // Filter tasks based on activeColumn
-  const filteredTasks =
-    activeColumn === 'all' ? tasks : tasks.filter((task) => task.status === activeColumn);
+  const filteredTasks = 
+    activeColumn === 'all' ? tasks :
+    activeColumn === 'active' ? tasks.filter((task) => task.status === 'ToDo' || task.status === 'InProgress') :
+    tasks.filter((task) => task.status === activeColumn);
 
   // No tasks UI
   if (tasks.length === 0) {
@@ -414,7 +416,7 @@ export function KanbanBoard({ mainQuest, onViewAllQuests }: KanbanProps) {
             <TouchableOpacity
               style={[
                 questStyles.columnFilter,
-                activeColumn === 'all'
+                activeColumn === 'active'
                   ? {
                       backgroundColor: 'rgba(30, 30, 30, 0.9)',
                       borderBottomWidth: 2,
@@ -422,79 +424,21 @@ export function KanbanBoard({ mainQuest, onViewAllQuests }: KanbanProps) {
                     }
                   : { backgroundColor: 'rgba(20, 20, 20, 0.7)' },
               ]}
-              onPress={() => setActiveColumn('all')}
+              onPress={() => setActiveColumn('active')}
             >
               <MaterialIcons
-                name="format-list-bulleted"
+                name="pending-actions"
                 size={16}
-                color={activeColumn === 'all' ? brightAccent : '#AAA'}
+                color={activeColumn === 'active' ? brightAccent : '#AAA'}
                 style={{ marginRight: 5 }}
               />
               <Text
                 style={[
                   questStyles.columnFilterText,
-                  { color: activeColumn === 'all' ? brightAccent : '#AAA', fontFamily: 'Inter_500Medium' },
+                  { color: activeColumn === 'active' ? brightAccent : '#AAA', fontFamily: 'Inter_500Medium' },
                 ]}
               >
-                All
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                questStyles.columnFilter,
-                activeColumn === 'ToDo'
-                  ? {
-                      backgroundColor: 'rgba(30, 30, 30, 0.9)',
-                      borderBottomWidth: 2,
-                      borderBottomColor: brightAccent,
-                    }
-                  : { backgroundColor: 'rgba(20, 20, 20, 0.7)' },
-              ]}
-              onPress={() => setActiveColumn('ToDo')}
-            >
-              <MaterialIcons
-                name="hourglass-empty"
-                size={16}
-                color={activeColumn === 'ToDo' ? brightAccent : '#AAA'}
-                style={{ marginRight: 5 }}
-              />
-              <Text
-                style={[
-                  questStyles.columnFilterText,
-                  { color: activeColumn === 'ToDo' ? brightAccent : '#AAA', fontFamily: 'Inter_500Medium' },
-                ]}
-              >
-                To Do
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                questStyles.columnFilter,
-                activeColumn === 'InProgress'
-                  ? {
-                      backgroundColor: 'rgba(30, 30, 30, 0.9)',
-                      borderBottomWidth: 2,
-                      borderBottomColor: brightAccent,
-                    }
-                  : { backgroundColor: 'rgba(20, 20, 20, 0.7)' },
-              ]}
-              onPress={() => setActiveColumn('InProgress')}
-            >
-              <MaterialIcons
-                name="timelapse"
-                size={16}
-                color={activeColumn === 'InProgress' ? brightAccent : '#AAA'}
-                style={{ marginRight: 5 }}
-              />
-              <Text
-                style={[
-                  questStyles.columnFilterText,
-                  { color: activeColumn === 'InProgress' ? brightAccent : '#AAA', fontFamily: 'Inter_500Medium' },
-                ]}
-              >
-                In Progress
+                To Do & In Progress
               </Text>
             </TouchableOpacity>
 
@@ -524,6 +468,35 @@ export function KanbanBoard({ mainQuest, onViewAllQuests }: KanbanProps) {
                 ]}
               >
                 Completed
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                questStyles.columnFilter,
+                activeColumn === 'all'
+                  ? {
+                      backgroundColor: 'rgba(30, 30, 30, 0.9)',
+                      borderBottomWidth: 2,
+                      borderBottomColor: brightAccent,
+                    }
+                  : { backgroundColor: 'rgba(20, 20, 20, 0.7)' },
+              ]}
+              onPress={() => setActiveColumn('all')}
+            >
+              <MaterialIcons
+                name="format-list-bulleted"
+                size={16}
+                color={activeColumn === 'all' ? brightAccent : '#AAA'}
+                style={{ marginRight: 5 }}
+              />
+              <Text
+                style={[
+                  questStyles.columnFilterText,
+                  { color: activeColumn === 'all' ? brightAccent : '#AAA', fontFamily: 'Inter_500Medium' },
+                ]}
+              >
+                All
               </Text>
             </TouchableOpacity>
           </ScrollView>

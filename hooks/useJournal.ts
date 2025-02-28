@@ -9,6 +9,8 @@ export function useJournal() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { triggerUpdate } = useQuestUpdate();
+  const [aiResponse, setAiResponse] = useState<string | null>(null);
+  const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
 
   const formatDate = (date: Date) => {
     return date.toISOString().split('T')[0];
@@ -78,25 +80,40 @@ export function useJournal() {
     fetchRecentEntries();
   }, [fetchRecentEntries, currentDate]);
 
-  const getEntry = useCallback((date: Date) => {
+  const getEntry = useCallback((date: Date): JournalEntry | null => {
     const dateStr = formatDate(date);
     
     // First check local entries (for unsaved changes)
     if (localEntries[dateStr] !== undefined) {
       console.log('Returning local entry for', dateStr, 'length:', localEntries[dateStr]?.length || 0);
-      return localEntries[dateStr];
+      // Create a temporary JournalEntry for local changes
+      return {
+        id: entries[dateStr]?.id || '',
+        created_at: date.toISOString(),
+        updated_at: new Date().toISOString(),
+        tags: entries[dateStr]?.tags || [],
+        title: entries[dateStr]?.title || '',
+        user_entry: localEntries[dateStr],
+        ai_analysis: entries[dateStr]?.ai_analysis || '',
+        ai_response: entries[dateStr]?.ai_response || '',
+        date: dateStr
+      };
     }
     
     // Then check saved entries
     const entry = entries[dateStr];
-    console.log('Returning saved entry for', dateStr, 'exists:', !!entry, 'length:', entry?.user_entry?.length || 0);
-    return entry ? entry.user_entry : '';
+    console.log('Returning saved entry for', dateStr, 'exists:', !!entry);
+    return entry || null;
   }, [entries, localEntries]);
 
-  const getAiAnalysis = useCallback((date: Date) => {
+  const getAiResponses = useCallback((date: Date) => {
     const dateStr = formatDate(date);
     const entry = entries[dateStr];
-    return entry ? entry.ai_analysis : '';
+    if (!entry) return { response: null, analysis: null };
+    return {
+      response: entry.ai_response || null,
+      analysis: entry.ai_analysis || null
+    };
   }, [entries]);
 
   // Update local entry text without saving to database
@@ -121,13 +138,22 @@ export function useJournal() {
       const savedEntry = await journalService.saveEntry(dateStr, text || '');
       console.log('Successfully saved entry:', savedEntry);
       
-      // Update entries with the saved entry
+      // Generate both AI responses
+      const { response, analysis } = await journalService.generateAIResponses(savedEntry.id, text || '');
+      setAiResponse(response);
+      setAiAnalysis(analysis);
+
+      // Update entries with the saved entry and responses
       setEntries(prev => ({
         ...prev,
-        [dateStr]: savedEntry
+        [dateStr]: {
+          ...savedEntry,
+          ai_response: response,
+          ai_analysis: analysis
+        }
       }));
       
-      // Don't clear local entries - keep the current text
+      // Keep the current text in local entries
       setLocalEntries(prev => ({
         ...prev,
         [dateStr]: text || ''
@@ -165,13 +191,15 @@ export function useJournal() {
   return {
     currentDate,
     getEntry,
-    getAiAnalysis,
+    getAiResponses, // Replace getAiAnalysis with getAiResponses
     updateLocalEntry,
     saveEntry,
     goToPreviousDay,
     goToNextDay,
     loading,
     error,
-    refreshEntries: fetchRecentEntries
+    refreshEntries: fetchRecentEntries,
+    aiResponse,
+    aiAnalysis
   };
 }
