@@ -22,25 +22,33 @@ export interface JournalEntry extends BaseEntity {
   aiAnalysis: string;
 }
 
-export interface QuestStatus extends BaseEntity {
+// Keeping QuestDescription for historical records
+export interface QuestDescriptionHistory extends BaseEntity {
   message: string;
   timestamp: string;
-  questId: number;
+  quest_id: number;  // Changed from questId to match naming convention
+  is_current: boolean;  // Changed from isCurrent to match naming convention
+}
+
+export interface QuestDescription extends BaseEntity {
+  message: string;
+  quest_id: number;
+  is_current: boolean;
+  tags?: string[];     // Make tags optional as it might be null
 }
 
 export interface Quest extends BaseEntity {
   title: string;
   tagline: string;
-  is_main: boolean;  // Changed from isMain
+  is_main: boolean;
   status: 'Active' | 'On-Hold' | 'Completed';
-  questStatus?: string;
-  currentStatus?: QuestStatus;
-  tasks?: Task[];  // Added as optional since it's a joined field
+  tasks?: Task[];
   analysis?: string;
-  parent_quest_id?: number;  // Changed from parentQuestId
-  start_date?: string;  // Changed from startDate
-  end_date?: string;   // Changed from endDate
-  StatusHistory?: Record<string, QuestStatus>;
+  parent_quest_id?: number;
+  start_date?: string;
+  end_date?: string;
+  current_description?: QuestDescription; // For joined data
+  description_history?: QuestDescription[];
 }
 
 export interface ChatMessage extends BaseEntity {

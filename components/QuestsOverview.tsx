@@ -1,13 +1,26 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, FlatList, ScrollView, Dimensions } from 'react-native';
+import { View, Text, TouchableOpacity, FlatList, ScrollView, Dimensions, ActivityIndicator } from 'react-native';
 import { Card } from 'react-native-paper';
 import { MaterialIcons } from '@expo/vector-icons';
+import { format } from 'date-fns';
 import { useTheme } from '@/contexts/ThemeContext';
 import styles, { colors } from '@/app/styles/global';
-import { useQuests } from '@/services/questsService';
-import { Quest } from '@/app/types';
+import { useQuests, createQuest, updateQuest } from '@/services/questsService';
+import { Quest, Task } from '@/app/types';
+import { updateTaskStatus, getNextStatus, createTask } from '@/services/tasksService';
+import { supabase } from '@/lib/supabase';
+import { CreateQuestModal } from './modals/CreateQuestModal';
+import { EditQuestModal } from './modals/EditQuestModal';
+import { CreateTaskModal } from './modals/CreateTaskModal';
+import { EditTaskModal } from './modals/EditTaskModal';
 
 type QuestStatus = 'Active' | 'On-Hold' | 'Completed';
+type TaskStatus = 'ToDo' | 'InProgress' | 'Done';
+
+interface QuestStatusUpdate {
+  timestamp: string;
+  message: string;
+}
 
 interface QuestsOverviewProps {
   quests: Quest[];
@@ -15,24 +28,77 @@ interface QuestsOverviewProps {
   currentMainQuest: Quest | null;
 }
 
+interface TaskFormData {
+  title: string;
+  description: string;
+  scheduled_for: string;
+  deadline?: string;
+  location?: string;
+  status: TaskStatus;
+  tags?: string[];
+}
+
+interface QuestFormData {
+  title: string;
+  tagline: string;
+  description: string;
+  status: QuestStatus;
+  start_date?: string;
+  end_date?: string;
+  is_main: boolean;
+}
+
+// Update Quest type to include currentStatus for display purposes only
+declare module '@/app/types' {
+  interface Quest {
+    currentStatus?: QuestStatusUpdate;
+  }
+}
+
 export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: QuestsOverviewProps) {
-  const { themeColor } = useTheme();
+  const { themeColor, secondaryColor } = useTheme();
   const [activeTab, setActiveTab] = useState<QuestStatus>('Active');
-  const [selectedQuest, setSelectedQuest] = useState<Quest | null>(null);
+  // Initialize selectedQuest with currentMainQuest
+  const [selectedQuest, setSelectedQuest] = useState<Quest | undefined>(currentMainQuest || undefined);
   const windowHeight = Dimensions.get('window').height;
+  const [updatingTaskId, setUpdatingTaskId] = useState<number | null>(null);
+  const { reload } = useQuests(); // Get the reload function from useQuests
+  
+  // Update selectedQuest when currentMainQuest changes
+  React.useEffect(() => {
+    if (currentMainQuest) {
+      setSelectedQuest(currentMainQuest);
+    }
+  }, [currentMainQuest]);
+  
+  // Task form state
+  const [isCreateModalVisible, setCreateModalVisible] = useState(false);
+  const [isEditModalVisible, setEditModalVisible] = useState(false);
+  const [taskBeingEdited, setTaskBeingEdited] = useState<Task | undefined>();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formData, setFormData] = useState<TaskFormData>({
+    title: '',
+    description: '',
+    scheduled_for: format(new Date(), 'yyyy-MM-dd'),
+    status: 'ToDo',
+    location: ''
+  });
+  
+  // Quest form state
+  const [isCreateQuestModalVisible, setCreateQuestModalVisible] = useState(false);
+  const [isEditQuestModalVisible, setEditQuestModalVisible] = useState(false);
+  const [questBeingEdited, setQuestBeingEdited] = useState<Quest | undefined>();
+  const [questFormData, setQuestFormData] = useState<QuestFormData>({
+    title: '',
+    tagline: '',
+    description: '', // Initialize description field
+    status: 'Active',
+    is_main: false
+  });
 
   const filteredQuests = quests.filter(q => q.status === activeTab);
   const tabs: QuestStatus[] = ['Active', 'On-Hold', 'Completed'];
 
-  // Generate a secondary color for our cyberpunk UI
-  const getSecondaryColor = (baseColor: string) => {
-    if (baseColor.includes('f') || baseColor.includes('e') || baseColor.includes('d')) {
-      return '#1D64AB';
-    }
-    return '#D81159';
-  };
-  
-  const secondaryColor = getSecondaryColor(themeColor);
   
   // Make text more visible against dark backgrounds
   const getBrightAccent = (baseColor: string) => {
@@ -55,6 +121,221 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
   };
   
   const brightAccent = getBrightAccent(themeColor);
+
+  // Reset form data for new task
+  const openCreateTaskModal = () => {
+    setFormData({
+      title: '',
+      description: '',
+      scheduled_for: format(new Date(), 'yyyy-MM-dd'),
+      status: 'ToDo',
+      location: '',
+      tags: []
+    });
+    setCreateModalVisible(true);
+  };
+
+  // Open edit task modal and populate with existing task data
+  const openEditTaskModal = (task: Task) => {
+    setTaskBeingEdited(task);
+    setFormData({
+      title: task.title,
+      description: task.description || '',
+      scheduled_for: task.scheduled_for,
+      deadline: task.deadline,
+      location: task.location || '',
+      status: task.status as TaskStatus,
+      tags: task.tags || []
+    });
+    setEditModalVisible(true);
+  };
+
+  // Create a new task
+  const handleCreateTask = async (data: any) => {
+    if (!selectedQuest) return;
+    
+    try {
+      setIsSubmitting(true);
+      
+      const taskData = {
+        ...data,
+        quest_id: selectedQuest.id
+      };
+      
+      const newTask = await createTask(taskData);
+      
+      // Update local state
+      if (selectedQuest && selectedQuest.tasks) {
+        selectedQuest.tasks = [...selectedQuest.tasks, newTask];
+        
+        // Force a re-render
+        setSelectedQuest({...selectedQuest});
+      }
+      
+      setCreateModalVisible(false);
+    } catch (error) {
+      console.error('Failed to create task:', error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Update an existing task
+  const handleUpdateTask = async (data: any) => {
+    if (!taskBeingEdited) return;
+    
+    try {
+      setIsSubmitting(true);
+      
+      // Ensure location is never undefined for the database
+      const updatedTask = {
+        ...data,
+        updated_at: new Date().toISOString()
+      };
+      
+      const { error } = await supabase
+        .from('tasks')
+        .update(updatedTask)
+        .eq('id', taskBeingEdited.id)
+        .select();
+      
+      if (error) throw error;
+      
+      // Update local state
+      if (selectedQuest && selectedQuest.tasks) {
+        selectedQuest.tasks = selectedQuest.tasks.map(t => 
+          t.id === taskBeingEdited.id 
+            ? { ...t, ...data } 
+            : t
+        );
+        
+        // Force a re-render
+        setSelectedQuest({...selectedQuest});
+      }
+      
+      setEditModalVisible(false);
+    } catch (error) {
+      console.error('Failed to update task:', error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Add function to handle task status toggle
+  const toggleTaskCompletion = async (task: any) => {
+    try {
+      setUpdatingTaskId(task.id);
+      const newStatus = getNextStatus(task.status);
+      await updateTaskStatus(task.id, newStatus);
+      
+      // Update local state
+      if (selectedQuest && selectedQuest.tasks) {
+        selectedQuest.tasks = selectedQuest.tasks.map(t => 
+          t.id === task.id ? { ...t, status: newStatus } : t
+        );
+      }
+      
+      // Force a re-render
+      setSelectedQuest({...selectedQuest!});
+    } catch (error) {
+      console.error('Failed to update task status:', error);
+    } finally {
+      setUpdatingTaskId(null);
+    }
+  };
+
+  // Reset form data for new quest
+  const openCreateQuestModal = () => {
+    setQuestFormData({
+      title: '',
+      tagline: '',
+      description: '', // Initialize description field
+      status: 'Active',
+      start_date: format(new Date(), 'yyyy-MM-dd'),
+      is_main: false
+    });
+    setCreateQuestModalVisible(true);
+  };
+
+  // Open edit quest modal and populate with existing quest data
+  const openEditQuestModal = (quest: Quest) => {
+    setQuestBeingEdited(quest);
+    setQuestFormData({
+      title: quest.title,
+      tagline: quest.tagline || '',
+      description: quest.current_description?.message || '',
+      status: quest.status,
+      start_date: quest.start_date || '',
+      end_date: quest.end_date || '',
+      is_main: quest.is_main
+    });
+    setEditQuestModalVisible(true);
+  };
+
+  // Create a new quest
+  const handleCreateQuest = async (data: QuestFormData) => {
+    try {
+      setIsSubmitting(true);
+      
+      const questData = {
+        title: data.title,
+        tagline: data.tagline,
+        description: data.description,
+        status: data.status,
+        start_date: data.start_date,
+        end_date: data.end_date,
+        is_main: data.is_main,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+      
+      // Use the questsService to create quest and handle description
+      await createQuest(questData);
+
+      // Close the modal
+      setCreateQuestModalVisible(false);
+      
+      // Reload quests
+      reload();
+    } catch (error) {
+      console.error('Failed to create quest:', error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Update an existing quest
+  const handleUpdateQuest = async (data: QuestFormData) => {
+    if (!questBeingEdited) return;
+    
+    try {
+      setIsSubmitting(true);
+      
+      const questData = {
+        title: data.title,
+        tagline: data.tagline,
+        description: data.description,
+        status: data.status,
+        start_date: data.start_date,
+        end_date: data.end_date,
+        is_main: data.is_main,
+        updated_at: new Date().toISOString()
+      };
+      
+      // Use the questsService to update quest and handle description
+      await updateQuest(questBeingEdited.id, questData);
+      
+      // Close the modal
+      setEditQuestModalVisible(false);
+      
+      // Reload quests
+      reload();
+    } catch (error) {
+      console.error('Failed to update quest:', error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background, height: windowHeight }]}>
@@ -114,29 +395,61 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
             <View style={{ 
               flexDirection: 'row', 
               alignItems: 'center',
+              justifyContent: 'space-between',
               marginBottom: 20,
               borderBottomWidth: 1,
               borderBottomColor: 'rgba(255, 255, 255, 0.1)',
               paddingBottom: 15
             }}>
-              <Text style={{ 
-                fontSize: 28,
-                fontWeight: 'bold',
-                color: '#FFFFFF',
-                textTransform: 'uppercase',
-                textShadowColor: themeColor,
-                textShadowOffset: { width: 1, height: 1 },
-                textShadowRadius: 4
-              }}>
-                QUESTS
-              </Text>
-              <View style={{
-                height: 4,
-                width: 40,
-                backgroundColor: themeColor,
-                marginLeft: 10,
-                borderRadius: 2,
-              }} />
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Text style={{ 
+                  fontSize: 28,
+                  fontWeight: 'bold',
+                  color: '#FFFFFF',
+                  textTransform: 'uppercase',
+                  textShadowColor: themeColor,
+                  textShadowOffset: { width: 1, height: 1 },
+                  textShadowRadius: 4
+                }}>
+                  QUESTS
+                </Text>
+                <View style={{
+                  height: 4,
+                  width: 40,
+                  backgroundColor: themeColor,
+                  marginLeft: 10,
+                  borderRadius: 2,
+                }} />
+              </View>
+              
+              {/* Create Quest Button */}
+              <TouchableOpacity 
+                onPress={openCreateQuestModal}
+                style={{
+                  backgroundColor: 'rgba(30, 30, 30, 0.9)',
+                  paddingHorizontal: 12,
+                  paddingVertical: 6,
+                  borderRadius: 6,
+                  borderWidth: 1,
+                  borderColor: themeColor,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                }}
+              >
+                <MaterialIcons 
+                  name="add" 
+                  size={16} 
+                  color={brightAccent}
+                  style={{ marginRight: 4 }}
+                />
+                <Text style={{ 
+                  color: brightAccent,
+                  fontWeight: '600',
+                  fontSize: 13,
+                }}>
+                  NEW QUEST
+                </Text>
+              </TouchableOpacity>
             </View>
 
             {/* Status Tabs */}
@@ -279,34 +592,67 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
                           }}>
                             {selectedQuest.title}
                           </Text>
-                          <TouchableOpacity 
-                            onPress={() => onSelectQuest(selectedQuest.id)}
-                            style={{
-                              backgroundColor: selectedQuest.id === currentMainQuest?.id ? 
-                                'rgba(30, 30, 30, 0.9)' : 'rgba(25, 25, 25, 0.9)',
-                              paddingHorizontal: 15,
-                              paddingVertical: 8,
-                              borderRadius: 6,
-                              borderWidth: 1,
-                              borderColor: selectedQuest.id === currentMainQuest?.id ? 
-                                secondaryColor : themeColor,
-                              flexDirection: 'row',
-                              alignItems: 'center',
-                            }}
-                          >
-                            <MaterialIcons 
-                              name={selectedQuest.id === currentMainQuest?.id ? "star" : "star-outline"} 
-                              size={18} 
-                              color={selectedQuest.id === currentMainQuest?.id ? secondaryColor : brightAccent}
-                              style={{ marginRight: 6 }}
-                            />
-                            <Text style={{ 
-                              color: selectedQuest.id === currentMainQuest?.id ? secondaryColor : brightAccent,
-                              fontWeight: '600',
-                            }}>
-                              {selectedQuest.id === currentMainQuest?.id ? 'MAIN QUEST' : 'SET AS MAIN'}
-                            </Text>
-                          </TouchableOpacity>
+                          <View style={{ flexDirection: 'row' }}>
+                            {/* Edit Quest Button */}
+                            <TouchableOpacity 
+                              onPress={() => openEditQuestModal(selectedQuest)}
+                              style={{
+                                backgroundColor: 'rgba(30, 30, 30, 0.9)',
+                                paddingHorizontal: 12,
+                                paddingVertical: 6,
+                                borderRadius: 6,
+                                borderWidth: 1,
+                                borderColor: themeColor,
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                marginRight: 10,
+                              }}
+                            >
+                              <MaterialIcons 
+                                name="edit" 
+                                size={16} 
+                                color={brightAccent}
+                                style={{ marginRight: 4 }}
+                              />
+                              <Text style={{ 
+                                color: brightAccent,
+                                fontWeight: '600',
+                                fontSize: 13,
+                              }}>
+                                EDIT
+                              </Text>
+                            </TouchableOpacity>
+                            
+                            {/* Set as Main Quest Button */}
+                            <TouchableOpacity 
+                              onPress={() => onSelectQuest(selectedQuest.id)}
+                              style={{
+                                backgroundColor: selectedQuest.id === currentMainQuest?.id ? 
+                                  'rgba(30, 30, 30, 0.9)' : 'rgba(25, 25, 25, 0.9)',
+                                paddingHorizontal: 15,
+                                paddingVertical: 8,
+                                borderRadius: 6,
+                                borderWidth: 1,
+                                borderColor: selectedQuest.id === currentMainQuest?.id ? 
+                                  secondaryColor : themeColor,
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                              }}
+                            >
+                              <MaterialIcons 
+                                name={selectedQuest.id === currentMainQuest?.id ? "star" : "star-outline"} 
+                                size={18} 
+                                color={selectedQuest.id === currentMainQuest?.id ? secondaryColor : brightAccent}
+                                style={{ marginRight: 6 }}
+                              />
+                              <Text style={{ 
+                                color: selectedQuest.id === currentMainQuest?.id ? secondaryColor : brightAccent,
+                                fontWeight: '600',
+                              }}>
+                                {selectedQuest.id === currentMainQuest?.id ? 'MAIN QUEST' : 'SET AS MAIN'}
+                              </Text>
+                            </TouchableOpacity>
+                          </View>
                         </View>
                         
                         {selectedQuest.tagline && (
@@ -322,6 +668,26 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
                       </View>
 
                       <View style={{ padding: 20 }}>
+                        {/* Display the quest description after tagline */}
+                        {selectedQuest.current_description?.message && (
+                          <View style={{
+                            backgroundColor: 'rgba(20, 20, 20, 0.7)',
+                            borderRadius: 6,
+                            padding: 15,
+                            marginBottom: 15,
+                            borderLeftWidth: 2,
+                            borderLeftColor: themeColor,
+                          }}>
+                            <Text style={{ 
+                              color: '#DDD', 
+                              fontSize: 14,
+                              lineHeight: 20
+                            }}>
+                              {selectedQuest.current_description.message}
+                            </Text>
+                          </View>
+                        )}
+
                         {/* Status Section */}
                         {selectedQuest?.currentStatus && (
                           <View style={{
@@ -350,16 +716,48 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
                           <View style={{ 
                             flexDirection: 'row', 
                             alignItems: 'center',
+                            justifyContent: 'space-between',
                             marginBottom: 10
                           }}>
-                            <MaterialIcons name="assignment" size={20} color={brightAccent} style={{ marginRight: 8 }} />
-                            <Text style={{ 
-                              fontSize: 18,
-                              color: '#FFF',
-                              fontWeight: '600'
-                            }}>
-                              Tasks ({selectedQuest.tasks?.length || 0})
-                            </Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                              <MaterialIcons name="assignment" size={20} color={brightAccent} style={{ marginRight: 8 }} />
+                              <Text style={{ 
+                                fontSize: 18,
+                                color: '#FFF',
+                                fontWeight: '600'
+                              }}>
+                                Tasks ({selectedQuest.tasks?.length || 0})
+                              </Text>
+                            </View>
+
+                            {/* Create Task Button */}
+                            <TouchableOpacity 
+                              onPress={openCreateTaskModal}
+                              style={{
+                                backgroundColor: 'rgba(30, 30, 30, 0.9)',
+                                paddingHorizontal: 12,
+                                paddingVertical: 6,
+                                borderRadius: 6,
+                                borderWidth: 1,
+                                borderColor: themeColor,
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                              }}
+                            >
+                              <MaterialIcons 
+                                name="add" 
+                                size={16} 
+                                color={brightAccent}
+                                style={{ marginRight: 4 }}
+                              />
+                              <Text style={{ 
+                                color: brightAccent,
+                                fontWeight: '600',
+                                fontSize: 13,
+                              }}>
+                                NEW TASK
+                              </Text>
+                            </TouchableOpacity>
                           </View>
 
                           {selectedQuest.tasks?.map((task) => (
@@ -402,30 +800,82 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
                                       color="#888"
                                       style={{ marginLeft: 12, marginRight: 4 }}
                                     />
-                                    <Text style={{ fontSize: 13, color: '#888' }}>
+                                    <Text style={{ fontSize: 13, color: "#888" }}>
                                       {task.location}
                                     </Text>
                                   </>
                                 )}
                               </View>
 
-                              {task.deadline && (
-                                <View style={{ 
-                                  flexDirection: 'row', 
-                                  alignItems: 'center',
-                                  marginTop: 4
-                                }}>
-                                  <MaterialIcons 
-                                    name="warning" 
-                                    size={14} 
-                                    color={colors.error}
-                                    style={{ marginRight: 4 }}
-                                  />
-                                  <Text style={{ fontSize: 13, color: colors.error }}>
-                                    Deadline: {task.deadline}
-                                  </Text>
+                              <View style={{ 
+                                flexDirection: 'row', 
+                                alignItems: 'center',
+                                marginTop: 4,
+                                justifyContent: 'space-between'
+                              }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                  {task.deadline && (
+                                    <View style={{ 
+                                      flexDirection: 'row', 
+                                      alignItems: 'center',
+                                      marginRight: 10
+                                    }}>
+                                      <MaterialIcons 
+                                        name="warning" 
+                                        size={14} 
+                                        color={colors.error}
+                                        style={{ marginRight: 4 }}
+                                      />
+                                      <Text style={{ fontSize: 13, color: colors.error }}>
+                                        Deadline: {task.deadline}
+                                      </Text>
+                                    </View>
+                                  )}
+                                  
+                                  {/* Add Edit Task Button */}
+                                  <TouchableOpacity 
+                                    onPress={() => openEditTaskModal(task)}
+                                    style={{
+                                      backgroundColor: 'rgba(40, 40, 40, 0.7)',
+                                      paddingHorizontal: 8,
+                                      paddingVertical: 4,
+                                      borderRadius: 4,
+                                      flexDirection: 'row',
+                                      alignItems: 'center',
+                                    }}
+                                  >
+                                    <MaterialIcons 
+                                      name="edit" 
+                                      size={14} 
+                                      color="#AAA"
+                                    />
+                                    <Text style={{ 
+                                      color: '#AAA',
+                                      fontSize: 12,
+                                      marginLeft: 2
+                                    }}>
+                                      EDIT
+                                    </Text>
+                                  </TouchableOpacity>
                                 </View>
-                              )}
+                                
+                                {/* Task Status Button */}
+                                <TouchableOpacity 
+                                  onPress={() => toggleTaskCompletion(task)}
+                                  disabled={updatingTaskId === task.id}
+                                  style={{ padding: 8 }}
+                                >
+                                  {updatingTaskId === task.id ? (
+                                    <ActivityIndicator size="small" color={task.status === 'Done' ? secondaryColor : themeColor} />
+                                  ) : task.status === 'Done' ? (
+                                    <MaterialIcons name="check-circle" size={20} color={secondaryColor} />
+                                  ) : task.status === 'InProgress' ? (
+                                    <MaterialIcons name="timelapse" size={20} color={themeColor} />
+                                  ) : (
+                                    <MaterialIcons name="radio-button-unchecked" size={20} color="#666" />
+                                  )}
+                                </TouchableOpacity>
+                              </View>
                             </View>
                           ))}
                         </View>
@@ -457,6 +907,42 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
           </View>
         </Card>
       </View>
+
+      <CreateQuestModal
+        visible={isCreateQuestModalVisible}
+        onClose={() => setCreateQuestModalVisible(false)}
+        onSubmit={handleCreateQuest}
+        isSubmitting={isSubmitting}
+      />
+
+      <EditQuestModal
+        visible={isEditQuestModalVisible}
+        onClose={() => {
+          setEditQuestModalVisible(false);
+          setQuestBeingEdited(undefined);
+        }}
+        onSubmit={handleUpdateQuest}
+        isSubmitting={isSubmitting}
+        quest={questBeingEdited} // Remove non-null assertion
+      />
+
+      <CreateTaskModal
+        visible={isCreateModalVisible}
+        onClose={() => setCreateModalVisible(false)}
+        onSubmit={handleCreateTask}
+        isSubmitting={isSubmitting}
+      />
+
+      <EditTaskModal
+        visible={isEditModalVisible}
+        onClose={() => {
+          setEditModalVisible(false);
+          setTaskBeingEdited(undefined);
+        }}
+        onSubmit={handleUpdateTask}
+        isSubmitting={isSubmitting}
+        task={taskBeingEdited} // Remove non-null assertion
+      />
     </View>
   );
 }

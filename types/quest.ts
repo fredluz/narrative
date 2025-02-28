@@ -21,27 +21,26 @@ export interface JournalEntry extends BaseEntity {
   aiAnalysis: string;
 }
 
-export interface QuestStatus extends BaseEntity {
+export interface QuestDescription extends BaseEntity {
   message: string;
   timestamp: string;
   questId: number;
+  isCurrent: boolean
 }
 
 export interface Quest extends BaseEntity {
   title: string;
-  shortDescription: string;
-  isMain: boolean;
+  tagline: string;
+  is_main: boolean;  // Changed from isMain
   status: 'Active' | 'On-Hold' | 'Completed';
-  progress: string;
   questStatus?: string;
-  currentStatus?: QuestStatus;
-  tasks: Task[];
-  kanban?: Record<string, string[]>;
+  description?: QuestDescription;
+  tasks?: Task[];  // Added as optional since it's a joined field
   analysis?: string;
-  parentQuestId?: number;
-  startDate?: string;
-  endDate?: string;
-  StatusHistory?: Record<string, QuestStatus>;
+  parent_quest_id?: number;  // Changed from parentQuestId
+  start_date?: string;  // Changed from startDate
+  end_date?: string;   // Changed from endDate
+  descriptionHistory?: Record<string, QuestDescription>;
 }
 
 export interface Memo extends BaseEntity {

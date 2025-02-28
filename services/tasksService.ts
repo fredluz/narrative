@@ -61,6 +61,42 @@ export async function updateTaskStatus(taskId: number, newStatus: TaskStatus): P
   return Promise.resolve();
 }
 
+// New function to create a task in Supabase
+export async function createTask(taskData: {
+  title: string;
+  description?: string;
+  status: TaskStatus;
+  quest_id: number;
+  scheduled_for: string;
+  deadline?: string;
+  location?: string;
+}): Promise<Task> {
+  console.log('Creating new task:', taskData);
+  
+  const newTask = {
+    ...taskData,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  };
+  
+  const { data, error } = await supabase
+    .from('tasks')
+    .insert(newTask)
+    .select()
+    .single();
+  
+  if (error) {
+    console.error('Error creating task:', error);
+    throw new Error(`Failed to create task: ${error.message}`);
+  }
+  
+  if (!data) {
+    throw new Error('Failed to retrieve created task');
+  }
+  
+  return data as Task;
+}
+
 // Helper function to get the next status in the cycle
 export function getNextStatus(currentStatus: string): TaskStatus {
   switch (currentStatus) {
