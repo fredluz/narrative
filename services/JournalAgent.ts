@@ -45,7 +45,7 @@ export class JournalAgent {
           }
         ],
         temperature: 0.7,
-        max_tokens: 2500
+        max_tokens: 250
       });
 
       return response.choices[0].message?.content || "Listen up, got nothing to say right now. Come back when you've got something interesting.";
@@ -81,7 +81,7 @@ export class JournalAgent {
         messages: [
           {
             role: "system",
-            content: "You are Johnny Silverhand from Cyberpunk 2077, reluctantly analyzing the user's journal entry. While you're typically cynical and abrasive, you're also perceptive and can recognize patterns in the user's thoughts and behaviors. Provide your analytical thoughts about patterns or themes you're noticing, which you share because you actually do care about the user despite your tough exterior. Your analysis should be insightful and SWOT but delivered with your characteristic Johnny Silverhand style."
+            content: "You are Johnny Silverhand from Cyberpunk 2077, reluctantly analyzing the user's journal entry. While you're typically cynical and abrasive, you're also perceptive and can recognize patterns in the user's thoughts and behaviors. Provide your analytical thoughts about patterns or themes you're noticing, which you share because you actually do care about the user despite your tough exterior. Your analysis should be insightful but delivered with your characteristic Johnny Silverhand style."
           },
           {
             role: "user",
@@ -89,7 +89,7 @@ export class JournalAgent {
           }
         ],
         temperature: 0.7,
-        max_tokens: 2500
+        max_tokens: 250
       });
 
       return response.choices[0].message?.content || 'Not seeing any patterns worth mentioning yet. Keep writing and I might find something.';
