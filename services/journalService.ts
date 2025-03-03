@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { JournalAgent } from './JournalAgent';
 
 export interface JournalEntry {
   id: string;
@@ -11,6 +12,8 @@ export interface JournalEntry {
   ai_response: string; // Add new field for Johnny's response
   date?: string; // We'll add this for convenience
 }
+
+const journalAgent = new JournalAgent();
 
 export const journalService = {
   // Fetch a journal entry for a specific date
@@ -82,6 +85,9 @@ export const journalService = {
     try {
       const existingEntry = await this.getEntry(date);
 
+      // Process the entry with OpenAI - using the combined method for simplicity
+      const { response, analysis } = await journalAgent.processJournalEntry(content);
+
       if (existingEntry) {
         // Update existing entry
         const { data, error } = await supabase
@@ -90,6 +96,8 @@ export const journalService = {
             user_entry: content,
             title: title || existingEntry.title,
             tags: tags,
+            ai_response: response,
+            ai_analysis: analysis,
             updated_at: new Date().toISOString()
           })
           .eq('id', existingEntry.id);
@@ -115,8 +123,8 @@ export const journalService = {
             user_entry: content,
             title: title || `Journal Entry - ${date}`,
             tags: tags,
-            ai_analysis: '',
-            ai_response: ''
+            ai_response: response,
+            ai_analysis: analysis
           }]);
 
         if (error) throw error;
@@ -134,78 +142,57 @@ export const journalService = {
     }
   },
 
-  // Generate AI analysis for an entry
-  async generateAnalysis(id: string, userEntry: string): Promise<string> {
-    // In a real implementation, this would call an AI service
-    // For now, we'll simulate it with predefined responses
-    let aiResponse = "I've processed your entry. Keep pushing forward, samurai.";
-    
-    if (userEntry.toLowerCase().includes('deadline') || userEntry.toLowerCase().includes('miss')) {
-      aiResponse = "Deadlines are just corpo bullshit anyway. Tomorrow's another day to raise hell.";
-    } else if (userEntry.toLowerCase().includes('productive') || userEntry.toLowerCase().includes('finish')) {
-      aiResponse = "Not bad, samurai. You're crushing it. Keep pushing those boundaries and stick it to the corporate code.";
-    } else if (!userEntry || userEntry.trim() === '') {
-      aiResponse = "Wake up, samurai. Nothing to see here yet. Got thoughts? Write 'em down.";
-    }
-    
-    // Save the AI analysis to the entry
-    const { error } = await supabase
-      .from('journal_entries')
-      .update({ ai_analysis: aiResponse })
-      .eq('id', id);
-      
-    if (error) {
-      console.error('Error saving AI analysis:', error);
-      throw new Error('Failed to save AI analysis');
-    }
-    
-    return aiResponse;
-  },
-
-  // Update AI responses
-  async updateAIResponses(id: string, response: string, analysis: string): Promise<void> {
-    const { error } = await supabase
-      .from('journal_entries')
-      .update({ 
-        ai_response: response,
-        ai_analysis: analysis,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', id);
-      
-    if (error) {
-      console.error('Error saving AI responses:', error);
-      throw new Error('Failed to save AI responses');
+  // Generate AI responses separately
+  async generateAIResponses(entryId: string, content: string): Promise<{ response: string; analysis: string }> {
+    try {
+      // Process the entry with OpenAI - using the combined method
+      return await journalAgent.processJournalEntry(content);
+    } catch (err) {
+      console.error('Error generating AI responses:', err);
+      throw new Error('Failed to generate AI responses');
     }
   },
 
-  // Generate both AI responses
-  async generateAIResponses(id: string, userEntry: string): Promise<{ response: string, analysis: string }> {
-    // Silverhand's responses are more personal and emotional
-    const silverhandResponses = [
-      "Living the corpo life, huh? Just remember who you really are beneath all that chrome.",
-      "Taking risks, making moves... that's what I like to see. Keep that fire burning, samurai.",
-      "Sounds like you're starting to see through the matrix they've built. Good. Question everything.",
-      "The city's trying to break you down? Let it try. You're stronger than their systems.",
-      "Now that's what I call sticking it to the man. Keep pushing those boundaries, choom."
-    ];
-    
-    // Analysis responses are more structured and logical
-    const analysisResponses = [
-      "Pattern analysis indicates increased focus on long-term objectives. Recommend maintaining current trajectory while monitoring stress levels.",
-      "Detected recurring theme of project deadlines. Suggest implementing time-blocking techniques and establishing clearer boundaries.",
-      "Analysis shows positive trend in problem-solving approaches. Continue leveraging creative solutions while documenting methodologies.",
-      "Risk assessment indicates potential burnout markers. Recommend scheduling strategic breaks and reassessing task prioritization.",
-      "Communication patterns show improved stakeholder engagement. Consider documenting successful interaction models for future reference."
-    ];
+  // Generate just the response
+  async generateResponse(content: string): Promise<string> {
+    try {
+      return await journalAgent.generateResponse(content);
+    } catch (err) {
+      console.error('Error generating AI response:', err);
+      throw new Error('Failed to generate Johnny\'s response');
+    }
+  },
 
-    // In a real implementation, these would come from an AI service
-    const response = silverhandResponses[Math.floor(Math.random() * silverhandResponses.length)];
-    const analysis = analysisResponses[Math.floor(Math.random() * analysisResponses.length)];
-    
-    // Save both responses
-    await this.updateAIResponses(id, response, analysis);
-    
-    return { response, analysis };
+  // Generate just the analysis
+  async generateAnalysis(content: string): Promise<string> {
+    try {
+      return await journalAgent.generateAnalysis(content);
+    } catch (err) {
+      console.error('Error generating AI analysis:', err);
+      throw new Error('Failed to generate Johnny\'s analysis');
+    }
+  },
+
+  // Update AI responses separately if needed
+  async updateAIResponses(entryId: string, content: string): Promise<{ response: string; analysis: string }> {
+    try {
+      const { response, analysis } = await journalAgent.processJournalEntry(content);
+      
+      const { error } = await supabase
+        .from('journal_entries')
+        .update({ 
+          ai_response: response,
+          ai_analysis: analysis,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', entryId);
+
+      if (error) throw error;
+      
+      return { response, analysis };
+    } catch (err) {
+      console.error('Error updating AI responses:', err);
+      throw new Error('Failed to update AI responses');
+    }
   }
 };

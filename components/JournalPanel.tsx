@@ -21,32 +21,41 @@ const JournalEntryInput: React.FC<{
   fullColumnMode?: boolean;
   themeColor: string;
 }> = ({ value, tagsValue, onChangeText, onChangeTags, loading, fullColumnMode, themeColor }) => (
-  <View style={{ flex: 4, display: 'flex', flexDirection: 'column' }}>
-    {/* Main text input */}
-    <TextInput
-      style={{
-        flex: 1,
-        backgroundColor: 'rgba(20, 20, 20, 0.9)',
-        borderWidth: 1,
-        borderColor: themeColor,
-        borderLeftWidth: 2,
-        borderLeftColor: themeColor,
-        borderRadius: 4,
-        marginBottom: 5,
-        color: '#FFFFFF',
-        padding: 12,
-        fontSize: fullColumnMode ? 18 : 16,
-        fontWeight: 'normal',
-        textAlignVertical: 'top',
-        minHeight: fullColumnMode ? 260 : 160,
-      }}
-      multiline={true}
-      value={value}
-      onChangeText={onChangeText}
-      placeholder="How's your day going, samurai?"
-      placeholderTextColor="#666"
-      editable={!loading}
-    />
+  <View style={{ 
+    flex: 1, 
+    display: 'flex', 
+    flexDirection: 'column',
+    height: '100%'
+  }}>
+    {/* Using TextInput directly inside a View for better height control */}
+    <View style={{
+      flex: 1,
+      backgroundColor: 'rgba(20, 20, 20, 0.9)',
+      borderWidth: 1,
+      borderColor: themeColor,
+      borderLeftWidth: 2,
+      borderLeftColor: themeColor,
+      borderRadius: 4,
+      marginBottom: 5,
+    }}>
+      <TextInput
+        style={{
+          flex: 1,
+          color: '#FFFFFF',
+          padding: 12,
+          fontSize: fullColumnMode ? 18 : 16,
+          fontWeight: 'normal',
+          textAlignVertical: 'top',
+          height: '100%',
+        }}
+        multiline={true}
+        value={value}
+        onChangeText={onChangeText}
+        placeholder="How's your day going, samurai?"
+        placeholderTextColor="#666"
+        editable={!loading}
+      />
+    </View>
     
     {/* Tags input */}
     <TextInput
@@ -80,15 +89,22 @@ const AIResponse: React.FC<{
   secondaryColor: string;
 }> = ({ response, loading, fullColumnMode, secondaryColor }) => (
   <View style={{
-    flex: 0.8,
+    flex: 1,
     backgroundColor: 'rgba(15, 15, 15, 0.8)',
     borderRadius: 5,
     borderLeftWidth: 3,
     borderColor: secondaryColor,
-    padding: 15,
-    marginTop: 10,
+    display: 'flex',
+    flexDirection: 'column',
+    height: '100%',
   }}>
-    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+    <View style={{ 
+      flexDirection: 'row', 
+      alignItems: 'center', 
+      padding: 10,
+      borderBottomWidth: 1,
+      borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+    }}>
       <MaterialIcons 
         name="psychology" 
         size={20} 
@@ -104,16 +120,18 @@ const AIResponse: React.FC<{
       </Text>
     </View>
     
-    <ThemedText style={{
-      fontSize: fullColumnMode ? 18 : 15,
-      color: '#BBB',
-      fontStyle: 'italic',
-      textShadowColor: secondaryColor,
-      textShadowOffset: { width: 0, height: 0 },
-      textShadowRadius: 3
-    }}>
-      {loading ? "Thinking..." : (response || "Keep typing, choom. Your story's writing itself.")}
-    </ThemedText>
+    <ScrollView style={{ flex: 1, padding: 10 }}>
+      <ThemedText style={{
+        fontSize: fullColumnMode ? 18 : 15,
+        color: '#BBB',
+        fontStyle: 'italic',
+        textShadowColor: secondaryColor,
+        textShadowOffset: { width: 0, height: 0 },
+        textShadowRadius: 3
+      }}>
+        {loading ? "Thinking..." : (response || "Keep typing, choom. Your story's writing itself.")}
+      </ThemedText>
+    </ScrollView>
   </View>
 );
 
@@ -125,15 +143,22 @@ const AIAnalysis: React.FC<{
   themeColor: string;
 }> = ({ analysis, loading, fullColumnMode, themeColor }) => (
   <View style={{
-    flex: 0.8,
+    flex: 1,
     backgroundColor: 'rgba(15, 15, 15, 0.8)',
     borderRadius: 5,
     borderLeftWidth: 3,
     borderColor: themeColor,
-    padding: 15,
-    marginTop: 10,
+    display: 'flex',
+    flexDirection: 'column',
+    height: '100%',
   }}>
-    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+    <View style={{ 
+      flexDirection: 'row', 
+      alignItems: 'center',
+      padding: 10,
+      borderBottomWidth: 1,
+      borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+    }}>
       <MaterialIcons 
         name="analytics" 
         size={20} 
@@ -149,14 +174,16 @@ const AIAnalysis: React.FC<{
       </Text>
     </View>
     
-    <ThemedText style={{
-      fontSize: fullColumnMode ? 18 : 15,
-      color: '#BBB',
-      fontStyle: 'normal',
-      lineHeight: 22,
-    }}>
-      {loading ? "Analyzing patterns..." : (analysis || "Awaiting data for analysis.")}
-    </ThemedText>
+    <ScrollView style={{ flex: 1, padding: 10 }}>
+      <ThemedText style={{
+        fontSize: fullColumnMode ? 18 : 15,
+        color: '#BBB',
+        fontStyle: 'normal',
+        lineHeight: 22,
+      }}>
+        {loading ? "Analyzing patterns..." : (analysis || "Awaiting data for analysis.")}
+      </ThemedText>
+    </ScrollView>
   </View>
 );
 
@@ -471,17 +498,14 @@ export function JournalPanel({ themeColor, textColor, fullColumnMode = false }: 
         </View>
       </View>
 
-      <ScrollView 
-        style={{ flex: 1 }} 
-        contentContainerStyle={{ 
-          flexGrow: 1,
-          padding: 15,
-        }}
-      >
+      <View style={{ 
+        flex: 1, 
+        padding: 15, 
+        flexDirection: 'column' 
+      }}>
         <ThemedText style={[styles.cardDetails, { 
           paddingLeft: 15,
-          paddingTop: 10,
-          paddingBottom: 5,
+          paddingBottom: 10,
           borderLeftWidth: 3,
           borderLeftColor: 'rgba(255, 255, 255, 0.1)',
           marginLeft: 15,
@@ -505,33 +529,45 @@ export function JournalPanel({ themeColor, textColor, fullColumnMode = false }: 
             </ThemedText>
           </View>
         ) : (
-          <View style={{ flex: 1, flexDirection: 'column', gap: 10 }}>
-            <JournalEntryInput
-              value={localEntry}
-              tagsValue={localTags}
-              onChangeText={handleEntryChange}
-              onChangeTags={handleTagsChange}
-              loading={loading}
-              fullColumnMode={fullColumnMode}
-              themeColor={themeColor}
-            />
+          <View style={{ 
+            flex: 1, 
+            flexDirection: 'column', 
+            gap: 10,
+            height: '100%',
+          }}>
+            {/* Each section gets approximately 1/3 of vertical space */}
+            <View style={{ flex: 1, height: '33%' }}>
+              <JournalEntryInput
+                value={localEntry}
+                tagsValue={localTags}
+                onChangeText={handleEntryChange}
+                onChangeTags={handleTagsChange}
+                loading={loading}
+                fullColumnMode={fullColumnMode}
+                themeColor={themeColor}
+              />
+            </View>
             
-            <AIResponse
-              response={aiResponse}
-              loading={loading}
-              fullColumnMode={fullColumnMode}
-              secondaryColor={secondaryColor}
-            />
+            <View style={{ flex: 1, height: '33%' }}>
+              <AIResponse
+                response={aiResponse}
+                loading={loading}
+                fullColumnMode={fullColumnMode}
+                secondaryColor={secondaryColor}
+              />
+            </View>
             
-            <AIAnalysis
-              analysis={aiAnalysis}
-              loading={loading}
-              fullColumnMode={fullColumnMode}
-              themeColor={themeColor}
-            />
+            <View style={{ flex: 1, height: '33%' }}>
+              <AIAnalysis
+                analysis={aiAnalysis}
+                loading={loading}
+                fullColumnMode={fullColumnMode}
+                themeColor={themeColor}
+              />
+            </View>
           </View>
         )}
-      </ScrollView>
+      </View>
     </Card>
   );
 }
