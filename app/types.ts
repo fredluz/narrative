@@ -59,5 +59,5 @@ export interface ChatMessage extends BaseEntity {
 
 export interface ChatSession extends BaseEntity {
   summary: string;
-  // created_at and updated_at come from BaseEntity
+  tags: string[];  // Added tags array
 }

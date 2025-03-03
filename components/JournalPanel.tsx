@@ -74,7 +74,7 @@ const JournalEntryInput: React.FC<{
       }}
       value={tagsValue}
       onChangeText={onChangeTags}
-      placeholder="Add tags (comma separated) e.g. work, meeting, idea"
+      placeholder="Add tags (comma separated) e.g. work, meeting, idea. In the future, have Johnny assign tags himself."
       placeholderTextColor="#666"
       editable={!loading}
     />

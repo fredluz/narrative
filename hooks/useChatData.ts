@@ -1,14 +1,80 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { ChatMessage } from '@/app/types';
 import { useTheme } from '@/contexts/ThemeContext';
 import { ChatAgent } from '@/services/ChatAgent';
 import { supabase } from '@/lib/supabase';
 
+const INACTIVITY_TIMEOUT = 5 * 60 * 1000; // 5 minutes in milliseconds
+const JOHNNY_RESPONSE_DELAY = 2000; // 2 seconds delay before Johnny replies
+
 export function useChatData() {
   const { themeColor } = useTheme();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isTyping, setIsTyping] = useState(false);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [sessionEnded, setSessionEnded] = useState(false);
   const chatAgent = new ChatAgent();
+  const inactivityTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const currentSessionMessagesRef = useRef<ChatMessage[]>([]);
+  const pendingMessagesRef = useRef<ChatMessage[]>([]); // Changed from string[] to ChatMessage[]
+  const johnnyResponseTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const lastMessageRef = useRef<string>('');
+
+  // Keep track of current session messages
+  const getCurrentSessionMessages = useCallback(() => {
+    return messages.filter(msg => !msg.chat_session_id);
+  }, [messages]);
+
+  // Keep track of session messages
+  useEffect(() => {
+    currentSessionMessagesRef.current = getCurrentSessionMessages();
+  }, [messages, getCurrentSessionMessages]);
+
+  // Reset inactivity timer
+  const resetInactivityTimer = useCallback(() => {
+    if (inactivityTimerRef.current) {
+      clearTimeout(inactivityTimerRef.current);
+    }
+    setSessionEnded(false);
+
+    inactivityTimerRef.current = setTimeout(async () => {
+      const sessionMessages = currentSessionMessagesRef.current;
+      if (sessionMessages.length > 0) {
+        try {
+          const sessionId = await chatAgent.summarizeAndStoreSession(sessionMessages);
+          // Update local messages with new session ID
+          setMessages(prev => prev.map(msg => 
+            sessionMessages.some(sMsg => sMsg.id === msg.id) 
+              ? { ...msg, chat_session_id: sessionId }
+              : msg
+          ));
+          setCurrentSessionId(null);
+          setSessionEnded(true);
+        } catch (error) {
+          console.error('Error summarizing session:', error);
+        }
+      }
+    }, INACTIVITY_TIMEOUT);
+  }, []);
+
+  const endSession = useCallback(async () => {
+    const sessionMessages = currentSessionMessagesRef.current;
+    if (sessionMessages.length > 0) {
+      try {
+        const sessionId = await chatAgent.summarizeAndStoreSession(sessionMessages);
+        // Update local messages with new session ID
+        setMessages(prev => prev.map(msg => 
+          sessionMessages.some(sMsg => sMsg.id === msg.id) 
+            ? { ...msg, chat_session_id: sessionId }
+            : msg
+        ));
+        setCurrentSessionId(null);
+        setSessionEnded(true);
+      } catch (error) {
+        console.error('Error summarizing session:', error);
+      }
+    }
+  }, []);
 
   // Load initial messages and set up real-time subscription
   useEffect(() => {
@@ -17,8 +83,8 @@ export function useChatData() {
       const { data, error } = await supabase
         .from('chat_messages')
         .select('*')
-        .order('created_at', { ascending: true })
-        .limit(50);
+        .is('chat_session_id', null)  // Only get messages without a session ID
+        .order('created_at', { ascending: true });
 
       if (error) {
         console.error('Error loading messages:', error);
@@ -42,7 +108,11 @@ export function useChatData() {
         (payload) => {
           if (payload.eventType === 'INSERT') {
             const newMessage = payload.new as ChatMessage;
-            setMessages(prev => [...prev, newMessage]);
+            // Only add message if it's not part of a session
+            if (!newMessage.chat_session_id) {
+              setMessages(prev => [...prev, newMessage]);
+              resetInactivityTimer();
+            }
           }
         }
       )
@@ -51,11 +121,25 @@ export function useChatData() {
     // Cleanup subscription
     return () => {
       subscription.unsubscribe();
+      if (inactivityTimerRef.current) {
+        clearTimeout(inactivityTimerRef.current);
+      }
     };
+  }, [resetInactivityTimer]);
+
+  // Handle user typing
+  const handleTyping = useCallback((text: string) => {
+    // Clear Johnny's response timer if user is typing
+    if (johnnyResponseTimerRef.current) {
+      clearTimeout(johnnyResponseTimerRef.current);
+    }
+    // Update the last message reference
+    lastMessageRef.current = text;
   }, []);
 
-  const sendMessage = useCallback(async (message: string) => {
-    if (!message.trim()) return;
+  // Handle message sending
+  const sendMessage = useCallback(async (messageText: string) => {
+    if (!messageText.trim()) return;
 
     // Create user message
     const userMessage: ChatMessage = {
@@ -63,65 +147,109 @@ export function useChatData() {
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       is_user: true,
-      message: message.trim()
+      message: messageText.trim(),
+      chat_session_id: currentSessionId || undefined
     };
 
+    // Add to pending messages
+    pendingMessagesRef.current.push(userMessage);
+
     try {
-      // Save user message to Supabase
+      // Save user message to Supabase - local state will update via subscription
       const { error: saveError } = await supabase
         .from('chat_messages')
         .insert([userMessage]);
 
       if (saveError) throw saveError;
 
-      // Show typing indicator
-      setIsTyping(true);
+      // Clear any existing timer
+      if (johnnyResponseTimerRef.current) {
+        clearTimeout(johnnyResponseTimerRef.current);
+      }
 
-      // Get Johnny's response
-      const response = await chatAgent.generateChatResponse(message);
+      // Set new timer for Johnny's response
+      johnnyResponseTimerRef.current = setTimeout(async () => {
+        // Only proceed with response if user hasn't started typing again
+        setIsTyping(true);
+        try {
+          // Get all pending messages and combine them
+          const pendingMessages = [...pendingMessagesRef.current];
+          const combinedMessage = pendingMessages
+            .map(msg => msg.message)
+            .join('\n');
 
-      // Create and save AI response
-      const aiMessage: ChatMessage = {
-        id: Date.now() + 1,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        is_user: false,
-        message: response
-      };
+          // Clear pending messages
+          pendingMessagesRef.current = [];
 
-      const { error: aiSaveError } = await supabase
-        .from('chat_messages')
-        .insert([aiMessage]);
+          // Get Johnny's response to all messages
+          const response = await chatAgent.generateChatResponse(combinedMessage);
 
-      if (aiSaveError) throw aiSaveError;
+          // Create and save AI response - local state will update via subscription
+          const aiMessage: ChatMessage = {
+            id: Date.now() + 1,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            is_user: false,
+            message: response,
+            chat_session_id: currentSessionId || undefined
+          };
+
+          // Save to Supabase
+          const { error: aiSaveError } = await supabase
+            .from('chat_messages')
+            .insert([aiMessage]);
+
+          if (aiSaveError) throw aiSaveError;
+
+          resetInactivityTimer();
+        } catch (error) {
+          console.error('Error in Johnny\'s response:', error);
+          const errorMessage: ChatMessage = {
+            id: Date.now() + 1,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            is_user: false,
+            message: "Damn netrunners must be messing with our connection. Try again in a bit.",
+            chat_session_id: currentSessionId || undefined
+          };
+
+          // Save error message to Supabase - local state will update via subscription
+          try {
+            await supabase
+              .from('chat_messages')
+              .insert([errorMessage]);
+          } catch (insertError) {
+            console.error('Error saving error message:', insertError);
+          }
+        } finally {
+          setIsTyping(false);
+        }
+      }, JOHNNY_RESPONSE_DELAY);
 
     } catch (error) {
       console.error('Error in sendMessage:', error);
-      // Add an error message from Johnny
-      const errorMessage: ChatMessage = {
-        id: Date.now() + 1,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        is_user: false,
-        message: "Damn netrunners must be messing with our connection. Try again in a bit."
-      };
-      
-      try {
-        await supabase
-          .from('chat_messages')
-          .insert([errorMessage]);
-      } catch (insertError) {
-        console.error('Error inserting error message:', insertError);
-      }
-    } finally {
-      setIsTyping(false);
     }
+  }, [currentSessionId, resetInactivityTimer]);
+
+  // Cleanup timers on unmount
+  useEffect(() => {
+    return () => {
+      if (johnnyResponseTimerRef.current) {
+        clearTimeout(johnnyResponseTimerRef.current);
+      }
+      if (inactivityTimerRef.current) {
+        clearTimeout(inactivityTimerRef.current);
+      }
+    };
   }, []);
 
   return {
-    messages,
+    messages: getCurrentSessionMessages(), // Only return current session messages
     sendMessage,
+    handleTyping,
+    endSession,
     themeColor,
     isTyping,
+    sessionEnded,
   };
 }

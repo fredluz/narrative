@@ -16,7 +16,7 @@ import { JournalPanel } from '@/components/JournalPanel';
 export function DesktopLayout() {
   const router = useRouter();
   const { themeColor, secondaryColor } = useTheme();
-  const { messages, sendMessage, themeColor: chatThemeColor, isTyping } = useChatData();
+  const { messages, sendMessage, handleTyping, endSession, themeColor: chatThemeColor, isTyping, sessionEnded } = useChatData();
   const { mainQuest, loading, error, reload } = useQuests();
   const { shouldUpdate, resetUpdate } = useQuestUpdate();
 
@@ -143,7 +143,10 @@ export function DesktopLayout() {
           themeColor={themeColor} 
           recentMessages={messages} 
           onSendMessage={sendMessage}
+          handleTyping={handleTyping}
+          onEndSession={endSession}
           isTyping={isTyping}
+          sessionEnded={sessionEnded}
         />
       </View>
       

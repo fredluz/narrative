@@ -18,14 +18,32 @@ interface Props {
   recentMessages: ChatMessage[];
   themeColor: string;
   onSendMessage?: (message: string) => Promise<void>;
+  handleTyping?: (text: string) => void;  // Add new prop
   isTyping?: boolean;
+  sessionEnded?: boolean;
+  onEndSession?: () => void;  // Add new prop
 }
 
-export function ChatInterface({ recentMessages, themeColor, onSendMessage, isTyping }: Props) {
+export function ChatInterface({ 
+  recentMessages, 
+  themeColor, 
+  onSendMessage, 
+  handleTyping,
+  isTyping, 
+  sessionEnded,
+  onEndSession
+}: Props) {
   const [message, setMessage] = useState('');
   const scrollViewRef = useRef<ScrollView>(null);
   
   const { secondaryColor } = useTheme();
+
+  // Clear message when session ends
+  useEffect(() => {
+    if (sessionEnded) {
+      setMessage('');
+    }
+  }, [sessionEnded]);
   
   // Scroll to bottom when new messages arrive
   useEffect(() => {
@@ -61,11 +79,18 @@ export function ChatInterface({ recentMessages, themeColor, onSendMessage, isTyp
   const handleSend = async () => {
     if (message.trim() === '') return;
     
-    const messageToSend = message; // Store message before clearing
+    const messageToSend = message;
     setMessage(''); // Clear immediately for better UX
     
     if (onSendMessage) {
       await onSendMessage(messageToSend);
+    }
+  };
+
+  const handleMessageChange = (text: string) => {
+    setMessage(text);
+    if (handleTyping) {
+      handleTyping(text);
     }
   };
 
@@ -145,7 +170,7 @@ export function ChatInterface({ recentMessages, themeColor, onSendMessage, isTyp
         borderBottomColor: 'rgba(255, 255, 255, 0.1)',
         backgroundColor: 'rgba(20, 20, 20, 0.7)',
       }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
           <Text style={{ 
             fontSize: 18,
             fontWeight: 'bold',
@@ -165,6 +190,36 @@ export function ChatInterface({ recentMessages, themeColor, onSendMessage, isTyp
             marginLeft: 8,
             borderRadius: 2,
           }} />
+          
+          <TouchableOpacity 
+            style={{
+              marginLeft: 15,
+              backgroundColor: 'rgba(30, 30, 30, 0.9)',
+              borderWidth: 1,
+              borderColor: secondaryColor,
+              borderRadius: 4,
+              paddingVertical: 4,
+              paddingHorizontal: 8,
+              flexDirection: 'row',
+              alignItems: 'center',
+            }}
+            onPress={onEndSession}
+          >
+            <MaterialIcons 
+              name="timer-off" 
+              size={16} 
+              color={secondaryColor} 
+              style={{ marginRight: 4 }} 
+            />
+            <Text style={{
+              color: secondaryColor,
+              fontSize: 12,
+              fontWeight: 'bold',
+              textTransform: 'uppercase',
+            }}>
+              End Session
+            </Text>
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -334,7 +389,7 @@ export function ChatInterface({ recentMessages, themeColor, onSendMessage, isTyp
               maxHeight: 100, // Limit height while still allowing some multiline if needed
             }}
             value={message}
-            onChangeText={setMessage}
+            onChangeText={handleMessageChange}
             onKeyPress={handleKeyPress}
             placeholder="Type your message..."
             placeholderTextColor="#666"

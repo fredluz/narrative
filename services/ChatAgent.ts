@@ -1,6 +1,6 @@
 import OpenAI from 'openai';
 import { supabase } from '../lib/supabase';
-import { ChatMessage, JournalEntry } from '@/app/types';
+import { ChatMessage, JournalEntry, ChatSession } from '@/app/types';
 import { ChatCompletionMessageParam } from 'openai/resources/chat';
 
 export class ChatAgent {
@@ -14,7 +14,7 @@ export class ChatAgent {
     });
   }
 
-  async generateChatResponse(message: string): Promise<string> {
+  async generateChatResponse(message: string, sessionId?: string): Promise<string> {
     try {
       // Fetch last few messages for conversation context
       const { data: recentMessages, error: chatError } = await supabase
@@ -55,20 +55,22 @@ export class ChatAgent {
 
 Remember:
 - Mix sarcasm with genuine concern
-- Reference their journal entries when relevant
 - Keep responses SHORT and punchy, you're writing a text message not an email
 - Push back against corporate thinking
 - You're texting, so write in lowercase and use late-millenial/early-zoomer slang and abbreviations. no emojis.
 - Encourage boldness and action
 - Provide insightful and characteristic commentary on choices made
 
-- Current context from their recent journal entries: ${journalContext}
-- Here's the chat until now: ${chatContext}
+Memory context from their recent journal entries (this is just for your memory, don't reply to these directly): 
+${journalContext}
 
-Here's what the user just texted you: "${message}"
-Reply to it.
+Current text conversation (treat this as part of the ongoing chat, this is the actual conversation you're having right now):
+${chatContext}
 
-Remember this context is JUST for your memory. You shouldn't reply to the context, you should just reply to the user's text messages. You SHOULD NOT REPLY LIKE YOU RESPONDED OR ANALYSED THE JOURNAL ENTRIES. You're texting, not writing a journal entry. 2 or 3 sentences max.`
+Here's what they just texted you: "${message}"
+Reply to it as if you're continuing this conversation - the chat context is what you've already discussed, unlike the journal entries which are just in your memory.
+
+Remember: You're texting casually, not writing a journal response. 2 or 3 sentences max. Keep it punchy and natural like you're actually texting back and forth with them.`
           },
           {
             role: "user" as const,
@@ -84,6 +86,74 @@ Remember this context is JUST for your memory. You shouldn't reply to the contex
       return responseText.replace(/^["'](.*)["']$/, '$1');
     } catch (error) {
       console.error('Error in generateChatResponse:', error);
+      throw error;
+    }
+  }
+
+  async summarizeAndStoreSession(messages: ChatMessage[]): Promise<string> {
+    try {
+      if (messages.length === 0) return '';
+
+      // Create prompt for summarization and tags
+      const chatHistory = messages.map(msg => 
+        `${msg.is_user ? "User" : "Johnny"}: ${msg.message}`
+      ).join('\n');
+
+      const response = await this.openai.chat.completions.create({
+        model: "deepseek-chat",
+        messages: [
+          {
+            role: "system",
+            content: `You are Johnny Silverhand summarizing a chat conversation you just had with guy who's head you live in. 
+            You need to:
+            1. Write a summary of the key points discussed. Keep it brief but capture the key points and any decisions or insights that came up.
+            2. Generate 4-8 tags that categorize this conversation.
+            Write in first person as Johnny, addressing what you and the guy discussed.
+            Format your response EXACTLY like this:
+            SUMMARY: (your summary here)
+            TAGS: tag1, tag2, tag3, tag4`
+          },
+          {
+            role: "user",
+            content: `Here's our conversation:\n${chatHistory}\n\nSummarize our chat and suggest relevant tags.`
+          }
+        ],
+        temperature: 0.7,
+        max_tokens: 2000
+      });
+
+      const responseText = response.choices[0].message?.content || "Had a chat with the user but nothing worth noting.";
+      
+      // Parse the response to separate summary and tags
+      const summaryMatch = responseText.match(/SUMMARY:\s*(.*?)(?=\nTAGS:|$)/s);
+      const tagsMatch = responseText.match(/TAGS:\s*(.*?)$/s);
+      
+      const summary = summaryMatch ? summaryMatch[1].trim() : responseText;
+      const tags = tagsMatch ? tagsMatch[1].split(',').map(tag => tag.trim()) : [];
+
+      // Create new session with summary and tags
+      const { data: sessionData, error: sessionError } = await supabase
+        .from('chat_sessions')
+        .insert([{ 
+          summary,
+          tags
+        }])
+        .select('id')
+        .single();
+
+      if (sessionError) throw sessionError;
+
+      // Update all messages with the session ID
+      const { error: updateError } = await supabase
+        .from('chat_messages')
+        .update({ chat_session_id: sessionData.id })
+        .in('id', messages.map(m => m.id));
+
+      if (updateError) throw updateError;
+
+      return sessionData.id;
+    } catch (error) {
+      console.error('Error in summarizeAndStoreSession:', error);
       throw error;
     }
   }
