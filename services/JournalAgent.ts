@@ -33,7 +33,7 @@ export class JournalAgent {
 
       // Get OpenAI response
       const response = await this.openai.chat.completions.create({
-        model: "gpt-4o-mini",
+        model: "gpt-4o",
         messages: [
           {
             role: "system",
@@ -45,7 +45,7 @@ export class JournalAgent {
           }
         ],
         temperature: 0.7,
-        max_tokens: 250
+        max_tokens: 8000
       });
 
       return response.choices[0].message?.content || "Listen up, got nothing to say right now. Come back when you've got something interesting.";
@@ -77,7 +77,7 @@ export class JournalAgent {
 
       // Get OpenAI response
       const response = await this.openai.chat.completions.create({
-        model: "gpt-4o-mini",
+        model: "gpt-4o",
         messages: [
           {
             role: "system",
@@ -89,7 +89,7 @@ export class JournalAgent {
           }
         ],
         temperature: 0.7,
-        max_tokens: 250
+        max_tokens: 2500
       });
 
       return response.choices[0].message?.content || 'Not seeing any patterns worth mentioning yet. Keep writing and I might find something.';
@@ -100,37 +100,37 @@ export class JournalAgent {
   }
 
   private createResponsePrompt(currentEntry: string, context: Array<{ entry: string; response: string }>): string {
-    let prompt = `Current journal entry: "${currentEntry}"
+    let prompt = `Here's the user's latest journal entry that you need to respond to: "${currentEntry}"
 
 `;
     
     if (context.length > 0) {
-      prompt += "Recent context:\n";
+      prompt += "For context only, here are some recent previous interactions :\n";
       context.forEach((entry, index) => {
-        prompt += `Entry ${index + 1}: "${entry.entry}"\n`;
+        prompt += `Previous Entry ${index + 1}: "${entry.entry}"\n`;
         prompt += `Your previous response: "${entry.response}"\n\n`;
       });
     }
 
-    prompt += "\nRespond to this journal entry as Johnny Silverhand - be snarky but ultimately supportive in your own way.";
+    prompt += "\nRespond  to the latest journal entry as Johnny Silverhand - be snarky but ultimately supportive in your own way.";
 
     return prompt;
   }
 
   private createAnalysisPrompt(currentEntry: string, context: Array<{ entry: string; analysis: string }>): string {
-    let prompt = `Current journal entry: "${currentEntry}"
+    let prompt = `Here's the user's latest journal entry that you need to analyze: "${currentEntry}"
 
 `;
     
     if (context.length > 0) {
-      prompt += "Recent context:\n";
+      prompt += "For context only, here are some recent previous entries (use these to identify patterns, but respond primarily to the latest entry):\n";
       context.forEach((entry, index) => {
-        prompt += `Entry ${index + 1}: "${entry.entry}"\n`;
+        prompt += `Previous Entry ${index + 1}: "${entry.entry}"\n`;
         prompt += `Your previous analysis: "${entry.analysis}"\n\n`;
       });
     }
 
-    prompt += "\nAnalyze patterns or themes you notice in this entry and previous ones. Share your insights reluctantly, as Johnny Silverhand would.";
+    prompt += "\nAnalyze primarily the latest entry while using the previous entries to identify any relevant patterns or themes. Let's hear what Johnny thinks.";
 
     return prompt;
   }
