@@ -16,7 +16,7 @@ import { JournalPanel } from '@/components/JournalPanel';
 export function DesktopLayout() {
   const router = useRouter();
   const { themeColor, secondaryColor } = useTheme();
-  const { messages } = useChatData();
+  const { messages, sendMessage, themeColor: chatThemeColor, isTyping } = useChatData();
   const { mainQuest, loading, error, reload } = useQuests();
   const { shouldUpdate, resetUpdate } = useQuestUpdate();
 
@@ -139,7 +139,12 @@ export function DesktopLayout() {
       </View>
 
       <View style={styles.column}>
-        <ChatInterface themeColor={themeColor} recentMessages={messages} />
+        <ChatInterface 
+          themeColor={themeColor} 
+          recentMessages={messages} 
+          onSendMessage={sendMessage}
+          isTyping={isTyping}
+        />
       </View>
       
       {/* JournalPanel moved to its own column for more vertical space */}

@@ -53,5 +53,11 @@ export interface Quest extends BaseEntity {
 
 export interface ChatMessage extends BaseEntity {
   message: string;
-  isUser: boolean;
+  is_user: boolean;  // Changed from isUser to match database schema
+  chat_session_id?: string;  // Added to link messages to sessions
+}
+
+export interface ChatSession extends BaseEntity {
+  summary: string;
+  // created_at and updated_at come from BaseEntity
 }

@@ -1,21 +1,127 @@
-import { useState } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { ChatMessage } from '@/app/types';
 import { useTheme } from '@/contexts/ThemeContext';
+import { ChatAgent } from '@/services/ChatAgent';
+import { supabase } from '@/lib/supabase';
 
 export function useChatData() {
   const { themeColor } = useTheme();
-  const [messages] = useState<ChatMessage[]>([
-    { id: 1,created_at: '00000', updated_at: '2222', isUser: false, message: "Rise and shine, samurai. Another day in this digital hellhole.",  },
-    { id: 1,created_at: '00000', updated_at: '2222',isUser: false, message: "Got your todo list here - feedback loops and database grind. Oh, and try not to ghost your input parameters tonight, got that hot date coming up." },
-    {id: 1,created_at: '00000', updated_at: '2222', isUser: false, message: "So what's it gonna be? Gonna dive into the code mines or keep staring at my gorgeous interface?" },
-    {id: 1,created_at: '00000', updated_at: '2222', isUser: true, message: "Thinking about tackling the database first, but yeah, can't mess up tonight's plans." },
-    {id: 1,created_at: '00000', updated_at: '2222', isUser: false, message: "Database work, huh? Real exciting stuff. Just don't let the corps standardize your thinking patterns."},
-    {id: 1,created_at: '00000', updated_at: '2222', isUser: false, message: "And hey - that date? That's the real quest here. Everything else is just side content." },
-    {id: 1,created_at: '00000', updated_at: '2222', isUser: false, message: "I'll keep an eye on the clock for ya. Shoot you a text at 6PM. Can't let you dive so deep into the code that you forget about the real world. You know how that goes." }
-  ]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [isTyping, setIsTyping] = useState(false);
+  const chatAgent = new ChatAgent();
+
+  // Load initial messages and set up real-time subscription
+  useEffect(() => {
+    // Load initial messages
+    const loadMessages = async () => {
+      const { data, error } = await supabase
+        .from('chat_messages')
+        .select('*')
+        .order('created_at', { ascending: true })
+        .limit(50);
+
+      if (error) {
+        console.error('Error loading messages:', error);
+        return;
+      }
+
+      setMessages(data || []);
+    };
+
+    loadMessages();
+
+    // Set up real-time subscription
+    const subscription = supabase
+      .channel('chat_messages')
+      .on('postgres_changes', 
+        { 
+          event: '*', 
+          schema: 'public', 
+          table: 'chat_messages' 
+        }, 
+        (payload) => {
+          if (payload.eventType === 'INSERT') {
+            const newMessage = payload.new as ChatMessage;
+            setMessages(prev => [...prev, newMessage]);
+          }
+        }
+      )
+      .subscribe();
+
+    // Cleanup subscription
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  const sendMessage = useCallback(async (message: string) => {
+    if (!message.trim()) return;
+
+    // Create user message
+    const userMessage: ChatMessage = {
+      id: Date.now(),
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      is_user: true,
+      message: message.trim()
+    };
+
+    try {
+      // Save user message to Supabase
+      const { error: saveError } = await supabase
+        .from('chat_messages')
+        .insert([userMessage]);
+
+      if (saveError) throw saveError;
+
+      // Show typing indicator
+      setIsTyping(true);
+
+      // Get Johnny's response
+      const response = await chatAgent.generateChatResponse(message);
+
+      // Create and save AI response
+      const aiMessage: ChatMessage = {
+        id: Date.now() + 1,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        is_user: false,
+        message: response
+      };
+
+      const { error: aiSaveError } = await supabase
+        .from('chat_messages')
+        .insert([aiMessage]);
+
+      if (aiSaveError) throw aiSaveError;
+
+    } catch (error) {
+      console.error('Error in sendMessage:', error);
+      // Add an error message from Johnny
+      const errorMessage: ChatMessage = {
+        id: Date.now() + 1,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        is_user: false,
+        message: "Damn netrunners must be messing with our connection. Try again in a bit."
+      };
+      
+      try {
+        await supabase
+          .from('chat_messages')
+          .insert([errorMessage]);
+      } catch (insertError) {
+        console.error('Error inserting error message:', insertError);
+      }
+    } finally {
+      setIsTyping(false);
+    }
+  }, []);
 
   return {
     messages,
+    sendMessage,
     themeColor,
+    isTyping,
   };
 }

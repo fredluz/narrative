@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   View, 
   Text, 
@@ -17,12 +17,22 @@ import { useTheme } from '@/contexts/ThemeContext';
 interface Props {
   recentMessages: ChatMessage[];
   themeColor: string;
+  onSendMessage?: (message: string) => Promise<void>;
+  isTyping?: boolean;
 }
 
-export function ChatInterface({ recentMessages, themeColor }: Props) {
+export function ChatInterface({ recentMessages, themeColor, onSendMessage, isTyping }: Props) {
   const [message, setMessage] = useState('');
+  const scrollViewRef = useRef<ScrollView>(null);
   
   const { secondaryColor } = useTheme();
+  
+  // Scroll to bottom when new messages arrive
+  useEffect(() => {
+    if (scrollViewRef.current) {
+      scrollViewRef.current.scrollToEnd({ animated: true });
+    }
+  }, [recentMessages]);
   
   // Make text more visible against dark backgrounds
   const getBrightAccent = (baseColor: string) => {
@@ -48,10 +58,22 @@ export function ChatInterface({ recentMessages, themeColor }: Props) {
   
   const brightAccent = getBrightAccent(themeColor);
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if (message.trim() === '') return;
-    console.log('Sending message:', message);
-    setMessage('');
+    
+    const messageToSend = message; // Store message before clearing
+    setMessage(''); // Clear immediately for better UX
+    
+    if (onSendMessage) {
+      await onSendMessage(messageToSend);
+    }
+  };
+
+  const handleKeyPress = (e: any) => {
+    if (e.nativeEvent.key === 'Enter' && !e.nativeEvent.shiftKey) {
+      e.preventDefault(); // Prevent new line
+      handleSend();
+    }
   };
 
   const formatTimestamp = (timestamp: string) => {
@@ -154,6 +176,7 @@ export function ChatInterface({ recentMessages, themeColor }: Props) {
         <ScrollView 
           style={{ padding: 10, flex: 1 }} 
           contentContainerStyle={{ paddingBottom: 20 }}
+          ref={scrollViewRef}
         >
           {recentMessages.map((msg, index) => (
             <View 
@@ -162,60 +185,130 @@ export function ChatInterface({ recentMessages, themeColor }: Props) {
                 {
                   padding: 12,
                   marginVertical: 5,
-                  borderRadius: 6,
+                  borderRadius: 5,
                   maxWidth: '85%',
+                  backgroundColor: 'rgba(15, 15, 15, 0.8)',
                   shadowColor: '#000',
                   shadowOffset: { width: 0, height: 3 },
                   shadowOpacity: 0.2,
                   shadowRadius: 4,
                   elevation: 3,
                 },
-                !msg.isUser 
+                !msg.is_user 
                   ? {
-                      backgroundColor: 'rgba(20, 20, 20, 0.7)',
                       alignSelf: 'flex-start',
-                      borderLeftWidth: 2,
-                      borderLeftColor: secondaryColor,
+                      borderLeftWidth: 3,
+                      borderColor: secondaryColor,
                       marginRight: '15%',
                     }
                   : {
-                      backgroundColor: 'rgba(30, 30, 30, 0.9)',
                       alignSelf: 'flex-end',
-                      borderLeftWidth: 2,
-                      borderLeftColor: themeColor,
+                      borderLeftWidth: 3,
+                      borderColor: themeColor,
                       marginLeft: '15%',
                     }
               ]}
             >
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
                 <Text style={{ 
-                  color: !msg.isUser ? secondaryColor : brightAccent,
+                  color: !msg.is_user ? secondaryColor : themeColor,
                   fontWeight: 'bold',
                   fontSize: 12,
                   textTransform: 'uppercase',
                   letterSpacing: 0.5,
-                  textShadowColor: !msg.isUser ? secondaryColor : themeColor,
+                  textShadowColor: !msg.is_user ? secondaryColor : themeColor,
                   textShadowOffset: { width: 0, height: 0 },
                   textShadowRadius: 3,
                 }}>
-                  {!msg.isUser ? 'SILVERHAND' : 'YOU'}
+                  {!msg.is_user ? 'SILVERHAND' : 'YOU'}
                 </Text>
                 <Text style={{ color: '#777', fontSize: 10 }}>
                   {formatTimestamp(msg.updated_at)}
                 </Text>
               </View>
               <Text style={{ 
-                fontSize: 15,
-                lineHeight: 20,
-                color: !msg.isUser ? '#DDD' : '#FFF',
-                textShadowColor: 'rgba(0, 0, 0, 0.5)',
-                textShadowOffset: { width: 0, height: 1 },
-                textShadowRadius: 2,
+                fontSize: 18,
+                color: '#BBB',
+                lineHeight: 22,
+                textShadowColor: !msg.is_user ? secondaryColor : themeColor,
+                textShadowOffset: { width: 0, height: 0 },
+                textShadowRadius: 3,
               }}>
                 {msg.message}
               </Text>
             </View>
           ))}
+          
+          {/* Typing indicator */}
+          {isTyping && (
+            <View 
+              style={[
+                {
+                  padding: 12,
+                  marginVertical: 5,
+                  borderRadius: 5,
+                  maxWidth: '85%',
+                  backgroundColor: 'rgba(15, 15, 15, 0.8)',
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 3 },
+                  shadowOpacity: 0.2,
+                  shadowRadius: 4,
+                  elevation: 3,
+                  alignSelf: 'flex-start',
+                  borderLeftWidth: 3,
+                  borderColor: secondaryColor,
+                  marginRight: '15%',
+                },
+              ]}
+            >
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                <Text style={{ 
+                  color: secondaryColor,
+                  fontWeight: 'bold',
+                  fontSize: 12,
+                  textTransform: 'uppercase',
+                  letterSpacing: 0.5,
+                  textShadowColor: secondaryColor,
+                  textShadowOffset: { width: 0, height: 0 },
+                  textShadowRadius: 3,
+                }}>
+                  SILVERHAND
+                </Text>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Text style={{ 
+                  fontSize: 18,
+                  color: '#BBB',
+                  lineHeight: 22,
+                  textShadowColor: secondaryColor,
+                  textShadowOffset: { width: 0, height: 0 },
+                  textShadowRadius: 3,
+                }}>
+                  typing
+                </Text>
+                <View style={{ 
+                  flexDirection: 'row', 
+                  marginLeft: 4,
+                  alignItems: 'flex-end',
+                }}>
+                  {[0, 1, 2].map((i) => (
+                    <View
+                      key={i}
+                      style={{
+                        width: 4,
+                        height: 4,
+                        borderRadius: 2,
+                        backgroundColor: '#BBB',
+                        marginLeft: 2,
+                        opacity: 0.7,
+                        transform: [{ translateY: Math.sin(Date.now() / (500 + i * 200)) * 2 }],
+                      }}
+                    />
+                  ))}
+                </View>
+              </View>
+            </View>
+          )}
         </ScrollView>
 
         {/* Chat input */}
@@ -237,12 +330,16 @@ export function ChatInterface({ recentMessages, themeColor }: Props) {
               marginRight: 10,
               borderLeftWidth: 2, 
               borderLeftColor: themeColor,
+              textAlignVertical: 'center', // Center text vertically
+              maxHeight: 100, // Limit height while still allowing some multiline if needed
             }}
             value={message}
             onChangeText={setMessage}
+            onKeyPress={handleKeyPress}
             placeholder="Type your message..."
             placeholderTextColor="#666"
-            multiline
+            blurOnSubmit={false}
+            multiline={false} // Changed to false to better handle Enter key
           />
           <TouchableOpacity 
             style={{

@@ -6,7 +6,8 @@ export class JournalAgent {
   
   constructor() {
     this.openai = new OpenAI({
-      apiKey: process.env.EXPO_PUBLIC_OPENAI_API_KEY,
+      apiKey: process.env.EXPO_PUBLIC_DEEPSEEK_API_KEY,
+      baseURL: 'https://api.deepseek.com/v1',
       dangerouslyAllowBrowser: true
     });
   }
@@ -33,7 +34,7 @@ export class JournalAgent {
 
       // Get OpenAI response
       const response = await this.openai.chat.completions.create({
-        model: "gpt-4o",
+        model: "deepseek-reasoner",
         messages: [
           {
             role: "system",
@@ -77,7 +78,7 @@ export class JournalAgent {
 
       // Get OpenAI response
       const response = await this.openai.chat.completions.create({
-        model: "gpt-4o",
+        model: "deepseek-reasoner",
         messages: [
           {
             role: "system",
