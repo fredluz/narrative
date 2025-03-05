@@ -214,8 +214,13 @@ export function JournalPanel({ themeColor, textColor, fullColumnMode = false }: 
       const todaysCheckups = await journalService.getCheckupEntries(dateStr);
       setCheckups(todaysCheckups);
 
-      // ONLY set the AI response from the newly created checkup
-      setAiResponse(newCheckup.ai_checkup_response || null);
+      // ONLY set the AI response from the newly created checkup, clean it first
+      let cleanResponse = newCheckup.ai_checkup_response || null;
+      if (cleanResponse) {
+        cleanResponse = cleanResponse.replace(/^["']|["']$/g, ''); // Remove surrounding quotes
+        cleanResponse = cleanResponse.replace(/^Johnny Silverhand's response:\s*/i, ''); // Remove prefix
+      }
+      setAiResponse(cleanResponse);
       
       // Analysis should stay as it was or null
       setAiAnalysis(aiAnalysis);
@@ -251,8 +256,21 @@ export function JournalPanel({ themeColor, textColor, fullColumnMode = false }: 
       setHasDailyEntry(true);
       
       const aiResponses = getAiResponses(currentDate);
-      setAiResponse(aiResponses.response);
-      setAiAnalysis(aiResponses.analysis);
+      let cleanResponse = aiResponses.response;
+      let cleanAnalysis = aiResponses.analysis;
+
+      // Clean response and analysis
+      if (cleanResponse) {
+        cleanResponse = cleanResponse.replace(/^["']|["']$/g, ''); // Remove surrounding quotes
+        cleanResponse = cleanResponse.replace(/^johnny silverhands response:\s*/i, ''); // Remove prefix
+      }
+      if (cleanAnalysis) {
+        cleanAnalysis = cleanAnalysis.replace(/^["']|["']$/g, ''); // Remove surrounding quotes
+        cleanAnalysis = cleanAnalysis.replace(/^johnny silverhands response:\s*/i, ''); // Remove prefix
+      }
+      
+      setAiResponse(cleanResponse);
+      setAiAnalysis(cleanAnalysis);
       
     } catch (err: any) {
       console.error('JournalPanel: Error in handleDailyEntry:', err);
@@ -384,65 +402,67 @@ export function JournalPanel({ themeColor, textColor, fullColumnMode = false }: 
         </View>
         
         <View style={journalStyles.journalHeaderRight}>
-          <TouchableOpacity 
-            style={[journalStyles.updateButton, { 
-              backgroundColor: 'rgba(30, 30, 30, 0.9)',
-              borderWidth: 1,
-              borderColor: themeColor,
-              marginRight: 10,
-              paddingVertical: 6,
-              shadowColor: themeColor,
-              shadowOffset: { width: 0, height: 0 },
-              shadowOpacity: 0.5,
-              shadowRadius: 5,
-              elevation: 5
-            }]}
-            onPress={handleSaveCheckup}
-            disabled={loading || !localEntry.trim()}
-          >
-            {loading ? (
-              <ActivityIndicator size="small" color={brightAccent} />
-            ) : (
+          <View style={{ flexDirection: 'column', gap: 8, marginRight: 10 }}>
+            <TouchableOpacity 
+              style={[journalStyles.updateButton, { 
+                backgroundColor: 'rgba(30, 30, 30, 0.9)',
+                borderWidth: 1,
+                borderColor: themeColor,
+                paddingVertical: 6,
+                shadowColor: themeColor,
+                shadowOffset: { width: 0, height: 0 },
+                shadowOpacity: 0.5,
+                shadowRadius: 5,
+                elevation: 5,
+                minWidth: 140 // Added minimum width to keep buttons same size
+              }]}
+              onPress={handleSaveCheckup}
+              disabled={loading || !localEntry.trim()}
+            >
+              {loading ? (
+                <ActivityIndicator size="small" color={brightAccent} />
+              ) : (
+                <ThemedText style={[journalStyles.updateButtonText, { 
+                  color: brightAccent,
+                  fontWeight: 'bold',
+                  textShadowColor: themeColor,
+                  textShadowOffset: { width: 0, height: 0 },
+                  textShadowRadius: 4
+                }]}>
+                  SAVE CHECKUP
+                </ThemedText>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={[journalStyles.updateButton, { 
+                backgroundColor: 'rgba(30, 30, 30, 0.9)',
+                borderWidth: 1,
+                borderColor: secondaryColor,
+                paddingVertical: 6,
+                shadowColor: secondaryColor,
+                shadowOffset: { width: 0, height: 0 },
+                shadowOpacity: 0.5,
+                shadowRadius: 5,
+                elevation: 5,
+                opacity: hasDailyEntry ? 0.5 : 1,
+                minWidth: 140 // Added minimum width to keep buttons same size
+              }]}
+              onPress={handleDailyEntry}
+              disabled={loading || hasDailyEntry || checkups.length === 0}
+            >
               <ThemedText style={[journalStyles.updateButtonText, { 
-                color: brightAccent,
+                color: secondaryColor,
                 fontWeight: 'bold',
-                textShadowColor: themeColor,
+                textShadowColor: secondaryColor,
                 textShadowOffset: { width: 0, height: 0 },
                 textShadowRadius: 4
               }]}>
-                SAVE CHECKUP
+                SAVE DAILY ENTRY
               </ThemedText>
-            )}
-          </TouchableOpacity>
+            </TouchableOpacity>
+          </View>
 
-          <TouchableOpacity 
-            style={[journalStyles.updateButton, { 
-              backgroundColor: 'rgba(30, 30, 30, 0.9)',
-              borderWidth: 1,
-              borderColor: secondaryColor,
-              marginRight: 10,
-              paddingVertical: 6,
-              shadowColor: secondaryColor,
-              shadowOffset: { width: 0, height: 0 },
-              shadowOpacity: 0.5,
-              shadowRadius: 5,
-              elevation: 5,
-              opacity: hasDailyEntry ? 0.5 : 1
-            }]}
-            onPress={handleDailyEntry}
-            disabled={loading || hasDailyEntry || checkups.length === 0}
-          >
-            <ThemedText style={[journalStyles.updateButtonText, { 
-              color: secondaryColor,
-              fontWeight: 'bold',
-              textShadowColor: secondaryColor,
-              textShadowOffset: { width: 0, height: 0 },
-              textShadowRadius: 4
-            }]}>
-              SAVE DAILY ENTRY
-            </ThemedText>
-          </TouchableOpacity>
-          
           <TouchableOpacity 
             style={{ 
               padding: 8, 

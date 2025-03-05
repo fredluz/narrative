@@ -241,66 +241,75 @@ export function ChatInterface({
           contentContainerStyle={{ paddingBottom: 20 }}
           ref={scrollViewRef}
         >
-          {recentMessages.map((msg, index) => (
-            <View 
-              key={`${msg.id}-${index}`}
-              style={[
-                {
-                  padding: 12,
-                  marginVertical: 5,
-                  borderRadius: 5,
-                  maxWidth: '85%',
-                  backgroundColor: 'rgba(15, 15, 15, 0.8)',
-                  shadowColor: '#000',
-                  shadowOffset: { width: 0, height: 3 },
-                  shadowOpacity: 0.2,
-                  shadowRadius: 4,
-                  elevation: 3,
-                },
-                !msg.is_user 
-                  ? {
-                      alignSelf: 'flex-start',
-                      borderLeftWidth: 3,
-                      borderColor: secondaryColor,
-                      marginRight: '15%',
-                    }
-                  : {
-                      alignSelf: 'flex-end',
-                      borderLeftWidth: 3,
-                      borderColor: themeColor,
-                      marginLeft: '15%',
-                    }
-              ]}
-            >
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+          {recentMessages.map((msg, index) => {
+            // Clean message text if it's from the AI (not user)
+            let messageText = msg.message;
+            if (!msg.is_user && messageText) {
+              messageText = messageText.replace(/^["']|["']$/g, ''); // Remove surrounding quotes
+              messageText = messageText.replace(/^Johnny Silverhand's response:\s*/i, ''); // Remove prefix
+            }
+            
+            return (
+              <View 
+                key={`${msg.id}-${index}`}
+                style={[
+                  {
+                    padding: 12,
+                    marginVertical: 5,
+                    borderRadius: 5,
+                    maxWidth: '85%',
+                    backgroundColor: 'rgba(15, 15, 15, 0.8)',
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 3 },
+                    shadowOpacity: 0.2,
+                    shadowRadius: 4,
+                    elevation: 3,
+                  },
+                  !msg.is_user 
+                    ? {
+                        alignSelf: 'flex-start',
+                        borderLeftWidth: 3,
+                        borderColor: secondaryColor,
+                        marginRight: '15%',
+                      }
+                    : {
+                        alignSelf: 'flex-end',
+                        borderLeftWidth: 3,
+                        borderColor: themeColor,
+                        marginLeft: '15%',
+                      }
+                ]}
+              >
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <Text style={{ 
+                    color: !msg.is_user ? secondaryColor : themeColor,
+                    fontWeight: 'bold',
+                    fontSize: 12,
+                    textTransform: 'uppercase',
+                    letterSpacing: 0.5,
+                    textShadowColor: !msg.is_user ? secondaryColor : themeColor,
+                    textShadowOffset: { width: 0, height: 0 },
+                    textShadowRadius: 3,
+                  }}>
+                    {!msg.is_user ? 'SILVERHAND' : 'YOU'}
+                  </Text>
+                  <Text style={{ color: '#777', fontSize: 10 }}>
+                    {formatTimestamp(msg.updated_at)}
+                  </Text>
+                </View>
                 <Text style={{ 
-                  color: !msg.is_user ? secondaryColor : themeColor,
-                  fontWeight: 'bold',
-                  fontSize: 12,
-                  textTransform: 'uppercase',
-                  letterSpacing: 0.5,
+                  fontSize: 18,
+                  color: '#BBB',
+                  lineHeight: 22,
                   textShadowColor: !msg.is_user ? secondaryColor : themeColor,
                   textShadowOffset: { width: 0, height: 0 },
                   textShadowRadius: 3,
                 }}>
-                  {!msg.is_user ? 'SILVERHAND' : 'YOU'}
-                </Text>
-                <Text style={{ color: '#777', fontSize: 10 }}>
-                  {formatTimestamp(msg.updated_at)}
+                  {messageText}
                 </Text>
               </View>
-              <Text style={{ 
-                fontSize: 18,
-                color: '#BBB',
-                lineHeight: 22,
-                textShadowColor: !msg.is_user ? secondaryColor : themeColor,
-                textShadowOffset: { width: 0, height: 0 },
-                textShadowRadius: 3,
-              }}>
-                {msg.message}
-              </Text>
-            </View>
-          ))}
+            );
+          })}
           
           {/* Improved typing indicator using TriangularSpinner */}
           {isTyping && (
