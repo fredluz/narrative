@@ -1,8 +1,10 @@
 import OpenAI from 'openai';
 import { supabase } from '../lib/supabase';
+import { QuestAgent } from './QuestAgent';
 
 export class JournalAgent {
   private openai: OpenAI;
+  private questAgent: QuestAgent;
   
   constructor() {
     this.openai = new OpenAI({
@@ -10,6 +12,7 @@ export class JournalAgent {
       baseURL: 'https://api.deepseek.com/v1',
       dangerouslyAllowBrowser: true
     });
+    this.questAgent = new QuestAgent();
   }
 
   // Updated to handle paired format for checkup entries too
@@ -34,8 +37,8 @@ export class JournalAgent {
         updated_at: entry.updated_at
       })) || [];
 
-      // Create the prompt with consistent paired format
-      const prompt = this.createResponsePrompt(currentEntry, context, previousCheckupsContext);
+      // Create the prompt with consistent paired format - now awaiting since it's async
+      const prompt = await this.createResponsePrompt(currentEntry, context, previousCheckupsContext);
 
       console.log('📤 Sending prompt to AI:', prompt);
       
@@ -88,7 +91,7 @@ export class JournalAgent {
       })) || [];
 
       // Create the prompt with previous checkups context if available
-      const prompt = this.createAnalysisPrompt(currentEntry, context, previousCheckupsContext);
+      const prompt = await this.createAnalysisPrompt(currentEntry, context, previousCheckupsContext);
 
       console.log('📤 Sending analysis prompt to AI:', prompt);
       
@@ -110,7 +113,7 @@ export class JournalAgent {
       });
 
       const aiAnalysis = response.choices[0].message?.content || 'Not seeing any patterns worth mentioning yet. Keep writing and I might find something.';
-      console.log('📥 Received AI analysis:', aiAnalysis.substring(0, 100) + '...');
+      console.log('📥 Received AI analysis:', aiAnalysis);
       
       return aiAnalysis;
     } catch (error) {
@@ -120,8 +123,13 @@ export class JournalAgent {
   }
 
   // Updated prompt creation to make AI aware of its previous responses
-  private createResponsePrompt(currentEntry: string, context: Array<{ entry: string; response: string; updated_at: string }>, previousCheckupsContext?: string): string {
+  private async createResponsePrompt(currentEntry: string, context: Array<{ entry: string; response: string; updated_at: string }>, previousCheckupsContext?: string): Promise<string> {
     console.log('🔧 Creating response prompt with context entries:', context.length);
+    
+    // First get relevant quests
+    console.log('🔄 Finding relevant quests for entry');
+    const relevantQuests = await this.questAgent.findRelevantQuests(currentEntry);
+    console.log('✨ Found relevant quests:', relevantQuests.map(q => q.title));
     
     const currentTime = new Date().toLocaleTimeString([], { 
       hour: '2-digit', 
@@ -133,19 +141,12 @@ export class JournalAgent {
       day: 'numeric'
     });
     
-    let prompt = `Here's the user's latest checkup entry that you need to respond to:\n[${currentDate}, ${currentTime}] USER: ${currentEntry}\n\n`;
-    
-    // First plane of context: Today's previous checkups in paired format with explicit reminder and timestamps
-    if (previousCheckupsContext && previousCheckupsContext.trim()) {
-      prompt += `IMPORTANT: Earlier today, you've already had these conversations with the user (in chronological order with timestamps):\n${previousCheckupsContext}\n\n`;
-      prompt += `As you can see above, YOU'VE ALREADY RESPONDED to the user's earlier checkups. Do not repeat advice or commentary you've already given in those earlier responses. Your new response should only address what's NEW in their latest entry.\n\n`;
-    }
-    
-    // Second plane of context: Historical journal entries with dates from updated_at
+    let prompt = '';
+
+    // First: Historical journal entries
     if (context.length > 0) {
-      prompt += "For additional historical context, here are some recent previous daily journal entries with their dates:\n";
+      prompt += "For historical context, here are some recent previous daily journal entries with their dates:\n";
       context.forEach((entry, index) => {
-        // Format the date from updated_at field
         const entryDate = new Date(entry.updated_at);
         const formattedDate = entryDate.toLocaleDateString('en-US', {
           month: 'short',
@@ -162,19 +163,50 @@ export class JournalAgent {
       });
     }
 
-    prompt += "\nIMPORTANT INSTRUCTIONS:\n1. Respond ONLY to the latest checkup entry (shown at the top)\n2. DO NOT repeat advice or commentary you've already given in your previous responses\n3. Focus on what's new or different in this latest entry\n4. Keep your characteristic Johnny Silverhand style - snarky but supportive\n5. If the user is clearly continuing a thought from earlier, acknowledge that continuity\n";
+    // Second: Quest details
+    if (relevantQuests.length > 0) {
+      console.log('📝 Adding quest details to prompt');
+      prompt += `\nRELEVANT QUEST DETAILS:\n`;
+      relevantQuests.forEach(quest => {
+        prompt += `\nQuest: ${quest.title}\n`;
+        prompt += `Description: ${quest.current_description?.message || 'No description available'}\n`;
+        prompt += `Current Status: ${quest.status || 'Unknown'}\n`;
+        if (quest.analysis) {
+          prompt += `Analysis: ${quest.analysis}\n`;
+        }
+        prompt += '---\n';
+      });
+      prompt += '\nKeep these quest details in mind when responding.\n\n';
+    }
+
+    // Third: Today's previous checkups
+    if (previousCheckupsContext && previousCheckupsContext.trim()) {
+      prompt += `IMPORTANT: Earlier today, you've already had these conversations with the user (in chronological order with timestamps):\n${previousCheckupsContext}\n\n`;
+      prompt += `As you can see above, YOU'VE ALREADY RESPONDED to the user's earlier checkups. Do not repeat advice or commentary you've already given in those earlier responses. Your new response should only address what's NEW in their latest entry.\n\n`;
+    }
+
+    // Fourth: Instructions
+    prompt += "\nIMPORTANT INSTRUCTIONS:\n";
+   
+    prompt += `'1. Respond ONLY to the latest checkup entry (shown below)
+2. DO NOT repeat advice or commentary you've already given in your previous responses
+3. Focus on what's new or different in this latest entry
+4. Keep your characteristic Johnny Silverhand style - snarky but supportive
+5. If the user is clearly continuing a thought from earlier, acknowledge that continuity\n\n`;
+
+    // Fifth: Current entry (repeated at end for LLM focus)
+    prompt += `Here's the user's latest checkup entry that you need to respond to:\n[${currentDate}, ${currentTime}] USER: ${currentEntry}\n`;
 
     console.log('✅ Response prompt created, length:', prompt.length);
+    console.log('📎 First 200 chars of prompt:', prompt.substring(0, 200));
     return prompt;
   }
 
-  private createAnalysisPrompt(currentEntry: string, context: Array<{ entry: string; analysis: string; updated_at: string }>, previousCheckupsContext?: string): string {
+  private async createAnalysisPrompt(currentEntry: string, context: Array<{ entry: string; analysis: string; updated_at: string }>, previousCheckupsContext?: string): Promise<string> {
     console.log('🔧 Creating analysis prompt with context entries:', context.length);
     
-    let prompt = `Here's the user's latest journal entry that you need to analyze: "${currentEntry}"
+    let prompt = `Here's the user's latest journal entry that you need to analyze: "${currentEntry}"\n\n`;
 
-`;
-    
     if (previousCheckupsContext) {
       prompt += `\nEarlier today, the user wrote:\n${previousCheckupsContext}\n`;
     }
@@ -200,6 +232,7 @@ export class JournalAgent {
     }
 
     prompt += "\nAnalyze the latest entry while considering both today's earlier entries and historical context to identify patterns or themes. Focus particularly on any shifts or developments throughout today. Let's hear what Johnny thinks.";
+    prompt += `Here's the user's latest journal entry that you need to analyze: "${currentEntry}"\n\n`;
 
     console.log('✅ Analysis prompt created, length:', prompt.length);
     return prompt;

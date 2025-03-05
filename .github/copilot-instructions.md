@@ -109,6 +109,37 @@ globs: *.md
       </explanation>
       
     </issue>
+
+    <issue>
+      <problem>
+      LLM prompt effectiveness diminished by poor content ordering
+      </problem>
+
+      <context>
+      When constructing prompts for LLM responses, the most relevant/critical content should be placed last 
+      in the prompt, as this has the strongest influence on the response. This is especially important when 
+      you want the LLM to focus on specific content or maintain a particular context while generating its response.
+      </context>
+
+      <incorrect>
+      - Placing the core content/question at the start of a long prompt
+      - Diluting the main topic with too much context after the key content
+      - Not reinforcing critical instructions at the end of the prompt
+      </incorrect>
+
+      <solution>
+      1. Structure prompts with supporting context first
+      2. Place the most critical content (what you want the LLM to directly respond to) last
+      3. If needed, repeat the core content at the end of the prompt to ensure it's the freshest context
+      </solution>
+
+      <explanation>
+      LLMs tend to focus more strongly on content placed towards the end of prompts. By structuring prompts 
+      with the most critical content last, we ensure the model's response is more directly focused on the 
+      core topic/question. This is similar to how human conversations work - we tend to respond most directly 
+      to the last thing said.
+      </explanation>
+    </issue>
   </section>
 
   <metadata>
