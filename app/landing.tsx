@@ -6,4 +6,5 @@ export default function LandingScreen() {
   const router = useRouter();
   
   return <DesktopLayout />;
+  
 }
