@@ -17,9 +17,10 @@ export const CheckupItem: React.FC<CheckupItemProps> = ({
   onPress,
   isExpanded
 }) => {
-  const checkupTime = new Date(checkup.created_at).toLocaleTimeString([], { 
+  const checkupTime = new Date(checkup.created_at).toLocaleTimeString('en-US', { 
     hour: '2-digit', 
-    minute: '2-digit'
+    minute: '2-digit',
+    hour12: false
   });
   
   // Get a summary of the entry (first sentence or first 60 chars)

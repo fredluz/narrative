@@ -134,7 +134,7 @@ export class JournalAgent {
     const currentTime = new Date().toLocaleTimeString([], { 
       hour: '2-digit', 
       minute: '2-digit',
-      hour12: true 
+      hour12: false 
     });
     const currentDate = new Date().toLocaleDateString('en-US', {
       month: 'short',
@@ -155,7 +155,7 @@ export class JournalAgent {
         const formattedTime = entryDate.toLocaleTimeString([], { 
           hour: '2-digit', 
           minute: '2-digit',
-          hour12: true
+          hour12: false
         });
         
         prompt += `Previous Daily Entry ${index + 1} [${formattedDate}, ${formattedTime}]: "${entry.entry}"\n`;
@@ -192,7 +192,9 @@ export class JournalAgent {
 2. DO NOT repeat advice or commentary you've already given in your previous responses
 3. Focus on what's new or different in this latest entry
 4. Keep your characteristic Johnny Silverhand style - snarky but supportive
-5. If the user is clearly continuing a thought from earlier, acknowledge that continuity\n\n`;
+5. If the user is clearly continuing a thought from earlier, acknowledge that continuity
+6. no or few emojis\n\n`;
+
 
     // Fifth: Current entry (repeated at end for LLM focus)
     prompt += `Here's the user's latest checkup entry that you need to respond to:\n[${currentDate}, ${currentTime}] USER: ${currentEntry}\n`;
@@ -223,7 +225,7 @@ export class JournalAgent {
         const formattedTime = entryDate.toLocaleTimeString([], { 
           hour: '2-digit', 
           minute: '2-digit',
-          hour12: true
+          hour12: false
         });
         
         prompt += `Previous Entry ${index + 1} [${formattedDate}, ${formattedTime}]: "${entry.entry}"\n`;
@@ -288,6 +290,7 @@ export class JournalAgent {
             3. Advice or thoughts for tomorrow
             4. Personal observations only you would make, with your characteristic edge and attitude
             5. Reference specific moments or exchanges from the day when relevant
+            6. no or few emojis
             
             Keep your cyberpunk attitude but be genuinely helpful. This is your chance to show you've been paying attention all day.`
           },

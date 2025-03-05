@@ -192,20 +192,12 @@ export const journalService = {
         // Format all existing checkups in chronological order (oldest first)
         previousCheckupsContext = todaysCheckups
           .map(entry => {
-            const entryDate = new Date(entry.created_at);
-            const formattedDate = entryDate.toLocaleDateString('en-US', {
-              month: 'short',
-              day: 'numeric'
-            });
-            const formattedTime = entryDate.toLocaleTimeString([], { 
+            const entryTime = new Date(entry.created_at).toLocaleTimeString('en-US', { 
               hour: '2-digit', 
               minute: '2-digit',
-              hour12: true
+              hour12: false
             });
-            
-            const timeSince = this.getTimeSinceString(entryDate);
-            
-            return `[${formattedDate}, ${formattedTime} - ${timeSince}] USER: ${entry.content}\n[${formattedDate}, ${formattedTime}] SILVERHAND: ${entry.ai_checkup_response || 'No response recorded'}`;
+            return `[${entryTime}] USER: ${entry.content}\n[${entryTime}] SILVERHAND: ${entry.ai_checkup_response || 'No response recorded'}`;
           })
           .join('\n\n');
       }
@@ -218,14 +210,24 @@ export const journalService = {
       } else {
         console.log('ℹ️ Using provided AI response');
       }
+
+      // Ensure the entry has a timestamp if it doesn't already
+      const now = new Date();
+      const currentTime = now.toLocaleTimeString('en-US', { 
+        hour: '2-digit', 
+        minute: '2-digit',
+        hour12: false
+      });
+
+      const finalContent = content.startsWith('[') ? content : `[${currentTime}] ${content}`;
       
       // Insert the checkup with AI response
       console.log('💾 Saving checkup entry to database');
       const { data, error } = await supabase
         .from('checkup_entries')
         .insert([{ 
-          created_at: new Date().toISOString(),
-          content: content,
+          created_at: now.toISOString(),
+          content: finalContent,
           tags,
           daily_entry_id: null,
           ai_checkup_response: checkupResponse
@@ -311,7 +313,7 @@ export const journalService = {
           const formattedTime = entryDate.toLocaleTimeString([], { 
             hour: '2-digit', 
             minute: '2-digit',
-            hour12: true
+            hour12: false
           });
           
           return {
@@ -342,7 +344,7 @@ export const journalService = {
           updated_at: new Date().toISOString(),
           user_entry: formattedContent,
           title: `Daily Entry - ${date}`,
-          tags: ['daily_entry'],
+          tags: [],
           ai_response: response,  // Use the end-of-day response
           ai_analysis: analysis   // Use the end-of-day analysis
         }])
@@ -388,7 +390,7 @@ export const journalService = {
         .order('created_at', { ascending: true });
       
       if (error) {
-        console.error('❌ Database error when fetching checkups for daily entry:', error);
+        console.error('❌ Database error when fetching checkups:', error);
         throw error;
       }
       

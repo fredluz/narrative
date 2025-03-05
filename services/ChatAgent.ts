@@ -67,7 +67,7 @@ export class ChatAgent {
           const time = new Date(checkup.created_at).toLocaleTimeString([], { 
             hour: '2-digit', 
             minute: '2-digit',
-            hour12: true
+            hour12: false
           });
           return `[${time}] Checkup: "${checkup.content}"\n[${time}] My Response: "${checkup.ai_checkup_response || 'No response recorded'}"`;
         }).join('\n\n');
@@ -118,6 +118,7 @@ CONVERSATION CONTEXT:
 - You're gonna get shown the full back-and-forth of this conversation in order
 - Your response should directly continue this conversation thread
 - Reference and build upon what's already been discussed in this chat session
+-  emojis are to be extremely rare
 `
 
       };
@@ -255,7 +256,7 @@ CONVERSATION CONTEXT:
             const time = new Date(entry.created_at).toLocaleTimeString([], { 
               hour: '2-digit', 
               minute: '2-digit',
-              hour12: true
+              hour12: false
             });
             return `[${time}] USER: ${entry.content}\n[${time}] SILVERHAND: ${entry.ai_checkup_response || 'No response recorded'}`;
           })
@@ -280,6 +281,13 @@ CONVERSATION CONTEXT:
   // Updated method to generate content for the checkup entry with more accurate user voice
   private async generateCheckupContent(messages: ChatMessage[], summary: string): Promise<string> {
     try {
+      const now = new Date();
+      const currentTime = now.toLocaleTimeString('en-US', { 
+        hour: '2-digit', 
+        minute: '2-digit',
+        hour12: false
+      });
+
       // Extract only the user's messages
       const userMessages = messages
         .filter(msg => msg.is_user)
@@ -293,7 +301,7 @@ CONVERSATION CONTEXT:
         .join('\n');
       
       // Get today's checkups to analyze user's writing style
-      const today = new Date().toISOString().split('T')[0];
+      const today = now.toISOString().split('T')[0];
       console.log('🔄 Fetching today\'s checkups for context and style analysis');
       const todaysCheckups = await journalService.getCheckupEntries(today);
       
@@ -305,23 +313,23 @@ CONVERSATION CONTEXT:
         // Extract only user entries for style analysis
         userStyleSamples = todaysCheckups
           .map(checkup => {
-            const time = new Date(checkup.created_at).toLocaleTimeString([], { 
+            const entryTime = new Date(checkup.created_at).toLocaleTimeString('en-US', { 
               hour: '2-digit', 
               minute: '2-digit',
-              hour12: true 
+              hour12: false 
             });
-            return `[${time}] "${checkup.content}"`;
+            return `[${entryTime}] "${checkup.content}"`;
           })
           .join('\n\n');
         
         // Format as paired entries for context comprehension
         checkupContext = todaysCheckups.map(checkup => {
-          const time = new Date(checkup.created_at).toLocaleTimeString([], { 
+          const entryTime = new Date(checkup.created_at).toLocaleTimeString('en-US', { 
             hour: '2-digit', 
             minute: '2-digit',
-            hour12: true
+            hour12: false
           });
-          return `[${time}] My entry: "${checkup.content}"\n[${time}] Johnny's response: "${checkup.ai_checkup_response || 'No response recorded'}"`;
+          return `[${entryTime}] My entry: "${checkup.content}"\n[${entryTime}] Johnny's response: "${checkup.ai_checkup_response || 'No response recorded'}"`;
         }).join('\n\n');
       }
       
@@ -332,7 +340,7 @@ CONVERSATION CONTEXT:
         messages: [
           {
             role: "system",
-            content: `You are creating a journal entry from the perspective of the user who just had a chat conversation with Johnny Silverhand.
+            content: `You are creating a journal entry from the perspective of the user who just had a chat conversation with Johnny Silverhand at ${currentTime}.
 
 YOUR TASK: 
 Write a short reflective journal entry (1-2 paragraphs) that accurately records what the USER talked about in their chat messages. This must be written in their authentic voice and style.
@@ -342,8 +350,9 @@ CRITICAL GUIDELINES:
 2. DO NOT invent any details, decisions, plans, or thoughts that weren't directly expressed by the user
 3. DO NOT narrate what Johnny said or his perspective - focus exclusively on the user's side
 4. Carefully study the user's writing style from their previous entries to match their tone, vocabulary, and manner of expression
-5. The entry should feel like the user wrote it themselves.
+5. The entry should feel like the user wrote it themselves
 6. Keep the language, tone and style consistent with the user's other entries
+7. Start the entry with "[${currentTime}] " - this exact format is required
 
 IMPORTANT: This is NOT a summary of the conversation - it's a personal journal entry written by the user recording their thoughts from the conversation in their authentic voice.`
           },
@@ -367,14 +376,24 @@ Write a reflective journal entry from my perspective about what I discussed in m
       });
 
       const aiContent = response.choices[0].message?.content || 
-             "Just had a chat with Johnny where I brought up the things that have been on my mind.";
-             
+             `[${currentTime}] Just had a chat with Johnny where I brought up the things that have been on my mind.`;
+      
+      // Ensure the content starts with the timestamp
+      if (!aiContent.startsWith(`[${currentTime}]`)) {
+        return `[${currentTime}] ${aiContent}`;
+      }
+      
       console.log('📥 Generated checkup content from chat session:', aiContent.substring(0, 100) + '...');
       
       return aiContent;
     } catch (error) {
       console.error('❌ Error generating checkup content:', error);
-      return "Had a conversation with Johnny about some things on my mind.";
+      const currentTime = new Date().toLocaleTimeString('en-US', { 
+        hour: '2-digit', 
+        minute: '2-digit',
+        hour12: false
+      });
+      return `[${currentTime}] Had a conversation with Johnny about some things on my mind.`;
     }
   }
 }
