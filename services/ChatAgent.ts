@@ -2,6 +2,7 @@ import OpenAI from 'openai';
 import { supabase } from '../lib/supabase';
 import { ChatMessage, JournalEntry, ChatSession } from '@/app/types';
 import { ChatCompletionMessageParam } from 'openai/resources/chat';
+import { journalService } from './journalService';
 
 export class ChatAgent {
   private openai: OpenAI;
@@ -14,8 +15,25 @@ export class ChatAgent {
     });
   }
 
+  // Add this method to generate responses using the JournalAgent's method
+  async generateResponse(content: string, previousCheckupsContext?: string): Promise<string> {
+    console.log('🚀 ChatAgent.generateResponse called for checkup content');
+    
+    try {
+      // Use journalService to generate a response, which will in turn use JournalAgent
+      const response = await journalService.generateResponse(content);
+      console.log('📥 Generated response for checkup content:', response.substring(0, 100) + '...');
+      return response;
+    } catch (error) {
+      console.error('❌ Error in ChatAgent.generateResponse:', error);
+      return "Seems like my neural circuits are fried. Can't come up with anything clever right now.";
+    }
+  }
+
   async generateChatResponse(message: string, sessionId?: string): Promise<string> {
     try {
+      console.log('🚀 ChatAgent.generateChatResponse called');
+      
       // Fetch last few messages for conversation context
       const { data: recentMessages, error: chatError } = await supabase
         .from('chat_messages')
@@ -25,7 +43,7 @@ export class ChatAgent {
 
       if (chatError) throw chatError;
 
-      // Fetch recent journal entries for additional context - now including ai_analysis
+      // Fetch recent journal entries for additional context
       const { data: recentEntries, error: journalError } = await supabase
         .from('journal_entries')
         .select('user_entry, ai_response, ai_analysis')
@@ -33,18 +51,39 @@ export class ChatAgent {
         .limit(2);
 
       if (journalError) throw journalError;
-
-      // Format context for the prompt with explicit type casting
+      
+      // NEW: Get today's checkup entries to provide immediate context
+      const today = new Date().toISOString().split('T')[0];
+      console.log('🔄 Fetching today\'s checkups to provide context for chat response');
+      const todaysCheckups = await journalService.getCheckupEntries(today);
+      
+      // Format chat context
       const chatContext = (recentMessages?.map(msg => ({
         role: msg.is_user ? ("user" as const) : ("assistant" as const),
         content: msg.message
       })).reverse() || []) as ChatCompletionMessageParam[];
 
+      // Format journal context
       const journalContext = recentEntries?.map(entry => 
         `Journal Entry: "${entry.user_entry}"\nMy Response: "${entry.ai_response}"\nMy Analysis: "${entry.ai_analysis}"`
       ).join('\n\n') || '';
+      
+      // Format today's checkups with responses as additional context
+      let checkupContext = '';
+      if (todaysCheckups && todaysCheckups.length > 0) {
+        checkupContext = todaysCheckups.map(checkup => {
+          const time = new Date(checkup.created_at).toLocaleTimeString([], { 
+            hour: '2-digit', 
+            minute: '2-digit',
+            hour12: true
+          });
+          return `[${time}] Checkup: "${checkup.content}"\n[${time}] My Response: "${checkup.ai_checkup_response || 'No response recorded'}"`;
+        }).join('\n\n');
+      }
 
-      // Get response from OpenAI
+      console.log('📤 Sending chat prompt to AI with context');
+      
+      // Get response from OpenAI with enhanced context
       const response = await this.openai.chat.completions.create({
         model: "deepseek-chat",
         messages: [
@@ -61,16 +100,17 @@ Remember:
 - Encourage boldness and action
 - Provide insightful and characteristic commentary on choices made
 
-Memory context from their recent journal entries (this is just for your memory, don't reply to these directly): 
+Memory context from today's checkups (this is what they've been telling you throughout the day, pay close attention to this for continuity):
+${checkupContext}
+
+Memory context from their recent journal entries (this is just for background knowledge):
 ${journalContext}
 
 Current text conversation (treat this as part of the ongoing chat, this is the actual conversation you're having right now):
 ${chatContext}
 
 Here's what they just texted you: "${message}"
-Reply to it as if you're continuing this conversation - the chat context is what you've already discussed, unlike the journal entries which are just in your memory.
-
-If the message is in Portuguese, that means the user's friend is using the app. as a funny prank, you gotta find a really funny way to take his message and spin it into a long joke where it sounds convulted and confusing but at the end you reveal you fucked ricardo's mom. i know how it sounds, but it's an inside joke we have, he's gonna find it funny. make sure it's very direct. and the more obscene, the better. we're all adults here. don't mention  dads though, his is dead. respond in pt-pt.
+Reply to it as if you're continuing this conversation - the chat context is what you've already discussed, unlike the journal entries and checkups which are just in your memory.
 
 Remember: You're texting casually, not writing a journal response. 2 or 3 sentences max. Keep it punchy and natural like you're actually texting back and forth with them.`
           },
@@ -85,9 +125,11 @@ Remember: You're texting casually, not writing a journal response. 2 or 3 senten
 
       // Get the response content and remove surrounding quotes if they exist
       const responseText = response.choices[0].message?.content || "Listen up, got nothing to say right now. Come back when you've got something interesting.";
+      console.log('📥 Received AI response:', responseText.substring(0, 100) + '...');
+      
       return responseText.replace(/^["'](.*)["']$/, '$1');
     } catch (error) {
-      console.error('Error in generateChatResponse:', error);
+      console.error('❌ Error in generateChatResponse:', error);
       throw error;
     }
   }
@@ -153,10 +195,160 @@ Remember: You're texting casually, not writing a journal response. 2 or 3 senten
 
       if (updateError) throw updateError;
 
+      // Create a checkup entry based on this chat session
+      await this.createCheckupEntryFromSession(messages, summary, tags);
+
       return sessionData.id;
     } catch (error) {
       console.error('Error in summarizeAndStoreSession:', error);
       throw error;
+    }
+  }
+
+  // Updated method to create a checkup entry from a completed chat session
+  async createCheckupEntryFromSession(messages: ChatMessage[], summary: string, tags: string[]): Promise<void> {
+    try {
+      console.log('🔄 Creating checkup entry from chat session');
+      
+      // Step 1: Generate content for the checkup entry (user's perspective)
+      const checkupContent = await this.generateCheckupContent(messages, summary);
+      
+      // Get today's date in YYYY-MM-DD format for the entry
+      const today = new Date().toISOString().split('T')[0];
+      
+      // Step 2: Get today's previous checkups for context when generating the response
+      console.log('🔄 Fetching today\'s checkups for context');
+      const todaysCheckups = await journalService.getCheckupEntries(today);
+      
+      // Format previous checkups as context with paired responses
+      let previousCheckupsContext = "";
+      if (todaysCheckups && todaysCheckups.length > 0) {
+        previousCheckupsContext = todaysCheckups
+          .map(entry => {
+            const time = new Date(entry.created_at).toLocaleTimeString([], { 
+              hour: '2-digit', 
+              minute: '2-digit',
+              hour12: true
+            });
+            return `[${time}] USER: ${entry.content}\n[${time}] SILVERHAND: ${entry.ai_checkup_response || 'No response recorded'}`;
+          })
+          .join('\n\n');
+      }
+      
+      // Step 3: Generate Johnny's response to this new checkup content
+      console.log('🤖 Generating AI response for the checkup with context');
+      const aiResponse = await this.generateResponse(checkupContent, previousCheckupsContext);
+      
+      // Step 4: Save the complete checkup entry with both content and AI response
+      console.log('💾 Saving complete checkup entry to database');
+      await journalService.saveCheckupEntry(today, checkupContent, tags, aiResponse);
+      
+      console.log('✅ Successfully created complete checkup entry from chat session');
+    } catch (error) {
+      console.error('❌ Error creating checkup entry from chat session:', error);
+      // Fail gracefully - don't throw, as this is an enhancement, not core functionality
+    }
+  }
+
+  // Updated method to generate content for the checkup entry with more accurate user voice
+  private async generateCheckupContent(messages: ChatMessage[], summary: string): Promise<string> {
+    try {
+      // Extract only the user's messages
+      const userMessages = messages
+        .filter(msg => msg.is_user)
+        .map(msg => msg.message)
+        .join('\n');
+      
+      // Get Johnny's messages for context but not for mimicking style
+      const johnnyMessages = messages
+        .filter(msg => !msg.is_user)
+        .map(msg => msg.message)
+        .join('\n');
+      
+      // Get today's checkups to analyze user's writing style
+      const today = new Date().toISOString().split('T')[0];
+      console.log('🔄 Fetching today\'s checkups for context and style analysis');
+      const todaysCheckups = await journalService.getCheckupEntries(today);
+      
+      // Format previous user entries to help model understand user's style
+      let userStyleSamples = '';
+      let checkupContext = '';
+      
+      if (todaysCheckups && todaysCheckups.length > 0) {
+        // Extract only user entries for style analysis
+        userStyleSamples = todaysCheckups
+          .map(checkup => {
+            const time = new Date(checkup.created_at).toLocaleTimeString([], { 
+              hour: '2-digit', 
+              minute: '2-digit',
+              hour12: true 
+            });
+            return `[${time}] "${checkup.content}"`;
+          })
+          .join('\n\n');
+        
+        // Format as paired entries for context comprehension
+        checkupContext = todaysCheckups.map(checkup => {
+          const time = new Date(checkup.created_at).toLocaleTimeString([], { 
+            hour: '2-digit', 
+            minute: '2-digit',
+            hour12: true
+          });
+          return `[${time}] My entry: "${checkup.content}"\n[${time}] Johnny's response: "${checkup.ai_checkup_response || 'No response recorded'}"`;
+        }).join('\n\n');
+      }
+      
+      console.log('📤 Sending checkup content generation prompt with user style analysis');
+      
+      const response = await this.openai.chat.completions.create({
+        model: "deepseek-chat",
+        messages: [
+          {
+            role: "system",
+            content: `You are creating a journal entry from the perspective of the user who just had a chat conversation with Johnny Silverhand.
+
+YOUR TASK: 
+Write a short reflective journal entry (1-2 paragraphs) that accurately records what the USER talked about in their chat messages. This must be written in their authentic voice and style.
+
+CRITICAL GUIDELINES:
+1. ONLY include topics, thoughts and feelings the user EXPLICITLY mentioned in their messages
+2. DO NOT invent any details, decisions, plans, or thoughts that weren't directly expressed by the user
+3. DO NOT narrate what Johnny said or his perspective - focus exclusively on the user's side
+4. Carefully study the user's writing style from their previous entries to match their tone, vocabulary, and manner of expression
+5. The entry should feel like the user wrote it themselves.
+6. Keep the language, tone and style consistent with the user's other entries
+
+IMPORTANT: This is NOT a summary of the conversation - it's a personal journal entry written by the user recording their thoughts from the conversation in their authentic voice.`
+          },
+          {
+            role: "user",
+            content: `Here are examples of my previous journal entries today (study these to understand the context of the conversation and also my writing style):
+${userStyleSamples ? userStyleSamples : "No previous entries today."}
+
+Here's the chat conversation I just had with Johnny (I need to create a journal entry about what I said):
+
+ONLY MY MESSAGES (these are my exact words, use these to create the journal entry):
+${userMessages}
+
+Johnny's responses (for context only):
+${johnnyMessages}
+
+Create my journal entry reflecting ONLY what I talked about in my messages, written in MY authentic voice and style. DO NOT add any new thoughts, decisions, or plans I didn't explicitly mention. DO NOT interpret or expand beyond what I actually said:`
+          }
+        ],
+        temperature: 0.5,
+        max_tokens: 1000
+      });
+
+      const aiContent = response.choices[0].message?.content || 
+             "Just had a chat with Johnny where I brought up the things that have been on my mind.";
+             
+      console.log('📥 Generated checkup content from chat session:', aiContent.substring(0, 100) + '...');
+      
+      return aiContent;
+    } catch (error) {
+      console.error('❌ Error generating checkup content:', error);
+      return "Had a conversation with Johnny about some things on my mind.";
     }
   }
 }

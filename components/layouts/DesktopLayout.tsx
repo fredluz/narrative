@@ -17,7 +17,15 @@ import { JournalPanel } from '@/components/journal/JournalPanel';
 export function DesktopLayout() {
   const router = useRouter();
   const { themeColor, secondaryColor } = useTheme();
-  const { messages, sendMessage, handleTyping, endSession, themeColor: chatThemeColor, isTyping, sessionEnded } = useChatData();
+  const { 
+    messages, 
+    sendMessage, 
+    handleTyping, 
+    endSession, 
+    isTyping, 
+    sessionEnded,
+    checkupCreated // Get the new checkupCreated state
+  } = useChatData();
   const { mainQuest, loading, error, reload } = useQuests();
   const { shouldUpdate, resetUpdate } = useQuestUpdate();
 
@@ -77,7 +85,7 @@ export function DesktopLayout() {
         left: -10,
         width: '120%',
         height: 1,
-        backgroundColor: secondaryColor,  // Using secondaryColor from ThemeContext
+        backgroundColor: secondaryColor,
         opacity: 0.1,
         transform: [{ rotate: '-0.3deg' }],
         zIndex: 1,
@@ -141,13 +149,13 @@ export function DesktopLayout() {
 
       <View style={styles.column}>
         <ChatInterface 
-          themeColor={themeColor} 
           recentMessages={messages} 
           onSendMessage={sendMessage}
           handleTyping={handleTyping}
           onEndSession={endSession}
           isTyping={isTyping}
           sessionEnded={sessionEnded}
+          checkupCreated={checkupCreated} // Pass the new prop
         />
       </View>
       

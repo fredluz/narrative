@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { View, ActivityIndicator } from 'react-native';
 
 interface ThemeContextType {
   themeColor: string;
@@ -20,26 +21,41 @@ const ThemeContext = createContext<ThemeContextType>({
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [themeColor, setThemeColorState] = useState('#2c8c0f');
   const [secondaryColor, setSecondaryColorState] = useState('#1D64AB');
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     // Load saved colors
     const loadColors = async () => {
-      const savedTheme = await AsyncStorage.getItem('themeColor');
-      const savedSecondary = await AsyncStorage.getItem('secondaryColor');
-      if (savedTheme) setThemeColorState(savedTheme);
-      if (savedSecondary) setSecondaryColorState(savedSecondary);
+      try {
+        const savedTheme = await AsyncStorage.getItem('themeColor');
+        const savedSecondary = await AsyncStorage.getItem('secondaryColor');
+        if (savedTheme) setThemeColorState(savedTheme);
+        if (savedSecondary) setSecondaryColorState(savedSecondary);
+      } catch (error) {
+        console.error('Error loading theme colors:', error);
+      } finally {
+        setIsLoading(false);
+      }
     };
     loadColors();
   }, []);
 
   const setThemeColor = async (color: string) => {
     setThemeColorState(color);
-    await AsyncStorage.setItem('themeColor', color);
+    try {
+      await AsyncStorage.setItem('themeColor', color);
+    } catch (error) {
+      console.error('Error saving theme color:', error);
+    }
   };
 
   const setSecondaryColor = async (color: string) => {
     setSecondaryColorState(color);
-    await AsyncStorage.setItem('secondaryColor', color);
+    try {
+      await AsyncStorage.setItem('secondaryColor', color);
+    } catch (error) {
+      console.error('Error saving secondary color:', error);
+    }
   };
 
   const isDark = (color: string) => {
@@ -50,6 +66,14 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const brightness = (r * 299 + g * 587 + b * 114) / 1000;
     return brightness < 128;
   };
+
+  if (isLoading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#181818' }}>
+        <ActivityIndicator size="large" color="#2c8c0f" />
+      </View>
+    );
+  }
 
   return (
     <ThemeContext.Provider value={{ 

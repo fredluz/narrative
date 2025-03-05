@@ -6,38 +6,44 @@ import {
   TouchableOpacity, 
   ScrollView, 
   KeyboardAvoidingView, 
-  Platform 
+  Platform,
+  Animated 
 } from 'react-native';
 import { Card } from 'react-native-paper';
 import { MaterialIcons } from '@expo/vector-icons';
 import styles, { colors } from '@/app/styles/global';
 import { ChatMessage } from '@/app/types';
 import { useTheme } from '@/contexts/ThemeContext';
-
+import TriangularSpinner from '../loading/TriangularSpinner';
+import { useNavigation } from '@react-navigation/native';
 
 interface Props {
   recentMessages: ChatMessage[];
-  themeColor: string;
   onSendMessage?: (message: string) => Promise<void>;
-  handleTyping?: (text: string) => void;  // Add new prop
+  handleTyping?: (text: string) => void;
   isTyping?: boolean;
   sessionEnded?: boolean;
-  onEndSession?: () => void;  // Add new prop
+  checkupCreated?: boolean; // Add new prop
+  onEndSession?: () => void;
 }
 
 export function ChatInterface({ 
-  recentMessages, 
-  themeColor, 
+  recentMessages,
   onSendMessage, 
   handleTyping,
   isTyping, 
   sessionEnded,
+  checkupCreated,
   onEndSession
 }: Props) {
   const [message, setMessage] = useState('');
   const scrollViewRef = useRef<ScrollView>(null);
   
-  const { secondaryColor } = useTheme();
+  // Remove the unused dot animations as we'll use the TriangularSpinner component
+  const { themeColor, secondaryColor } = useTheme();
+  const navigation = useNavigation();
+
+  // Remove the animation effect that's not working
 
   // Clear message when session ends
   useEffect(() => {
@@ -110,6 +116,7 @@ export function ChatInterface({
       return '';
     }
   };
+
 
   return (
     <Card style={{
@@ -295,7 +302,7 @@ export function ChatInterface({
             </View>
           ))}
           
-          {/* Typing indicator */}
+          {/* Improved typing indicator using TriangularSpinner */}
           {isTyping && (
             <View 
               style={[
@@ -331,10 +338,13 @@ export function ChatInterface({
                   SILVERHAND
                 </Text>
               </View>
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 4 }}>
+                {/* Replace the placeholder view with the TriangularSpinner component */}
+                <TriangularSpinner size={24} color={secondaryColor} />
                 <Text style={{ 
                   fontSize: 18,
                   color: '#BBB',
+                  marginLeft: 8,
                   lineHeight: 22,
                   textShadowColor: secondaryColor,
                   textShadowOffset: { width: 0, height: 0 },
@@ -342,27 +352,41 @@ export function ChatInterface({
                 }}>
                   typing
                 </Text>
-                <View style={{ 
-                  flexDirection: 'row', 
-                  marginLeft: 4,
-                  alignItems: 'flex-end',
-                }}>
-                  {[0, 1, 2].map((i) => (
-                    <View
-                      key={i}
-                      style={{
-                        width: 4,
-                        height: 4,
-                        borderRadius: 2,
-                        backgroundColor: '#BBB',
-                        marginLeft: 2,
-                        opacity: 0.7,
-                        transform: [{ translateY: Math.sin(Date.now() / (500 + i * 200)) * 2 }],
-                      }}
-                    />
-                  ))}
-                </View>
               </View>
+            </View>
+          )}
+          
+          {/* Session ended notification with checkup information */}
+          {sessionEnded && (
+            <View style={{
+              marginTop: 20,
+              padding: 12,
+              borderRadius: 5,
+              backgroundColor: 'rgba(20, 20, 20, 0.8)',
+              borderWidth: 1,
+              borderColor: secondaryColor,
+            }}>
+              <Text style={{
+                color: '#BBB',
+                fontSize: 16,
+                textAlign: 'center',
+                marginBottom: 8,
+              }}>
+                Session ended
+              </Text>
+              
+              {checkupCreated && (
+                <View style={{ marginTop: 8 }}>
+                  <Text style={{
+                    color: '#BBB',
+                    fontSize: 14,
+                    textAlign: 'center',
+                    marginBottom: 8,
+                  }}>
+                    A checkup entry has been created in your journal based on this conversation.
+                  </Text>
+                </View>
+              )}
             </View>
           )}
         </ScrollView>
@@ -396,6 +420,7 @@ export function ChatInterface({
             placeholderTextColor="#666"
             blurOnSubmit={false}
             multiline={false} // Changed to false to better handle Enter key
+            editable={!sessionEnded} // Disable input when session has ended
           />
           <TouchableOpacity 
             style={{
@@ -411,8 +436,10 @@ export function ChatInterface({
               shadowOpacity: 0.5,
               shadowRadius: 5,
               elevation: 5,
+              opacity: sessionEnded ? 0.5 : 1, // Fade out when disabled
             }} 
             onPress={handleSend}
+            disabled={sessionEnded} // Disable button when session has ended
           >
             <MaterialIcons name="send" size={24} color="#FFF" />
           </TouchableOpacity>

@@ -4,7 +4,7 @@ import { useQuestUpdate } from '@/contexts/QuestUpdateContext';
 
 export function useJournal() {
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [entries, setEntries] = useState<Record<string, JournalEntry>>({});
+  const [entries, setEntries] = useState<Record<string, JournalEntry[]>>({});
   const [localEntries, setLocalEntries] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -33,38 +33,20 @@ export function useJournal() {
       const journalEntries = await journalService.getEntries(startDate, endDate);
       console.log('Fetched entries:', journalEntries);
       
-      // Convert to our local format
-      const entriesRecord: Record<string, JournalEntry> = {};
+      // Convert to our local format, organized by date
+      const entriesRecord: Record<string, JournalEntry[]> = {};
       journalEntries.forEach((entry: JournalEntry) => {
         if (entry.date) {
-          console.log(`Adding entry for date ${entry.date} to local records:`, entry);
-          entriesRecord[entry.date] = entry;
+          if (!entriesRecord[entry.date]) {
+            entriesRecord[entry.date] = [];
+          }
+          entriesRecord[entry.date].push(entry);
         }
       });
       
       setEntries(entriesRecord);
       console.log('Updated entries state:', entriesRecord);
       
-      // Keep any unsaved changes in localEntries
-      const todayString = formatDate(today);
-      if (!entriesRecord[todayString] && !localEntries[todayString]) {
-        console.log(`No entry found for today (${todayString}), creating empty local entry`);
-        setLocalEntries(prev => ({
-          ...prev,
-          [todayString]: ''
-        }));
-      }
-      
-      // Check if current date entry exists but has no local counterpart
-      const currentDateStr = formatDate(currentDate);
-      if (entriesRecord[currentDateStr] && localEntries[currentDateStr] === undefined) {
-        console.log(`Found entry for current date ${currentDateStr} but no local entry, initializing local state`);
-        // This is important - initialize local entry with the database value
-        setLocalEntries(prev => ({
-          ...prev,
-          [currentDateStr]: entriesRecord[currentDateStr].user_entry || ''
-        }));
-      }
     } catch (err: any) {
       const errorMessage = err?.message || "Failed to load journal entries";
       setError(errorMessage);
@@ -72,105 +54,69 @@ export function useJournal() {
     } finally {
       setLoading(false);
     }
-  }, [currentDate]);
+  }, []);
 
   // Load entries whenever currentDate changes
   useEffect(() => {
     console.log('Current date changed to', formatDate(currentDate), '- refreshing entries');
     fetchRecentEntries();
-  }, [fetchRecentEntries, currentDate]);
+  }, [currentDate]);
 
   const getEntry = useCallback((date: Date): JournalEntry | null => {
     const dateStr = formatDate(date);
+    const dateEntries = entries[dateStr] || [];
     
-    // First check local entries (for unsaved changes)
-    if (localEntries[dateStr] !== undefined) {
-      console.log('Returning local entry for', dateStr, 'length:', localEntries[dateStr]?.length || 0);
-      // Create a temporary JournalEntry for local changes
-      return {
-        id: entries[dateStr]?.id || '',
-        created_at: date.toISOString(),
-        updated_at: new Date().toISOString(),
-        tags: entries[dateStr]?.tags || [],
-        title: entries[dateStr]?.title || '',
-        user_entry: localEntries[dateStr],
-        ai_analysis: entries[dateStr]?.ai_analysis || '',
-        ai_response: entries[dateStr]?.ai_response || '',
-        date: dateStr
-      };
-    }
-    
-    // Then check saved entries
-    const entry = entries[dateStr];
-    console.log('Returning saved entry for', dateStr, 'exists:', !!entry);
-    return entry || null;
-  }, [entries, localEntries]);
-
-  const getAiResponses = useCallback((date: Date) => {
-    const dateStr = formatDate(date);
-    const entry = entries[dateStr];
-    if (!entry) return { response: null, analysis: null };
-    return {
-      response: entry.ai_response || null,
-      analysis: entry.ai_analysis || null
-    };
+    // Return the latest entry for the date
+    return dateEntries.length > 0 ? dateEntries[dateEntries.length - 1] : null;
   }, [entries]);
 
+  const getAiResponses = useCallback((date: Date): { response: string | null; analysis: string | null } => {
+    const entry = getEntry(date);
+    return {
+      response: entry?.ai_response || null,
+      analysis: entry?.ai_analysis || null
+    };
+  }, [getEntry]);
+
   // Update local entry text without saving to database
-  const updateLocalEntry = useCallback((date: Date, text: string) => {
+  const updateLocalEntry = useCallback((date: Date, content: string) => {
     const dateStr = formatDate(date);
     setLocalEntries(prev => ({
       ...prev,
-      [dateStr]: text
+      [dateStr]: content
     }));
   }, []);
 
   // Save entry to the database
-  const saveEntry = async (date: Date) => {
+  const saveEntry = useCallback(async (date: Date, content: string, tags: string[] = []) => {
     const dateStr = formatDate(date);
-    let text = localEntries[dateStr];
-    
+    setLoading(true);
     try {
-      setLoading(true);
-      setError(null);
-      console.log(`Attempting to save entry for ${dateStr} with content:`, text);
+      // Save the checkup entry
+      const savedEntry = await journalService.saveCheckupEntry(dateStr, content, tags);
       
-      const savedEntry = await journalService.saveEntry(dateStr, text || '');
-      console.log('Successfully saved entry:', savedEntry);
+      // Refresh entries to get the latest data
+      await fetchRecentEntries();
       
-      // Generate both AI responses
-      const { response, analysis } = await journalService.generateAIResponses(savedEntry.id, text || '');
-      setAiResponse(response);
-      setAiAnalysis(analysis);
-
-      // Update entries with the saved entry and responses
-      setEntries(prev => ({
-        ...prev,
-        [dateStr]: {
-          ...savedEntry,
-          ai_response: response,
-          ai_analysis: analysis
-        }
-      }));
-      
-      // Keep the current text in local entries
+      // Update local state
       setLocalEntries(prev => ({
         ...prev,
-        [dateStr]: text || ''
+        [dateStr]: content
       }));
       
       // Trigger app-wide update notification
       triggerUpdate();
       
+      return savedEntry;
     } catch (err: any) {
       const errorMessage = err?.message || "Failed to update journal entry";
       setError(errorMessage);
       console.error("Error in saveEntry:", err);
-      throw err; // Re-throw to handle in component
+      throw err;
     } finally {
       setLoading(false);
     }
-  };
+  }, [fetchRecentEntries, triggerUpdate]);
 
   const goToPreviousDay = () => {
     const prevDay = new Date(currentDate);
@@ -191,7 +137,7 @@ export function useJournal() {
   return {
     currentDate,
     getEntry,
-    getAiResponses, // Replace getAiAnalysis with getAiResponses
+    getAiResponses,
     updateLocalEntry,
     saveEntry,
     goToPreviousDay,

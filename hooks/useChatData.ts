@@ -13,6 +13,7 @@ export function useChatData() {
   const [isTyping, setIsTyping] = useState(false);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [sessionEnded, setSessionEnded] = useState(false);
+  const [checkupCreated, setCheckupCreated] = useState(false);
   const chatAgent = new ChatAgent();
   const inactivityTimerRef = useRef<NodeJS.Timeout | null>(null);
   const currentSessionMessagesRef = useRef<ChatMessage[]>([]);
@@ -36,6 +37,7 @@ export function useChatData() {
       clearTimeout(inactivityTimerRef.current);
     }
     setSessionEnded(false);
+    setCheckupCreated(false);
 
     inactivityTimerRef.current = setTimeout(async () => {
       const sessionMessages = currentSessionMessagesRef.current;
@@ -50,6 +52,7 @@ export function useChatData() {
           ));
           setCurrentSessionId(null);
           setSessionEnded(true);
+          setCheckupCreated(true); // Mark that we've created a checkup
         } catch (error) {
           console.error('Error summarizing session:', error);
         }
@@ -70,6 +73,7 @@ export function useChatData() {
         ));
         setCurrentSessionId(null);
         setSessionEnded(true);
+        setCheckupCreated(true); // Mark that we've created a checkup
       } catch (error) {
         console.error('Error summarizing session:', error);
       }
@@ -248,8 +252,8 @@ export function useChatData() {
     sendMessage,
     handleTyping,
     endSession,
-    themeColor,
     isTyping,
     sessionEnded,
+    checkupCreated, // Add new state to be exposed
   };
 }

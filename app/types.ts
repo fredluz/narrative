@@ -16,10 +16,19 @@ export interface Task extends BaseEntity {
   quest?: Quest;         // For joined data
 }
 
+// Updated to match database schema exactly
 export interface JournalEntry extends BaseEntity {
   title: string;
-  userEntry: string;
-  aiAnalysis: string;
+  user_entry: string;
+  ai_analysis: string;
+  ai_response: string;
+}
+
+// NEW: CheckupEntry interface
+export interface CheckupEntry extends BaseEntity {
+  content: string;  
+  daily_entry_id?: number;
+  ai_checkup_response?: string;
 }
 
 // Keeping QuestDescription for historical records
