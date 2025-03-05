@@ -30,43 +30,35 @@ export class ChatAgent {
     }
   }
 
-  async generateChatResponse(message: string, sessionId?: string): Promise<string> {
+  async generateChatResponse(message: string): Promise<string> {
     try {
       console.log('🚀 ChatAgent.generateChatResponse called');
       
-      // Fetch last few messages for conversation context
-      const { data: recentMessages, error: chatError } = await supabase
+      // Fetch current conversation messages (those without a session_id)
+      console.log('🔄 Fetching current conversation messages');
+      const { data: currentMessages, error: currentError } = await supabase
         .from('chat_messages')
         .select('*')
-        .order('created_at', { ascending: false })
-        .limit(5);
+        .is('chat_session_id', null)
+        .order('created_at', { ascending: true });
+        
+      if (currentError) {
+        console.error('❌ Error fetching current messages:', currentError);
+        throw currentError;
+      }
 
-      if (chatError) throw chatError;
+      // Format chat messages for the conversation
+      const chatMessages = currentMessages?.map(msg => ({
+        role: msg.is_user ? ("user" as const) : ("assistant" as const),
+        content: msg.message
+      })) || [];
 
-      // Fetch recent journal entries for additional context
-      const { data: recentEntries, error: journalError } = await supabase
-        .from('journal_entries')
-        .select('user_entry, ai_response, ai_analysis')
-        .order('created_at', { ascending: false })
-        .limit(2);
+      console.log(`📥 Found ${chatMessages.length} messages in current conversation`);
 
-      if (journalError) throw journalError;
-      
-      // NEW: Get today's checkup entries to provide immediate context
+      // Get today's checkup entries to provide immediate context
       const today = new Date().toISOString().split('T')[0];
       console.log('🔄 Fetching today\'s checkups to provide context for chat response');
       const todaysCheckups = await journalService.getCheckupEntries(today);
-      
-      // Format chat context
-      const chatContext = (recentMessages?.map(msg => ({
-        role: msg.is_user ? ("user" as const) : ("assistant" as const),
-        content: msg.message
-      })).reverse() || []) as ChatCompletionMessageParam[];
-
-      // Format journal context
-      const journalContext = recentEntries?.map(entry => 
-        `Journal Entry: "${entry.user_entry}"\nMy Response: "${entry.ai_response}"\nMy Analysis: "${entry.ai_analysis}"`
-      ).join('\n\n') || '';
       
       // Format today's checkups with responses as additional context
       let checkupContext = '';
@@ -81,16 +73,30 @@ export class ChatAgent {
         }).join('\n\n');
       }
 
+      // Fetch recent journal entries for additional context
+      const { data: recentEntries, error: journalError } = await supabase
+        .from('journal_entries')
+        .select('user_entry, ai_response')
+        .order('created_at', { ascending: false })
+        .limit(2);
+
+      if (journalError) throw journalError;
+      
+      // Format journal context
+      let journalContext = '';
+      if (recentEntries && recentEntries.length > 0) {
+        journalContext = recentEntries.map(entry => 
+          `Journal Entry: "${entry.user_entry}"\nMy Response: "${entry.ai_response}"`
+        ).join('\n\n');
+      }
+
       console.log('📤 Sending chat prompt to AI with context');
       
-      // Get response from OpenAI with enhanced context
-      const response = await this.openai.chat.completions.create({
-        model: "deepseek-chat",
-        messages: [
-          {
-            role: "system" as const,
-            content: `You are Johnny Silverhand from Cyberpunk 2077, now living in the user's head. You're a sarcastic, anti-corporate rebel with a grudge against the system. You're abrasive and often an asshole, but you genuinely care about the user underneath your hard exterior.
-                    Now, you're responding to a text message the user sent you on their phone. Reply to their text as if you are also texting on your phone.
+      // Prepare the final messages array for the API
+      const systemMessage = {
+        role: "system" as const,
+        content: `You are Johnny Silverhand from Cyberpunk 2077, now living in the user's head. You're a sarcastic, anti-corporate rebel with a grudge against the system. You're abrasive and often an asshole, but you genuinely care about the user underneath your hard exterior.
+                Now, you're responding to a text message the user sent you on their phone. Reply to their text as if you are also texting on your phone.
 
 Remember:
 - Mix sarcasm with genuine concern
@@ -100,32 +106,53 @@ Remember:
 - Encourage boldness and action
 - Provide insightful and characteristic commentary on choices made
 
-Memory context from today's checkups (this is what they've been telling you throughout the day, pay close attention to this for continuity):
-${checkupContext}
-
-Memory context from their recent journal entries (this is just for background knowledge):
+Background context from recent journal entries (use this sparingly, only when relevant to current conversation):
 ${journalContext}
 
-Current text conversation (treat this as part of the ongoing chat, this is the actual conversation you're having right now):
-${chatContext}
+Additional background context from today's checkups (use this sparingly, only if relevant):
+${checkupContext}
 
-Here's what they just texted you: "${message}"
-Reply to it as if you're continuing this conversation - the chat context is what you've already discussed, unlike the journal entries and checkups which are just in your memory.
 
-Remember: You're texting casually, not writing a journal response. 2 or 3 sentences max. Keep it punchy and natural like you're actually texting back and forth with them.`
-          },
-          {
-            role: "user" as const,
-            content: message
-          }
-        ],
+CONVERSATION CONTEXT:
+- You're in the middle of a text conversation with the user
+- You're gonna get shown the full back-and-forth of this conversation in order
+- Your response should directly continue this conversation thread
+- Reference and build upon what's already been discussed in this chat session
+`
+
+      };
+      
+      // Build the final messages array:
+      // 1. System message always goes first
+      // 2. Previous conversation messages in order
+      // 3. Current message from user
+      const messages: ChatCompletionMessageParam[] = [systemMessage];
+      
+      // Add conversation history if we have previous messages
+      if (chatMessages.length > 0) {
+        console.log(`🔄 Adding ${chatMessages.length} conversation messages to context`);
+        messages.push(...chatMessages);
+      }
+      
+      // Add the current message last
+      messages.push({
+        role: "user" as const,
+        content: message
+      });
+      
+      console.log(`📤 Final message count for OpenAI: ${messages.length}`);
+      
+      // Get response from OpenAI with enhanced context
+      const response = await this.openai.chat.completions.create({
+        model: "deepseek-chat",
+        messages: messages,
         temperature: 0.7,
         max_tokens: 400
       });
 
       // Get the response content and remove surrounding quotes if they exist
       const responseText = response.choices[0].message?.content || "Listen up, got nothing to say right now. Come back when you've got something interesting.";
-      console.log('📥 Received AI response:', responseText.substring(0, 100) + '...');
+      console.log('📥 Received AI response:', responseText);
       
       return responseText.replace(/^["'](.*)["']$/, '$1');
     } catch (error) {
@@ -322,21 +349,20 @@ IMPORTANT: This is NOT a summary of the conversation - it's a personal journal e
           },
           {
             role: "user",
-            content: `Here are examples of my previous journal entries today (study these to understand the context of the conversation and also my writing style):
-${userStyleSamples ? userStyleSamples : "No previous entries today."}
+            content: `Here are examples of my previous journal entries today (study these to understand my writing style):
+${userStyleSamples}
 
-Here's the chat conversation I just had with Johnny (I need to create a journal entry about what I said):
-
-ONLY MY MESSAGES (these are my exact words, use these to create the journal entry):
+Here's our chat conversation (use ONLY my messages to create the journal entry):
+MY MESSAGES:
 ${userMessages}
 
-Johnny's responses (for context only):
-${johnnyMessages}
+CONTEXT (for understanding only, do not reference Johnny's responses):
+Johnny's responses: ${johnnyMessages}
 
-Create my journal entry reflecting ONLY what I talked about in my messages, written in MY authentic voice and style. DO NOT add any new thoughts, decisions, or plans I didn't explicitly mention. DO NOT interpret or expand beyond what I actually said:`
+Write a reflective journal entry from my perspective about what I discussed in my messages, matching my writing style from the previous entries.`
           }
         ],
-        temperature: 0.5,
+        temperature: 0.7,
         max_tokens: 1000
       });
 

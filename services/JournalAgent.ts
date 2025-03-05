@@ -57,7 +57,7 @@ export class JournalAgent {
       });
 
       const aiResponse = response.choices[0].message?.content || "Listen up, got nothing to say right now. Come back when you've got something interesting.";
-      console.log('📥 Received AI response:', aiResponse.substring(0, 100) + '...');
+      console.log('📥 Received AI response:', aiResponse);
       
       return aiResponse;
     } catch (error) {
