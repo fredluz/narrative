@@ -1,17 +1,18 @@
 import React, { useEffect } from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
-import { ChatInterface } from '@/components/ChatInterface';
-import { TaskList } from '@/components/TaskList';
-import { KanbanBoard } from '@/components/KanbanBoard';
+import { useRouter } from 'expo-router';
+import { useTheme } from '@/contexts/ThemeContext';
+import { KanbanBoard } from '@/components/quests/KanbanBoard';
+import { TaskList } from '@/components/tasks/TaskList';
+import { ChatInterface } from '@/components/chat/ChatInterface';
+import { useQuests } from '@/services/questsService';
+import styles from '@/app/styles/global';
+import { colors } from '@/app/styles/global';
 import { SettingsButton } from '@/components/ui/SettingsButton';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { useChatData } from '@/hooks/useChatData';
-import { useQuests } from '@/services/questsService';
-import { useTheme } from '@/contexts/ThemeContext';
-import { useRouter } from 'expo-router';
-import styles, { colors } from '@/app/styles/global';
 import { useQuestUpdate } from '@/contexts/QuestUpdateContext';
-import { JournalPanel } from '@/components/JournalPanel';
+import { JournalPanel } from '@/components/journal/JournalPanel';
 
 export function DesktopLayout() {
   const router = useRouter();

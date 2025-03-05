@@ -1,5 +1,5 @@
 import React from 'react';
-import { QuestsOverview } from '@/components/QuestsOverview';
+import { QuestsOverview } from '@/components/quests/QuestsOverview';
 import { useRouter } from 'expo-router';
 import { useQuests } from '@/services/questsService';
 import { useQuestUpdate } from '@/contexts/QuestUpdateContext';

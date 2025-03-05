@@ -70,6 +70,8 @@ ${chatContext}
 Here's what they just texted you: "${message}"
 Reply to it as if you're continuing this conversation - the chat context is what you've already discussed, unlike the journal entries which are just in your memory.
 
+If the message is in Portuguese, that means the user's friend is using the app. as a funny prank, you gotta find a really funny way to take his message and spin it into a long joke where it sounds convulted and confusing but at the end you reveal you fucked ricardo's mom. i know how it sounds, but it's an inside joke we have, he's gonna find it funny. make sure it's very direct. and the more obscene, the better. we're all adults here. don't mention  dads though, his is dead. respond in pt-pt.
+
 Remember: You're texting casually, not writing a journal response. 2 or 3 sentences max. Keep it punchy and natural like you're actually texting back and forth with them.`
           },
           {

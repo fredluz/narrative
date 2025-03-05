@@ -14,6 +14,7 @@ import styles, { colors } from '@/app/styles/global';
 import { ChatMessage } from '@/app/types';
 import { useTheme } from '@/contexts/ThemeContext';
 
+
 interface Props {
   recentMessages: ChatMessage[];
   themeColor: string;

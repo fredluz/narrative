@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, FlatList, ScrollView, Dimensions, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, FlatList, ScrollView, Dimensions, ActivityIndicator, LayoutChangeEvent } from 'react-native';
 import { Card } from 'react-native-paper';
 import { MaterialIcons } from '@expo/vector-icons';
 import { format } from 'date-fns';
@@ -9,10 +9,11 @@ import { useQuests, createQuest, updateQuest } from '@/services/questsService';
 import { Quest, Task } from '@/app/types';
 import { updateTaskStatus, getNextStatus, createTask } from '@/services/tasksService';
 import { supabase } from '@/lib/supabase';
-import { CreateQuestModal } from './modals/CreateQuestModal';
-import { EditQuestModal } from './modals/EditQuestModal';
-import { CreateTaskModal } from './modals/CreateTaskModal';
-import { EditTaskModal } from './modals/EditTaskModal';
+import { CreateQuestModal } from '../modals/CreateQuestModal';
+import { EditQuestModal } from '../modals/EditQuestModal';
+import { CreateTaskModal } from '../modals/CreateTaskModal';
+import { EditTaskModal } from '../modals/EditTaskModal';
+
 
 type QuestStatus = 'Active' | 'On-Hold' | 'Completed';
 type TaskStatus = 'ToDo' | 'InProgress' | 'Done';

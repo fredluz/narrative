@@ -1,21 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  View, 
-  Text, 
-  TouchableOpacity, 
-  ScrollView,
-  ActivityIndicator,
-  Dimensions,
-  LayoutChangeEvent
-} from 'react-native';
+    View, 
+    Text, 
+    TouchableOpacity, 
+    ScrollView,
+    ActivityIndicator,
+    Dimensions,
+    LayoutChangeEvent
+  } from 'react-native';
 import { Card } from 'react-native-paper';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useTheme } from '@/contexts/ThemeContext';
+import { Task } from '@/app/types';
+import { taskStyles } from '@/app/styles/taskStyles';
 import styles, { colors } from '@/app/styles/global';
+
 import { useTasks, updateTaskStatus, getNextStatus, TaskStatus } from '@/services/tasksService';
 import { useQuestUpdate } from '@/contexts/QuestUpdateContext';
-import { useTheme } from '@/contexts/ThemeContext';
-import { taskStyles } from '@/app/styles/taskStyles';
-import type { Task } from '@/app/types';
 
 interface TaskListProps {
   compactMode?: boolean;
