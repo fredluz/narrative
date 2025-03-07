@@ -8,15 +8,14 @@ export interface BaseEntity {
 export interface Task extends BaseEntity {
   title: string;
   description?: string;
-  scheduled_for: string;  // Changed from scheduledFor
+  scheduled_for: string;
   location: string;
-  quest_id: number;      // Changed from questId
+  quest_id: number;
   deadline?: string;
   status: 'ToDo' | 'InProgress' | 'Done';
-  quest?: Quest;         // For joined data
+  quest?: Quest;
 }
 
-// Updated to match database schema exactly
 export interface JournalEntry extends BaseEntity {
   title: string;
   user_entry: string;
@@ -24,31 +23,16 @@ export interface JournalEntry extends BaseEntity {
   ai_response: string;
 }
 
-// NEW: CheckupEntry interface
 export interface CheckupEntry extends BaseEntity {
   content: string;  
   daily_entry_id?: number;
   ai_checkup_response?: string;
 }
 
-// Keeping QuestDescription for historical records
-export interface QuestDescriptionHistory extends BaseEntity {
-  message: string;
-  timestamp: string;
-  quest_id: number;  // Changed from questId to match naming convention
-  is_current: boolean;  // Changed from isCurrent to match naming convention
-}
-
-export interface QuestDescription extends BaseEntity {
-  message: string;
-  quest_id: number;
-  is_current: boolean;
-  tags?: string[];     // Make tags optional as it might be null
-}
-
 export interface Quest extends BaseEntity {
   title: string;
   tagline: string;
+  description?: string;
   is_main: boolean;
   status: 'Active' | 'On-Hold' | 'Completed';
   tasks?: Task[];
@@ -56,17 +40,15 @@ export interface Quest extends BaseEntity {
   parent_quest_id?: number;
   start_date?: string;
   end_date?: string;
-  current_description?: QuestDescription; // For joined data
-  description_history?: QuestDescription[];
 }
 
 export interface ChatMessage extends BaseEntity {
   message: string;
-  is_user: boolean;  // Changed from isUser to match database schema
-  chat_session_id?: string;  // Added to link messages to sessions
+  is_user: boolean;
+  chat_session_id?: string;
 }
 
 export interface ChatSession extends BaseEntity {
   summary: string;
-  tags: string[];  // Added tags array
+  tags: string[];
 }

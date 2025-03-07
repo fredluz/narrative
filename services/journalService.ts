@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase';
-import { JournalAgent } from './JournalAgent';
+import { JournalAgent } from './agents/JournalAgent';
 
 // Daily entries from journal_entries table
 export interface JournalEntry {
@@ -121,36 +121,6 @@ export const journalService = {
     } catch (err) {
       console.error('Error generating AI analysis:', err);
       throw new Error('Failed to generate Johnny\'s analysis');
-    }
-  },
-
-  // Update AI responses for an existing entry
-  async updateAIResponses(entryId: string, content: string): Promise<{ response: string; analysis: string }> {
-    console.log('🔄 journalService.updateAIResponses called for entry ID:', entryId);
-    try {
-      console.log('🤖 Generating new AI responses');
-      const { response, analysis } = await journalAgent.processJournalEntry(content);
-      
-      console.log('💾 Updating entry in database with new responses');
-      const { error } = await supabase
-        .from('journal_entries')
-        .update({ 
-          ai_response: response,
-          ai_analysis: analysis,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', entryId);
-
-      if (error) {
-        console.error('❌ Database error when updating AI responses:', error);
-        throw error;
-      }
-      
-      console.log('✅ AI responses updated for entry ID:', entryId);
-      return { response, analysis };
-    } catch (err) {
-      console.error('Error updating AI responses:', err);
-      throw new Error('Failed to update AI responses');
     }
   },
 
@@ -292,42 +262,47 @@ export const journalService = {
     return data || [];
   },
 
-  // Updated to use processEndOfDay with checkups and responses paired together
-  async saveDailyEntry(date: string): Promise<JournalEntry> {
+  // Updated to optionally include current text as final checkup
+  async saveDailyEntry(date: string, currentText?: string): Promise<JournalEntry> {
     console.log('💾 journalService.saveDailyEntry called for date:', date);
     try {
+      // If there's current text, save it as a final checkup first
+      if (currentText?.trim()) {
+        console.log('📝 Saving current text as final checkup');
+        await this.saveCheckupEntry(date, currentText);
+      }
+
       // Get all unlinked checkups for this date
       console.log('🔄 Fetching unlinked checkups for the day');
       const unsavedCheckups = await this.getUnsavedCheckupEntries(date);
       console.log('ℹ️ Found', unsavedCheckups.length, 'checkups to link to daily entry');
-      
       // Format checkups with their AI responses paired together with full datetime info
       console.log('🔄 Formatting checkups with responses for daily entry');
       const checkupsWithResponses = unsavedCheckups
         .map(entry => {
           const entryDate = new Date(entry.created_at);
           const formattedDate = entryDate.toLocaleDateString('en-US', {
-            month: 'short',
-            day: 'numeric'
+        month: 'short',
+        day: 'numeric'
           });
           const formattedTime = entryDate.toLocaleTimeString([], { 
-            hour: '2-digit', 
-            minute: '2-digit',
-            hour12: false
+        hour: '2-digit', 
+        minute: '2-digit',
+        hour12: false
           });
           
           return {
-            date: formattedDate,
-            time: formattedTime,
-            content: entry.content,
-            response: entry.ai_checkup_response || 'No response recorded'
+        date: formattedDate,
+        time: formattedTime,
+        content: entry.content,
+        response: entry.ai_checkup_response || 'No response recorded'
           };
         });
       
       // Format as input for prompt - each checkup paired with its response
       const formattedContent = checkupsWithResponses
         .map(({date, time, content, response}) => 
-          `[${date}, ${time}] USER: ${content}\n[${date}, ${time}] SILVERHAND: ${response}`
+          `[${date}, ${time}] USER:\n ${content}\nSILVERHAND: ${response}`
         )
         .join('\n\n');
 
@@ -335,13 +310,16 @@ export const journalService = {
       console.log('🤖 Generating end-of-day responses');
       const { response, analysis } = await journalAgent.processEndOfDay(formattedContent);
 
+      // Use the date parameter to create an end-of-day timestamp
+      const entryTimestamp = `${date}T23:59:59`;
+      
       // Create the daily entry with the generated responses
       console.log('💾 Creating daily entry in database');
       const { data, error } = await supabase
         .from('journal_entries')
         .insert([{
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
+          created_at: entryTimestamp,
+          updated_at: entryTimestamp,
           user_entry: formattedContent,
           title: `Daily Entry - ${date}`,
           tags: [],

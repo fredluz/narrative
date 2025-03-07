@@ -1,8 +1,8 @@
 import OpenAI from 'openai';
-import { supabase } from '../lib/supabase';
+import { supabase } from '../../lib/supabase';
 import { ChatMessage, JournalEntry, ChatSession } from '@/app/types';
 import { ChatCompletionMessageParam } from 'openai/resources/chat';
-import { journalService } from './journalService';
+import { journalService } from '../journalService';
 
 export class ChatAgent {
   private openai: OpenAI;

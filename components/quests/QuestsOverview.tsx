@@ -14,14 +14,8 @@ import { EditQuestModal } from '../modals/EditQuestModal';
 import { CreateTaskModal } from '../modals/CreateTaskModal';
 import { EditTaskModal } from '../modals/EditTaskModal';
 
-
 type QuestStatus = 'Active' | 'On-Hold' | 'Completed';
 type TaskStatus = 'ToDo' | 'InProgress' | 'Done';
-
-interface QuestStatusUpdate {
-  timestamp: string;
-  message: string;
-}
 
 interface QuestsOverviewProps {
   quests: Quest[];
@@ -47,13 +41,6 @@ interface QuestFormData {
   start_date?: string;
   end_date?: string;
   is_main: boolean;
-}
-
-// Update Quest type to include currentStatus for display purposes only
-declare module '@/app/types' {
-  interface Quest {
-    currentStatus?: QuestStatusUpdate;
-  }
 }
 
 export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: QuestsOverviewProps) {
@@ -264,7 +251,7 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
     setQuestFormData({
       title: quest.title,
       tagline: quest.tagline || '',
-      description: quest.current_description?.message || '',
+      description: quest.description || '',
       status: quest.status,
       start_date: quest.start_date || '',
       end_date: quest.end_date || '',
@@ -286,17 +273,10 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
         start_date: data.start_date,
         end_date: data.end_date,
         is_main: data.is_main,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
       };
       
-      // Use the questsService to create quest and handle description
       await createQuest(questData);
-
-      // Close the modal
       setCreateQuestModalVisible(false);
-      
-      // Reload quests
       reload();
     } catch (error) {
       console.error('Failed to create quest:', error);
@@ -320,16 +300,10 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
         start_date: data.start_date,
         end_date: data.end_date,
         is_main: data.is_main,
-        updated_at: new Date().toISOString()
       };
       
-      // Use the questsService to update quest and handle description
       await updateQuest(questBeingEdited.id, questData);
-      
-      // Close the modal
       setEditQuestModalVisible(false);
-      
-      // Reload quests
       reload();
     } catch (error) {
       console.error('Failed to update quest:', error);
@@ -672,8 +646,8 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
                       </View>
 
                       <View style={{ padding: 20 }}>
-                        {/* Display the quest description after tagline */}
-                        {selectedQuest.current_description?.message && (
+                        {/* Display the quest description */}
+                        {selectedQuest.description && (
                           <View style={{
                             backgroundColor: 'rgba(20, 20, 20, 0.7)',
                             borderRadius: 6,
@@ -691,30 +665,7 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
                               textShadowRadius: 3,
                               lineHeight: 20
                             }}>
-                              {selectedQuest.current_description.message}
-                            </Text>
-                          </View>
-                        )}
-
-                        {/* Status Section */}
-                        {selectedQuest?.currentStatus && (
-                          <View style={{
-                            backgroundColor: 'rgba(20, 20, 20, 0.7)',
-                            borderRadius: 6,
-                            padding: 15,
-                            marginBottom: 15,
-                            borderLeftWidth: 2,
-                            borderLeftColor: secondaryColor,
-                          }}>
-                            <Text style={{ 
-                              color: '#999',
-                              fontSize: 12,
-                              marginBottom: 4
-                            }}>
-                              [{selectedQuest.currentStatus.timestamp}]
-                            </Text>
-                            <Text style={{ color: '#DDD', fontSize: 14 }}>
-                              {selectedQuest.currentStatus.message}
+                              {selectedQuest.description}
                             </Text>
                           </View>
                         )}

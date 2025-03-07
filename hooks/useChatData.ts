@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { ChatMessage } from '@/app/types';
 import { useTheme } from '@/contexts/ThemeContext';
-import { ChatAgent } from '@/services/ChatAgent';
+import { ChatAgent } from '@/services/agents/ChatAgent';
 import { supabase } from '@/lib/supabase';
 
 const INACTIVITY_TIMEOUT = 5 * 60 * 1000; // 5 minutes in milliseconds

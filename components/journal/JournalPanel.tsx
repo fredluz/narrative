@@ -68,19 +68,26 @@ export function JournalPanel({ themeColor, textColor, fullColumnMode = false }: 
       setOriginalEntry('');
       setLocalTags('');
       
-      // If there are checkups today, use the AI response from the latest one
-      if (todaysCheckups.length > 0) {
+      // If there's a daily entry response, use that
+      if (dailyEntryForDate?.ai_response) {
+        setAiResponse(dailyEntryForDate.ai_response);
+      } else if (todaysCheckups.length > 0) {
+        // Otherwise, if there are checkups today, use the AI response from the latest one
         const latestCheckup = todaysCheckups[todaysCheckups.length - 1];
         setAiResponse(latestCheckup.ai_checkup_response || null);
       } else {
-        // Fallback to the response from useJournal if no checkups
+        // Fallback to the response from useJournal if no checkups or daily entry
         const aiResponses = getAiResponses(currentDate);
         setAiResponse(aiResponses.response);
       }
       
-      // Analysis should always come from daily entries, not checkups
-      const aiResponses = getAiResponses(currentDate);
-      setAiAnalysis(aiResponses.analysis);
+      // Analysis should always come from daily entries
+      if (dailyEntryForDate?.ai_analysis) {
+        setAiAnalysis(dailyEntryForDate.ai_analysis);
+      } else {
+        const aiResponses = getAiResponses(currentDate);
+        setAiAnalysis(aiResponses.analysis);
+      }
     };
 
     loadEntries();

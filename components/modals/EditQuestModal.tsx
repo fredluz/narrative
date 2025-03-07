@@ -47,7 +47,7 @@ export function EditQuestModal({
       setFormData({
         title: quest.title,
         tagline: quest.tagline || '',
-        description: quest.current_description?.message || '',
+        description: quest.description || '',
         status: quest.status,
         start_date: quest.start_date || '',
         end_date: quest.end_date || '',

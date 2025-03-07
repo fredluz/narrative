@@ -1,24 +1,25 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import type { Quest, QuestDescription } from '@/app/types';
+import type { Quest } from '@/app/types';
 import { RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 
-// Explicitly define the payload structure
+// Update interface to match QuestInput structure
 interface QuestUpdate {
   id: number;
+  title: string;
+  tagline: string;
+  description?: string;
   is_main: boolean;
-  title?: string;
-  tagline?: string;
-  status?: string;
-  start_date?: string;
-  end_date?: string;
+  status: 'Active' | 'On-Hold' | 'Completed';
   analysis?: string;
   parent_quest_id?: number;
+  start_date?: string;
+  end_date?: string;
   tags?: string[];
 }
 
 // Define input types
-interface QuestInput extends Omit<Quest, 'id' | 'created_at' | 'updated_at' | 'current_description' | 'description_history' | 'tasks'> {
+interface QuestInput extends Omit<Quest, 'id' | 'created_at' | 'updated_at' | 'tasks'> {
   description?: string;
 }
 
@@ -36,24 +37,15 @@ async function fetchQuests(): Promise<Quest[]> {
       tags,
       title,
       tagline,
+      description,
       is_main,
       status,
       start_date,
       end_date,
       analysis,
       parent_quest_id,
-      tasks (*),
-      current_description:quest_description!quest_id(
-        id,
-        message,
-        quest_id,
-        is_current,
-        created_at,
-        updated_at,
-        tags
-      )
+      tasks (*)
     `)
-    .eq('quest_description.is_current', true)
     .order('created_at', { ascending: false });
 
   if (error) {
@@ -61,21 +53,13 @@ async function fetchQuests(): Promise<Quest[]> {
     throw error;
   }
 
-  // Transform the data to ensure current_description is either undefined or a single object
-  const transformedData = (data || []).map(quest => ({
-    ...quest,
-    current_description: Array.isArray(quest.current_description) ? quest.current_description[0] : quest.current_description
-  }));
-
-  return transformedData;
+  return data || [];
 }
 
 async function createQuest(questData: QuestInput): Promise<Quest> {
-  const { description, ...questFields } = questData;
-  
   // Clean up empty timestamps
   const cleanedFields = Object.fromEntries(
-    Object.entries(questFields).map(([key, value]) => {
+    Object.entries(questData).map(([key, value]) => {
       // If it's a date field and the value is an empty string, return null
       if ((key === 'start_date' || key === 'end_date') && value === '') {
         return [key, null];
@@ -84,7 +68,7 @@ async function createQuest(questData: QuestInput): Promise<Quest> {
     })
   );
 
-  // First create the quest
+  // Create the quest with description directly in the quest table
   const { data: quest, error: questError } = await supabase
     .from('quests')
     .insert({
@@ -96,33 +80,13 @@ async function createQuest(questData: QuestInput): Promise<Quest> {
     .single();
 
   if (questError) throw questError;
-
-  if (description) {
-    const timestamp = new Date().toISOString();
-    // Then create the description
-    const { error: descError } = await supabase
-      .from('quest_description')
-      .insert({
-        message: description,
-        quest_id: quest.id,
-        is_current: true,
-        created_at: timestamp,
-        updated_at: timestamp,
-        tags: [] // Initialize with empty array since it's optional
-      });
-
-    if (descError) throw descError;
-  }
-
   return quest;
 }
 
 async function updateQuest(questId: number, questData: QuestInput): Promise<void> {
-  const { description, ...questFields } = questData;
-
   // Clean up empty timestamps
   const cleanedFields = Object.fromEntries(
-    Object.entries(questFields).map(([key, value]) => {
+    Object.entries(questData).map(([key, value]) => {
       // If it's a date field and the value is an empty string, return null
       if ((key === 'start_date' || key === 'end_date') && value === '') {
         return [key, null];
@@ -131,7 +95,7 @@ async function updateQuest(questId: number, questData: QuestInput): Promise<void
     })
   );
 
-  // Update quest fields
+  // Update quest with description directly in the quest table
   const { error: questError } = await supabase
     .from('quests')
     .update({
@@ -141,66 +105,6 @@ async function updateQuest(questId: number, questData: QuestInput): Promise<void
     .eq('id', questId);
 
   if (questError) throw questError;
-
-  if (description) {
-    console.log('Updating quest description for quest:', questId);
-    const timestamp = new Date().toISOString();
-    
-    // First check if there's an existing current description
-    const { data: existingDesc, error: checkError } = await supabase
-      .from('quest_description')
-      .select('*')
-      .eq('quest_id', questId)
-      .eq('is_current', true)
-      .single();
-
-    if (checkError && checkError.code !== 'PGRST116') { // PGRST116 is "not found" which is ok
-      console.error('Error checking existing description:', checkError);
-      throw checkError;
-    }
-
-    // If there's an existing current description and it's different
-    if (existingDesc && existingDesc.message !== description) {
-      console.log('Updating existing description status');
-      const { error: updateError } = await supabase
-        .from('quest_description')
-        .update({ 
-          is_current: false,
-          updated_at: timestamp
-        })
-        .eq('quest_id', questId)
-        .eq('is_current', true);
-
-      if (updateError) {
-        console.error('Error updating existing description:', updateError);
-        throw updateError;
-      }
-    }
-
-    // Only create new description if it's different from existing or there is no existing
-    if (!existingDesc || existingDesc.message !== description) {
-      console.log('Creating new description');
-      const { data: newDesc, error: insertError } = await supabase
-        .from('quest_description')
-        .insert({
-          message: description,
-          quest_id: questId,
-          is_current: true,
-          created_at: timestamp,
-          updated_at: timestamp,
-          tags: [] // Initialize with empty array since it's optional
-        })
-        .select()
-        .single();
-
-      if (insertError) {
-        console.error('Error creating new description:', insertError);
-        throw insertError;
-      }
-
-      console.log('Successfully created new description:', newDesc);
-    }
-  }
 }
 
 async function updateMainQuest(questId: number): Promise<void> {
