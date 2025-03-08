@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, Dimensions, StyleSheet, TouchableOpacity, Platform } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, Dimensions, StyleSheet, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { authService } from '@/services/authService';
@@ -7,163 +7,150 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { colors } from '@/app/styles/global';
 import { useSupabase } from '@/contexts/SupabaseContext';
 
-// Define the Stream interface for the Matrix animation
-interface Stream {
-  chars: string[];
-  xPosition: number;
-  isNarrative: boolean;
-  narrativeLetter: string | null;
-}
+const asciiArt = `
+    ███╗   ██╗ █████╗ ██████╗ ██████╗  █████╗ ████████╗██╗██╗   ██╗███████╗
+   ████╗  ██║██╔══██╗██╔══██╗██╔══██╗██╔══██╗╚══██╔══╝██║██║   ██║██╔════╝
+  ██╔██╗ ██║███████║██████╔╝██████╔╝███████║   ██║   ██║██║   ██║█████╗  
+ ██║╚██╗██║██╔══██║██╔══██╗██╔══██╗██╔══██║   ██║   ██║╚██╗ ██╝ ██╔══╝  
+██║ ╚████║██║  ██║██║  ██║██║  ██║██║  ██║   ██║   ██║ ╚████╔╝ ███████╗
+╚═╝  ╚═══╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝   ╚═╝   ╚═╝  ╚═══╝  ╚══════╝
+`;
 
-// MatrixBackground component for the falling characters animation
-const MatrixBackground = () => {
-  const [offset, setOffset] = useState(0);
-  const [streams, setStreams] = useState<Stream[]>([]);
-
-  // Constants for the animation
-  const charSet = 'qwertyuiopasdfghjklçzxcvbnm,.?!@€@£§€{[]}«»~^-_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  const screenWidth = Dimensions.get('window').width;
-  const screenHeight = Dimensions.get('window').height;
-  const columnWidth = 20; // Width between streams
-  const charHeight = 15; // Height of each character
-  const streamLength = screenHeight  + 20; // Buffer for looping
-  const numColumns = 15;
-  const narrativeText = 'NARRATIVE';
-  const narrativeLength = narrativeText.length;
-  const startCol = Math.floor((numColumns - narrativeLength) / 2);
-  const narrativeIndices = Array.from({ length: narrativeLength }, (_, i) => startCol + i);
-  const yCenter = screenHeight / 2;
-  const narrativeHeight = 500; // Height of the green "NARRATIVE" zone
-  const tolerance = narrativeHeight / 2;
-
-  // Initialize streams when the component mounts
-  useEffect(() => {
-    const newStreams = Array.from({ length: numColumns }, (_, i) => ({
-      chars: Array.from({ length: streamLength*6 }, () => charSet[Math.floor(Math.random() * charSet.length)]),
-      xPosition: (i * columnWidth)+ (numColumns * columnWidth *4),
-      isNarrative: narrativeIndices.includes(i),
-      narrativeLetter: i >= startCol && i < startCol + narrativeLength ? narrativeText[i - startCol] : null,
-    }));
-    setStreams(newStreams);
-  }, []);
-
-  // Update offset for the falling effect
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setOffset((prev) => (prev + 1) % (streamLength * charHeight));
-    }, 50); // Update every 50ms for smooth animation
-    return () => clearInterval(interval); // Cleanup on unmount
-  }, []);
-
-  return (
-    <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: -1 }}>
-      {streams.map((stream, streamIndex) => (
-        <View
-          key={streamIndex}
-          style={{
-            position: 'absolute',
-            left: stream.xPosition,
-            top: -offset,
-          }}
-        >
-          {stream.chars.map((char, charIndex) => {
-            const y = -offset + charIndex * charHeight;
-            // Skip rendering if character is off-screen
-            if (y < -charHeight || y > screenHeight) return null;
-            const isInRange = y >= yCenter - tolerance && y <= yCenter + tolerance;
-            const displayChar = stream.isNarrative && isInRange ? stream.narrativeLetter : char;
-            const color = stream.isNarrative && isInRange ? '#00FF00' : '#FFFFFF'; // Green for "NARRATIVE", white otherwise
-            return (
-              <Text
-                key={charIndex}
-                style={{
-                  fontFamily: 'monospace',
-                  fontSize: 14,
-                  color,
-                  lineHeight: charHeight,
-                  opacity: 0.8,
-                }}
-              >
-                {displayChar}
-              </Text>
-            );
-          })}
-        </View>
-      ))}
-    </View>
-  );
-};
+// Extended char set (incl. Chinese)
+const CHAR_SET =
+  'qwertyuiopasdfghjklçzxcvbnm,.?!@€@£§€{[]}«»~^-_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789我你他是嘛汉字测试';
 
 export default function AuthScreen() {
   const router = useRouter();
-  const { themeColor, secondaryColor } = useTheme();
+  const { themeColor } = useTheme();
   const { session } = useSupabase();
+
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Redirect to landing page if session exists
+  // Track window dims
+  const [screenDims, setScreenDims] = useState(Dimensions.get('window'));
+  // Only store half as many columns
+  const [matrixIndices, setMatrixIndices] = useState<number[][]>([]);
+
+  useEffect(() => {
+    // Orientation / size changes
+    const handleChange = ({ window }: any) => setScreenDims(window);
+    const subscription = Dimensions.addEventListener('change', handleChange);
+    return () => subscription?.remove?.();
+  }, []);
+
+  // Initialize or re-init the half-width wave
+  useEffect(() => {
+    initMatrix();
+  }, [screenDims]);
+
+  // Keep cycling the wave
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      updateMatrix();
+    }, 150);
+    return () => clearInterval(intervalId);
+  }, [matrixIndices]);
+
+  // If session found, navigate
   useEffect(() => {
     if (session) {
-      console.log('Session detected in AuthScreen, navigating to landing');
       router.replace('/landing');
     }
   }, [session]);
 
-  // Handle Google sign-in
+  const initMatrix = () => {
+    const columnWidth = 20;
+    const charHeight = 15;
+
+    // total columns for the full screen
+    const totalColumns = Math.floor(screenDims.width / columnWidth);
+    const numRows = Math.ceil(screenDims.height / charHeight);
+
+    // half for the wave
+    const waveColumns = Math.floor(totalColumns / 2);
+
+    const newIndices: number[][] = [];
+    for (let r = 0; r < numRows; r++) {
+      const row: number[] = [];
+      for (let c = 0; c < waveColumns; c++) {
+        row.push(Math.floor(Math.random() * CHAR_SET.length));
+      }
+      newIndices.push(row);
+    }
+    setMatrixIndices(newIndices);
+  };
+
+  const updateMatrix = () => {
+    if (!matrixIndices.length) return;
+    setMatrixIndices((prev) => {
+      const next = prev.map((row) => [...row]);
+      for (let r = 0; r < next.length; r++) {
+        for (let c = 0; c < next[r].length; c++) {
+          // scramble ~3% chance
+          if (Math.random() < 0.03) {
+            next[r][c] = Math.floor(Math.random() * CHAR_SET.length);
+          } else {
+            // cycle index
+            next[r][c] = (next[r][c] + 1) % CHAR_SET.length;
+          }
+        }
+      }
+      return next;
+    });
+  };
+
   const handleGoogleSignIn = async () => {
+    setIsLoading(true);
+    setError(null);
     try {
-      setIsLoading(true);
-      setError(null);
-
-      console.log('Starting Google sign in...');
-      const { data, error } = await authService.signInWithOAuth('google');
-
-      if (error) {
-        console.error('Google sign in error:', error);
-        throw error;
+      const { data, error: signInError } = await authService.signInWithOAuth('google');
+      if (signInError || !data?.session) {
+        throw signInError;
       }
-
-      if (!data?.session) {
-        console.log('No session data returned from sign in');
-        return;
-      }
-
-      console.log('Sign in successful, session will update');
     } catch (err: any) {
-      console.error('Failed to sign in with Google:', err);
-      setError(err.message || 'Failed to sign in with Google. Please try again.');
+      setError(err.message || 'Google sign-in failed.');
     } finally {
       setIsLoading(false);
     }
   };
 
+  /**
+   * For each row:
+   *  - waveLeft = the normal row
+   *  - waveRight = waveLeft reversed
+   *  - Display them side-by-side in a single row
+   *    Each <Text> gets flex:1, so they're forced to share space horizontally
+   */
+  const renderMatrix = () => {
+    return matrixIndices.map((row, rowIndex) => {
+      const waveLeft = row.map((i) => CHAR_SET[i]).join('');
+      const waveRight = waveLeft.split('').reverse().join('');
+
+      return (
+        <View key={rowIndex} style={styles.rowContainer}>
+          <Text style={[styles.rowText, styles.leftCol]} numberOfLines={1}>
+            {waveLeft}
+          </Text>
+          <Text style={[styles.rowText, styles.rightCol]} numberOfLines={1}>
+            {waveRight}
+          </Text>
+        </View>
+      );
+    });
+  };
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Add the Matrix background animation */}
-      <MatrixBackground />
+      {/* Matrix: wave + reflection */}
+      <View style={styles.backgroundContainer}>{renderMatrix()}</View>
+
+      {/* Auth UI */}
       <View style={styles.content}>
-        <Text
-          style={[
-            styles.title,
-            {
-              color: '#FFFFFF',
-              textShadowColor: themeColor,
-              textShadowOffset: { width: 1, height: 1 },
-              textShadowRadius: 5,
-            },
-          ]}
-        >
-          NARRATIVE
-        </Text>
-
+        <Text style={[styles.asciiArt, { color: themeColor }]}>{asciiArt}</Text>
         <Text style={styles.subtitle}>Your Digital Quest Journal</Text>
-
-        {error && (
-          <View style={styles.errorContainer}>
-            <Text style={styles.errorText}>{error}</Text>
-          </View>
-        )}
-
+        {error && <Text style={styles.errorText}>{error}</Text>}
         <TouchableOpacity
           style={[styles.googleButton, { borderColor: themeColor }]}
           onPress={handleGoogleSignIn}
@@ -179,85 +166,77 @@ export default function AuthScreen() {
   );
 }
 
+// Styles
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
+  backgroundContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: -1,
+  },
+  // Each row has 2 columns side by side
+  rowContainer: {
+    flexDirection: 'row',
+    width: '100%',
+  },
+  // each half is forced to share horizontal space
+  leftCol: {
+    flex: 1,
+    textAlign: 'left',
+  },
+  rightCol: {
+    flex: 1,
+    textAlign: 'right',
+  },
+  // base styling for row text
+  rowText: {
+    fontFamily: 'monospace',
+    fontSize: 18,
+    color: '#FFFFFF',
+    opacity: 0.15,
+    lineHeight: 15,
+  },
   content: {
     width: '100%',
     maxWidth: 400,
     padding: 20,
     alignItems: 'center',
-    zIndex: 1, // Ensure content is above the background
+    zIndex: 1,
   },
-  title: {
-    fontSize: 48,
-    fontWeight: 'bold',
+  asciiArt: {
+    fontFamily: 'monospace',
+    fontSize: 8,
+    textAlign: 'center',
     marginBottom: 10,
-    fontFamily: Platform.select({
-      ios: 'Helvetica',
-      android: 'Roboto',
-      default: 'Arial',
-    }),
   },
   subtitle: {
     fontSize: 18,
     color: '#999',
-    marginBottom: 40,
-    fontFamily: Platform.select({
-      ios: 'Helvetica',
-      android: 'Roboto',
-      default: 'Arial',
-    }),
+    marginBottom: 20,
   },
   googleButton: {
     flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(30, 30, 30, 0.9)',
     padding: 16,
     borderRadius: 8,
     borderWidth: 1,
-    width: '100%',
     justifyContent: 'center',
-    marginBottom: 16,
   },
   buttonIcon: {
-    marginRight: 12,
+    marginRight: 8,
   },
   buttonText: {
     fontSize: 16,
     fontWeight: '600',
   },
-  errorContainer: {
-    backgroundColor: 'rgba(200, 0, 0, 0.1)',
-    borderRadius: 8,
-    padding: 16,
-    marginBottom: 16,
-    width: '100%',
-    borderLeftWidth: 3,
-    borderLeftColor: colors.error,
-  },
   errorText: {
     color: colors.error,
-    fontSize: 14,
-  },
-  glitchLine: {
-    position: 'absolute',
-    top: '35%',
-    left: -10,
-    width: '120%',
-    height: 1,
-    opacity: 0.1,
-    transform: [{ rotate: '-0.3deg' }],
-  },
-  verticalAccent: {
-    position: 'absolute',
-    top: '10%',
-    bottom: '10%',
-    width: 1,
-    right: '20%',
-    opacity: 0.1,
+    marginBottom: 16,
   },
 });
