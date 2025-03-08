@@ -21,7 +21,7 @@ export interface CheckupEntry {
   content: string;
   tags: string[];
   // Foreign key to journal_entries.id (linking each checkup to its associated daily entry)
-  daily_entry_id?: string;
+  daily_entry_id?: number;
   ai_checkup_response?: string; // Add AI response for individual checkups
 }
 

@@ -140,6 +140,66 @@ globs: *.md
       to the last thing said.
       </explanation>
     </issue>
+
+    <issue>
+      <problem>
+      Feature Implementation Planning and Progress Tracking
+      </problem>
+
+      <context>
+      When implementing new features, components, services, or any substantial code additions, 
+      it's crucial to have a clear plan and track progress. This helps maintain organization, 
+      ensures comprehensive implementation, and provides documentation for future reference.
+      </context>
+
+      <solution>
+      1. Create a markdown file in the appropriate directory when starting a new feature
+      2. Structure the plan with sections:
+         - Overview
+         - Implementation Steps
+         - Technical Requirements
+         - Database Changes (if needed)
+         - UI Components (if applicable)
+         - Testing Strategy
+      3. Add a "WORK SO FAR" section to track progress
+      4. Update the progress section after each significant change
+
+      Example structure:
+      ```markdown
+      # Feature Name
+
+      ## Overview
+      Brief description of the feature
+
+      ## Implementation Steps
+      1. Step one
+      2. Step two
+      ...
+
+      ## WORK SO FAR
+      ### Completed
+      - ✅ Created base component structure
+      - ✅ Implemented database schema
+
+      ### In Progress
+      - [ ] Implementing UI components
+      - [ ] Setting up API endpoints
+
+      ### Next Steps
+      1. Add error handling
+      2. Implement caching
+      ```
+      </solution>
+
+      <explanation>
+      This pattern ensures that:
+      - Features are well-planned before implementation
+      - Progress is tracked and visible
+      - Implementation remains organized and methodical
+      - Future developers can understand the feature's evolution
+      - No critical components are overlooked
+      </explanation>
+    </issue>
   </section>
 
   <metadata>

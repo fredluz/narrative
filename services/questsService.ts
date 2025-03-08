@@ -26,7 +26,7 @@ interface QuestInput extends Omit<Quest, 'id' | 'created_at' | 'updated_at' | 't
 type QuestRealtimePayload = RealtimePostgresChangesPayload<QuestUpdate>;
 
 // Database operations
-async function fetchQuests(): Promise<Quest[]> {
+export async function fetchQuests(): Promise<Quest[]> {
   console.log('Fetching quests...');
   const { data, error } = await supabase
     .from('quests')

@@ -2,15 +2,24 @@ import { GoogleGenerativeAI, type GenerativeModel } from "@google/generative-ai"
 import { supabase } from '../../lib/supabase';
 import type { Quest } from '@/app/types';
 
+interface TaskRelevanceItem {
+    taskId: number;
+    name: string;
+    description: string;
+    relevance: string;
+}
+
 interface QuestRelevanceItem {
     questId: number;
     isRelevant: boolean;
-    relevance?: string;
+    relevance?: string | null;
+    relevantTasks: TaskRelevanceItem[];
 }
 
 export class QuestAgent {
     private genAI: GoogleGenerativeAI;
     private model: GenerativeModel;
+    private readonly MISC_QUEST_ID = -1;
     
     constructor() {
       this.genAI = new GoogleGenerativeAI(process.env.EXPO_PUBLIC_GEMINI_API_KEY || '');
@@ -30,7 +39,15 @@ export class QuestAgent {
   {
     "questId": ${questId},
     "isRelevant": boolean,
-    "relevance": string | null
+    "relevance": string | null,
+    "relevantTasks": [
+      {
+        "taskId": number,
+        "name": string,
+        "description": string,
+        "relevance": string
+      }
+    ]
   }
   
   Input to validate: "${rawResponse}"
@@ -75,7 +92,9 @@ export class QuestAgent {
         try {
           const parsed = JSON.parse(jsonContent) as QuestRelevanceItem;
           // Verify the required fields are present and of correct type
-          if (typeof parsed.questId !== 'number' || typeof parsed.isRelevant !== 'boolean') {
+          if (typeof parsed.questId !== 'number' || 
+              typeof parsed.isRelevant !== 'boolean' || 
+              !Array.isArray(parsed.relevantTasks)) {
             console.log('❌ Repaired JSON is missing required fields or has wrong types');
             return null;
           }
@@ -101,7 +120,120 @@ export class QuestAgent {
         .replace(/`{1,2}$/gm, '')      // Remove inline code marks at end
         .trim();
     }
-  
+
+    private async analyzeMiscQuestTasks(journalContent: string, miscQuest: Quest): Promise<QuestRelevanceItem | null> {
+        console.log('🔍 Analyzing Misc quest tasks specifically');
+        
+        if (!miscQuest.tasks || miscQuest.tasks.length === 0) {
+            console.log('❌ No tasks found in Misc quest');
+            return null;
+        }
+
+        const prompt = `You are analyzing ONLY the tasks from a miscellaneous quest collection to see if they're relevant to a journal entry.
+DO NOT consider the quest's description or context - ONLY look at each task individually.
+
+Journal Entry: "${journalContent}"
+
+Tasks to analyze:
+${miscQuest.tasks.map(task => `ID: ${task.id}
+Title: ${task.title}
+Description: ${task.description || 'No description'}`).join('\n\n')}
+
+For each task, determine if it's specifically relevant to the journal content.
+Only include tasks that have a STRONG, DIRECT connection to the journal entry.
+
+RESPOND ONLY WITH A JSON OBJECT IN THIS EXACT FORMAT:
+{
+  "questId": ${miscQuest.id},
+  "isRelevant": false,
+  "relevance": "Only included if specific tasks are relevant",
+  "relevantTasks": []
+}
+
+If any tasks are relevant, include them like this:
+{
+  "questId": ${miscQuest.id},
+  "isRelevant": true,
+  "relevance": "Tasks related to specific journal mentions",
+  "relevantTasks": [
+    {
+      "taskId": [task id],
+      "name": "task name",
+      "description": "task description",
+      "relevance": "CLEAR explanation of the direct connection to journal content"
+    }
+  ]
+}
+
+Be VERY selective - only include tasks with clear, direct relevance to the journal entry.`;
+
+        try {
+            console.log('📤 Sending misc tasks analysis to AI');
+            const result = await this.model.generateContent(prompt);
+            const aiResponse = this.cleanResponseText(result.response.text().trim());
+            
+            return await this.validateAndRepairJson(aiResponse, miscQuest.id);
+        } catch (error) {
+            console.error('❌ Error analyzing misc tasks:', error);
+            return null;
+        }
+    }
+
+    private async analyzeRegularQuest(journalContent: string, quest: Quest): Promise<QuestRelevanceItem | null> {
+        console.log(`\n🔎 Analyzing regular quest: "${quest.title}"`);
+        
+        const prompt = `You are analyzing if this quest is relevant to a journal entry. Reply ONLY with a JSON object.
+
+Journal Entry: "${journalContent}"
+
+Quest Details:
+Title: ${quest.title}
+Description: ${quest.description || 'No description yet'}
+Tasks:
+${quest.tasks?.map(task => `- ${task.title}: ${task.description || 'No description'}`).join('\n') || 'No tasks'}
+
+Consider:
+1. Direct mentions of the quest title or related keywords
+2. Strong connections to the quest description
+3. Clear references to related activities or goals
+4. Current quest status relevance
+5. Specific mentions or implications related to individual tasks
+
+Be STRICT in your relevance criteria - only include if there's a CLEAR connection.
+
+RESPOND ONLY WITH A JSON OBJECT IN THIS EXACT FORMAT:
+{
+  "questId": ${quest.id},
+  "isRelevant": false,
+  "relevance": null,
+  "relevantTasks": []
+}
+
+OR if relevant:
+{
+  "questId": ${quest.id},
+  "isRelevant": true,
+  "relevance": "detailed explanation of relevance",
+  "relevantTasks": [
+    {
+      "taskId": [task id],
+      "name": "task name",
+      "description": "task description",
+      "relevance": "clear explanation of direct relevance"
+    }
+  ]
+}`;
+
+        try {
+            const result = await this.model.generateContent(prompt);
+            const aiResponse = this.cleanResponseText(result.response.text().trim());
+            return await this.validateAndRepairJson(aiResponse, quest.id);
+        } catch (error) {
+            console.error('❌ Error analyzing regular quest:', error);
+            return null;
+        }
+    }
+
     async findRelevantQuests(journalContent: string): Promise<Quest[]> {
       try {
         console.log('🔍 QuestAgent: Finding relevant quests for journal entry');
@@ -135,114 +267,63 @@ export class QuestAgent {
 
         console.log(`📋 Found ${quests.length} total quests to analyze`);
         
-        // Analyze each quest individually
+        // Separate misc quest from regular quests using ID instead of title
+        const miscQuest = quests.find(q => q.id === this.MISC_QUEST_ID);
+        const regularQuests = quests.filter(q => q.id !== this.MISC_QUEST_ID);
+
+        // Store all relevant quest data
         const relevantQuestData: QuestRelevanceItem[] = [];
-        
-        for (const quest of quests) {
-          console.log(`\n🔎 Analyzing quest: "${quest.title}"`);
-          console.log(`📖 Description: ${quest.description?.substring(0, 100) || 'No description'}...`);
-          
-          let validResult: QuestRelevanceItem | null = null;
-          let attempts = 0;
-          const maxAttempts = 2;
 
-          while (!validResult && attempts < maxAttempts) {
-            attempts++;
-            console.log(`📝 Attempt ${attempts} of ${maxAttempts} to analyze quest`);
-
-            const prompt = `You are analyzing if this quest is relevant to a journal entry. Reply ONLY with a JSON object.
-
-Journal Entry: "${journalContent}"
-
-Quest Details:
-Title: ${quest.title}
-Analysis: ${quest.analysis || 'No analysis yet'}
-Description: ${quest.description || 'No description yet'}
-
-Determine if this specific quest is relevant to the journal entry content. Consider:
-1. Direct mentions of the quest title or related keywords
-2. Thematic connections to the quest description
-3. Related activities or goals mentioned
-4. Current quest status relevance
-
-RESPOND ONLY WITH A JSON OBJECT IN THIS EXACT FORMAT:
-{
-  "questId": ${quest.id},
-  "isRelevant": false,
-  "relevance": null
-}
-
-OR if relevant:
-{
-  "questId": ${quest.id},
-  "isRelevant": true,
-  "relevance": "explanation of why this quest is relevant"
-}
-
-DO NOT include any other text, only the JSON object.`;
-
-            console.log('📤 Sending quest analysis to AI');
-            
-            const result = await this.model.generateContent(prompt);
-            const aiResponse = result.response.text().trim();
-            
-            if (!aiResponse) {
-              console.log('⚠️ No AI response received for quest');
-              continue;
+        // First analyze misc quest tasks if it exists
+        let miscTaskIds: number[] = [];
+        if (miscQuest) {
+            console.log('📋 Analyzing Misc quest tasks first');
+            const miscAnalysis = await this.analyzeMiscQuestTasks(journalContent, miscQuest);
+            if (miscAnalysis?.isRelevant) {
+                miscTaskIds = miscAnalysis.relevantTasks.map(task => task.taskId);
+                relevantQuestData.push(miscAnalysis);
             }
-
-            // Clean the response first
-            const cleanedResponse = this.cleanResponseText(aiResponse);
-            console.log('🧹 Cleaned response:', cleanedResponse);
-
-            // Try parsing the cleaned response directly first
-            try {
-              console.log('🔍 Attempting direct JSON parse');
-              const parsed = JSON.parse(cleanedResponse) as QuestRelevanceItem;
-              
-              // Verify the required fields are present and of correct type
-              if (typeof parsed.questId === 'number' && typeof parsed.isRelevant === 'boolean') {
-                console.log('✅ JSON parsed successfully on first try');
-                validResult = parsed;
-              } else {
-                console.log('⚠️ Parsed JSON missing required fields, will try validation');
-                validResult = await this.validateAndRepairJson(cleanedResponse, quest.id);
-              }
-            } catch (parseError) {
-              console.log('⚠️ Direct parse failed, attempting validation');
-              // Only use validation if direct parse fails
-              validResult = await this.validateAndRepairJson(cleanedResponse, quest.id);
-            }
-            
-            if (validResult) {
-              if (validResult.isRelevant) {
-                console.log('✅ Quest is relevant:', validResult.relevance);
-                relevantQuestData.push(validResult);
-              } else {
-                console.log('❌ Quest is not relevant');
-              }
-            } else {
-              console.log('⚠️ Invalid response, will retry if attempts remain');
-            }
-          }
-
-          if (!validResult) {
-            console.log('❌ Failed to get valid analysis after all attempts');
-          }
         }
 
-        // Filter and map the quests to ensure they match the Quest type
-        const relevantQuests = quests
-          .filter(quest => relevantQuestData.some(data => data.questId === quest.id))
-          .map(quest => ({
-            ...quest,
-            relevance: relevantQuestData.find(data => data.questId === quest.id)?.relevance || null
-          })) as Quest[];
+        // Then analyze regular quests
+        console.log(`📋 Analyzing ${regularQuests.length} regular quests`);
+        for (const quest of regularQuests) {
+            const questAnalysis = await this.analyzeRegularQuest(journalContent, quest);
+            if (questAnalysis?.isRelevant) {
+                // If any tasks from misc are now associated with a specific quest,
+                // remove them from misc
+                if (miscTaskIds.length > 0) {
+                    const miscQuestData = relevantQuestData.find(q => q.questId === miscQuest?.id);
+                    if (miscQuestData) {
+                        // Remove any misc tasks that are now associated with this specific quest
+                        miscQuestData.relevantTasks = miscQuestData.relevantTasks.filter(
+                            task => !questAnalysis.relevantTasks.some(rt => rt.taskId === task.taskId)
+                        );
+                        // Update misc quest relevance status if no tasks remain
+                        if (miscQuestData.relevantTasks.length === 0) {
+                            miscQuestData.isRelevant = false;
+                            miscQuestData.relevance = null;
+                        }
+                    }
+                }
+                relevantQuestData.push(questAnalysis);
+            }
+        }
 
-        console.log(`\n✨ Found ${relevantQuests.length} relevant quests:`, relevantQuests.map(q => ({ 
-          title: q.title, 
-          description: q.description,
-        })));
+        // Clean up - remove any misc quest if it has no remaining relevant tasks
+        const finalQuestData = relevantQuestData.filter(q => q.isRelevant && q.relevantTasks.length > 0);
+
+        // Map back to Quest type with relevance data
+        const relevantQuests = quests
+            .filter(quest => finalQuestData.some(data => data.questId === quest.id))
+            .map(quest => ({
+                ...quest,
+                relevance: finalQuestData.find(data => data.questId === quest.id)?.relevance || null,
+                relevantTasks: finalQuestData.find(data => data.questId === quest.id)?.relevantTasks || []
+            })) as Quest[];
+
+        console.log(`\n✨ Found ${relevantQuests.length} relevant quests:`, 
+            relevantQuests.map(q => ({ title: q.title, taskCount: q.relevantTasks?.length })));
         return relevantQuests;
 
       } catch (error) {
@@ -250,4 +331,4 @@ DO NOT include any other text, only the JSON object.`;
         throw error;
       }
     }
-  }
+}

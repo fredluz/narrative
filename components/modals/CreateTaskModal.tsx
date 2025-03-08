@@ -4,6 +4,8 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { format } from 'date-fns';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Task } from '@/app/types';
+import { TaskRecommendation } from '@/services/TaskRecommendationParser';
+import { ThemedText } from '@/components/ui/ThemedText';
 
 type TaskStatus = 'ToDo' | 'InProgress' | 'Done';
 
@@ -15,6 +17,9 @@ interface TaskFormData {
   location?: string;
   status: TaskStatus;
   tags?: string[];
+  quest_id?: string;
+  priority: 'high' | 'medium' | 'low';
+  sourceRecommendation?: TaskRecommendation;
 }
 
 interface CreateTaskModalProps {
@@ -22,23 +27,49 @@ interface CreateTaskModalProps {
   onClose: () => void;
   onSubmit: (data: TaskFormData) => Promise<void>;
   isSubmitting: boolean;
+  quests?: Array<{ id: string; title: string; }>;
+  recommendation?: TaskRecommendation;
 }
 
 export function CreateTaskModal({ 
   visible, 
   onClose, 
   onSubmit,
-  isSubmitting 
+  isSubmitting,
+  quests = [],
+  recommendation
 }: CreateTaskModalProps) {
-  const { themeColor } = useTheme();
+  const { themeColor, secondaryColor } = useTheme();
   const [formData, setFormData] = React.useState<TaskFormData>({
-    title: '',
-    description: '',
+    title: recommendation?.title || '',
+    description: recommendation?.description || '',
     scheduled_for: format(new Date(), 'yyyy-MM-dd'),
     status: 'ToDo',
     location: '',
-    tags: []
+    tags: [],
+    priority: recommendation?.priority || 'medium',
+    sourceRecommendation: recommendation
   });
+
+  // Reset form when recommendation changes
+  React.useEffect(() => {
+    if (recommendation) {
+      setFormData(prev => ({
+        ...prev,
+        title: recommendation.title,
+        description: recommendation.description,
+        priority: recommendation.priority,
+        sourceRecommendation: recommendation,
+        // If we have quest tags, try to find a matching quest
+        quest_id: recommendation.suggestedQuestTags.length > 0 
+          ? quests.find(q => 
+              recommendation.suggestedQuestTags.some(tag => 
+                q.title.toLowerCase().includes(tag.toLowerCase())
+              ))?.id 
+          : undefined
+      }));
+    }
+  }, [recommendation, quests]);
 
   const handleSubmit = async () => {
     await onSubmit(formData);
@@ -48,7 +79,8 @@ export function CreateTaskModal({
       scheduled_for: format(new Date(), 'yyyy-MM-dd'),
       status: 'ToDo',
       location: '',
-      tags: []
+      tags: [],
+      priority: 'medium'
     });
   };
 
@@ -99,6 +131,84 @@ export function CreateTaskModal({
           </View>
 
           <ScrollView style={{ maxHeight: '100%' }}>
+            {/* Quest Selection - New Section */}
+            <Text style={{ color: '#AAA', fontSize: 14, marginBottom: 5 }}>Quest</Text>
+            <View style={{
+              backgroundColor: '#2A2A2A',
+              borderRadius: 4,
+              marginBottom: 15,
+              overflow: 'hidden'
+            }}>
+              {quests.map(quest => (
+                <TouchableOpacity
+                  key={quest.id}
+                  style={{
+                    padding: 10,
+                    borderBottomWidth: 1,
+                    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+                    backgroundColor: formData.quest_id === quest.id ? 'rgba(255, 255, 255, 0.1)' : 'transparent',
+                    flexDirection: 'row',
+                    alignItems: 'center'
+                  }}
+                  onPress={() => setFormData({ ...formData, quest_id: quest.id })}
+                >
+                  <MaterialIcons 
+                    name={formData.quest_id === quest.id ? 'radio-button-checked' : 'radio-button-unchecked'} 
+                    size={20} 
+                    color={formData.quest_id === quest.id ? themeColor : '#AAA'}
+                    style={{ marginRight: 10 }}
+                  />
+                  <Text style={{ color: '#FFF' }}>{quest.title}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Priority Selection - New Section */}
+            <Text style={{ color: '#AAA', fontSize: 14, marginBottom: 5 }}>Priority</Text>
+            <View style={{ 
+              flexDirection: 'row', 
+              justifyContent: 'space-between', 
+              marginBottom: 15 
+            }}>
+              {(['high', 'medium', 'low'] as const).map((priority) => (
+                <TouchableOpacity
+                  key={priority}
+                  style={{
+                    backgroundColor: formData.priority === priority 
+                      ? priority === 'high' 
+                        ? '#D32F2F'
+                        : priority === 'medium'
+                          ? '#FB8C00'
+                          : '#388E3C'
+                      : '#2A2A2A',
+                    paddingHorizontal: 15,
+                    paddingVertical: 8,
+                    borderRadius: 4,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                  }}
+                  onPress={() => setFormData({ ...formData, priority })}
+                >
+                  <MaterialIcons 
+                    name={
+                      priority === 'high' ? 'priority-high' :
+                      priority === 'medium' ? 'remove-circle-outline' :
+                      'arrow-downward'
+                    }
+                    size={16}
+                    color={formData.priority === priority ? '#FFF' : '#AAA'}
+                    style={{ marginRight: 5 }}
+                  />
+                  <Text style={{ 
+                    color: formData.priority === priority ? '#FFF' : '#AAA',
+                    textTransform: 'capitalize'
+                  }}>
+                    {priority}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
             <Text style={{ color: '#AAA', fontSize: 14, marginBottom: 5 }}>Title *</Text>
             <TextInput
               value={formData.title}
@@ -229,7 +339,26 @@ export function CreateTaskModal({
               ))}
             </View>
 
-            <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}>
+            {/* Source Recommendation - New Section */}
+            {recommendation && (
+              <View style={{
+                marginTop: 15,
+                padding: 10,
+                backgroundColor: 'rgba(0, 0, 0, 0.3)',
+                borderRadius: 4,
+                borderLeftWidth: 2,
+                borderLeftColor: secondaryColor
+              }}>
+                <Text style={{ color: secondaryColor, fontSize: 12, marginBottom: 5 }}>
+                  SILVERHAND'S RECOMMENDATION
+                </Text>
+                <Text style={{ color: '#AAA', fontSize: 12, fontStyle: 'italic' }}>
+                  {recommendation.originalText}
+                </Text>
+              </View>
+            )}
+
+            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 20 }}>
               <TouchableOpacity
                 onPress={onClose}
                 style={{

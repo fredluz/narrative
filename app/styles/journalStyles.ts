@@ -36,7 +36,49 @@ export const journalStyles = StyleSheet.create({
   // Journal screen styles
   container: {
     flex: 1,
-    padding: 16,
+    backgroundColor: '#151515',
+  },
+
+  contentContainer: {
+    padding: 20,
+    paddingBottom: 100,
+  },
+
+  headerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+    paddingLeft: 15,
+    borderLeftWidth: 3,
+  },
+
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
+
+  insightCard: {
+    marginBottom: 20,
+    backgroundColor: 'rgba(20, 20, 20, 0.7)',
+    borderLeftWidth: 3,
+    padding: 15,
+  },
+
+  insightHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+
+  insightTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+
+  insightText: {
+    color: '#AAA',
+    lineHeight: 20,
   },
 
   header: {
@@ -48,10 +90,6 @@ export const journalStyles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255, 255, 255, 0.15)',
     paddingBottom: 15,
-  },
-
-  contentContainer: {
-    flex: 1,
   },
 
   dateList: {

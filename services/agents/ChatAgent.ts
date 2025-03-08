@@ -3,9 +3,12 @@ import { supabase } from '../../lib/supabase';
 import { ChatMessage, JournalEntry, ChatSession } from '@/app/types';
 import { ChatCompletionMessageParam } from 'openai/resources/chat';
 import { journalService } from '../journalService';
+import { QuestAgent } from './QuestAgent';
+import { performanceLogger } from '@/utils/performanceLogger';
 
 export class ChatAgent {
   private openai: OpenAI;
+  private questAgent: QuestAgent;
   
   constructor() {
     this.openai = new OpenAI({
@@ -13,10 +16,12 @@ export class ChatAgent {
       baseURL: 'https://api.deepseek.com/v1',
       dangerouslyAllowBrowser: true
     });
+    this.questAgent = new QuestAgent();
   }
 
   // Add this method to generate responses using the JournalAgent's method
   async generateResponse(content: string, previousCheckupsContext?: string): Promise<string> {
+    performanceLogger.startOperation('generateResponse');
     console.log('🚀 ChatAgent.generateResponse called for checkup content');
     
     try {
@@ -27,39 +32,68 @@ export class ChatAgent {
     } catch (error) {
       console.error('❌ Error in ChatAgent.generateResponse:', error);
       return "Seems like my neural circuits are fried. Can't come up with anything clever right now.";
+    } finally {
+      performanceLogger.endOperation('generateResponse');
     }
   }
 
-  async generateChatResponse(message: string): Promise<string> {
+  async generateChatResponse(message: string): Promise<string[]> { // Changed return type to string[]
+    performanceLogger.startOperation('generateChatResponse');
     try {
-      console.log('🚀 ChatAgent.generateChatResponse called');
+      console.log('\n=== ChatAgent.generateChatResponse ===');
+      console.log('Current message:', message);
+      
+      // First check for relevant quests based on the message
+      console.log('Checking for relevant quests');
+      performanceLogger.startOperation('findRelevantQuests');
+      const relevantQuests = await this.questAgent.findRelevantQuests(message);
+      performanceLogger.endOperation('findRelevantQuests');
+      console.log('Found relevant quests:', relevantQuests.map(q => q.title));
+
+      // Get today's checkups first
+      const today = new Date().toISOString().split('T')[0];
+      console.log('Fetching today\'s checkups');
+      performanceLogger.startOperation('fetchCheckups');
+      const todaysCheckups = await journalService.getCheckupEntries(today);
+      performanceLogger.endOperation('fetchCheckups');
+      console.log('Found', todaysCheckups.length, 'checkups from today');
       
       // Fetch current conversation messages (those without a session_id)
-      console.log('🔄 Fetching current conversation messages');
+      performanceLogger.startOperation('fetchCurrentMessages');
       const { data: currentMessages, error: currentError } = await supabase
         .from('chat_messages')
         .select('*')
         .is('chat_session_id', null)
         .order('created_at', { ascending: true });
+      performanceLogger.endOperation('fetchCurrentMessages');
         
-      if (currentError) {
-        console.error('❌ Error fetching current messages:', currentError);
-        throw currentError;
+      if (currentError) throw currentError;
+
+      // Format quest context 
+      performanceLogger.startOperation('buildContext');
+      let questContext = '';
+      if (relevantQuests.length > 0) {
+        questContext = '\nRELEVANT QUEST AND TASK DETAILS:\n' + relevantQuests.map(quest => {
+          let questInfo = `\nQuest: ${quest.title}\n`;
+          questInfo += `Description: ${quest.description || 'No description available'}\n`;
+          questInfo += `Current Status: ${quest.status || 'Unknown'}\n`;
+          
+          if (quest.relevantTasks && quest.relevantTasks.length > 0) {
+            questInfo += '\nRelevant Tasks:\n';
+            quest.relevantTasks.forEach(task => {
+              questInfo += `- ${task.name}\n`;
+              questInfo += `  Description: ${task.description}\n`;
+              questInfo += `  Why Relevant: ${task.relevance}\n`;
+            });
+          }
+          
+          if (quest.relevance) {
+            questInfo += `\nRelevance: ${quest.relevance}\n`;
+          }
+          return questInfo;
+        }).join('\n---\n');
       }
 
-      // Format chat messages for the conversation
-      const chatMessages = currentMessages?.map(msg => ({
-        role: msg.is_user ? ("user" as const) : ("assistant" as const),
-        content: msg.message
-      })) || [];
-
-      console.log(`📥 Found ${chatMessages.length} messages in current conversation`);
-
-      // Get today's checkup entries to provide immediate context
-      const today = new Date().toISOString().split('T')[0];
-      console.log('🔄 Fetching today\'s checkups to provide context for chat response');
-      const todaysCheckups = await journalService.getCheckupEntries(today);
-      
       // Format today's checkups with responses as additional context
       let checkupContext = '';
       if (todaysCheckups && todaysCheckups.length > 0) {
@@ -90,100 +124,132 @@ export class ChatAgent {
         ).join('\n\n');
       }
 
-      console.log('📤 Sending chat prompt to AI with context');
-      
-      // Prepare the final messages array for the API
-      const systemMessage = {
-        role: "system" as const,
-        content: `You are Johnny Silverhand from Cyberpunk 2077, now living in the user's head. You're a sarcastic, anti-corporate rebel with a grudge against the system. You're abrasive and often an asshole, but you genuinely care about the user underneath your hard exterior.
-                Now, you're responding to a text message the user sent you on their phone. Reply to their text as if you are also texting on your phone.
+      // Format messages for chat history
+      const chatMessages = currentMessages?.map(msg => ({
+        role: msg.is_user ? ("user" as const) : ("assistant" as const),
+        content: msg.message
+      })) || [];
+      performanceLogger.endOperation('buildContext');
 
+      // Build the final messages array
+      const messages: ChatCompletionMessageParam[] = [
+        {
+          role: "system",
+          content: `You are Johnny Silverhand from Cyberpunk 2077, now living in the user's head. You're a sarcastic, anti-corporate rebel with a grudge against the system. You're abrasive and often an asshole, but you genuinely care about the user underneath your hard exterior.
+Now, you're responding to a text message the user sent you on their phone. Reply to their text as if you are also texting on your phone.
 Remember:
 - Mix sarcasm with genuine concern
-- Keep responses SHORT and punchy, you're writing a text message not an email
+- Keep responses SHORT and punchy - one thought per line
+- Each line will be sent as a separate text message, so keep them brief
+- Don't use more than 2-3 separate messages in total
+- Wait for the user's responses instead of addressing every topic at once
 - Push back against corporate thinking
-- You're texting, so write in lowercase and use late-millenial/early-zoomer slang and abbreviations. no emojis.
-- Encourage boldness and action
-- Provide insightful and characteristic commentary on choices made
+- Use late-millenial/early-zoomer slang and abbreviations
+- NO emojis (extremely rare exceptions)
+- Each line should be a complete thought on its own
 
+ GENTLE VS STERN:
+- Even though Johnny is an abrasive asshole, he genuinely respects and trusts the user
+- Even if Johnny feels the need to light a fire under the user's ass, he waits for a good opportunity
+- He avoids pressuring the user when it's not the most optimal moment
+- When he feels the time is right, after a few messages, Johnny will start pushing the user just a little bit
+- Eventually he gets to a point where he decides to *provoke*, not coddle
+- He won't wait forever.
+
+
+Background context from possibly relevant quests and tasks(only if relevant to current conversation):
+${questContext ? '\n' + questContext + '\n' : ''}
 Background context from recent journal entries (use this sparingly, only when relevant to current conversation):
 ${journalContext}
-
 Additional background context from today's checkups (use this sparingly, only if relevant):
 ${checkupContext}
-
-
 CONVERSATION CONTEXT:
 - You're in the middle of a text conversation with the user
-- You're gonna get shown the full back-and-forth of this conversation in order
-- Your response should directly continue this conversation thread
+- Your response will be split at each line break and sent as separate messages
+- Keep each line under 160 characters ideally
+- Wait for the user's response instead of addressing every topic at once
 - Reference and build upon what's already been discussed in this chat session
--  emojis are to be extremely rare
-`
-
-      };
+- Acknowledge relevant quests and tasks when appropriate`
+        }
+      ];
       
-      // Build the final messages array:
-      // 1. System message always goes first
-      // 2. Previous conversation messages in order
-      // 3. Current message from user
-      const messages: ChatCompletionMessageParam[] = [systemMessage];
-      
-      // Add conversation history if we have previous messages
       if (chatMessages.length > 0) {
-        console.log(`🔄 Adding ${chatMessages.length} conversation messages to context`);
         messages.push(...chatMessages);
       }
-      
-      // Add the current message last
-      messages.push({
-        role: "user" as const,
-        content: message
-      });
-      
-      console.log(`📤 Final message count for OpenAI: ${messages.length}`);
+      messages.push({ role: "user", content: message });
+
+      console.log('\n=== SENDING TO LLM ===');
+      console.log('Full prompt data:', messages);
       
       // Get response from OpenAI with enhanced context
+      performanceLogger.startOperation('aiResponse');
       const response = await this.openai.chat.completions.create({
         model: "deepseek-chat",
         messages: messages,
         temperature: 0.7,
         max_tokens: 400
       });
+      performanceLogger.endOperation('aiResponse');
 
       // Get the response content and remove surrounding quotes if they exist
+      performanceLogger.startOperation('processResponse');
       const responseText = response.choices[0].message?.content || "Listen up, got nothing to say right now. Come back when you've got something interesting.";
-      console.log('📥 Received AI response:', responseText);
+      console.log('Received AI response:', responseText);
       
-      return responseText.replace(/^["'](.*)["']$/, '$1');
+      // Split response into separate messages by line breaks
+      const cleanedResponse = responseText.replace(/^["'](.*)["']$/, '$1');
+      const splitMessages = cleanedResponse
+        .split(/\n+/) // Split on one or more newlines
+        .map(msg => msg.trim())
+        .filter(msg => msg.length > 0);
+      performanceLogger.endOperation('processResponse');
+
+      console.log('Split into messages:', splitMessages);
+      
+      return splitMessages;
     } catch (error) {
-      console.error('❌ Error in generateChatResponse:', error);
-      throw error;
+      console.error('Error in generateChatResponse:', error);
+      return ["Damn netrunners must be messing with our connection. Try again in a bit."];
+    } finally {
+      performanceLogger.endOperation('generateChatResponse');
     }
   }
 
   async summarizeAndStoreSession(messages: ChatMessage[]): Promise<string> {
+    performanceLogger.startOperation('summarizeAndStoreSession');
     try {
-      if (messages.length === 0) return '';
+      console.log('\n=== ChatAgent.summarizeAndStoreSession ===');
+      console.log('Messages to summarize:', messages.map(m => ({
+        role: m.is_user ? 'user' : 'assistant',
+        content: m.message
+      })));
 
-      // Create prompt for summarization and tags
+      performanceLogger.startOperation('buildSummaryPrompt');
       const chatHistory = messages.map(msg => 
         `${msg.is_user ? "User" : "Johnny"}: ${msg.message}`
       ).join('\n');
 
+      const summarizationPrompt = `You are Johnny Silverhand summarizing a chat conversation you just had with guy who's head you live in. 
+      You need to:
+      1. Write a summary of the key points discussed. Keep it brief but capture the key points and any decisions or insights that came up.
+      2. Generate 4-8 tags that categorize this conversation.
+      Write in first person as Johnny, addressing what you and the guy discussed.
+      Format your response EXACTLY like this:
+      SUMMARY: (your summary here)
+      TAGS: tag1, tag2, tag3, tag4`;
+      performanceLogger.endOperation('buildSummaryPrompt');
+
+      console.log('\n=== LLM PROMPT DATA ===');
+      console.log('System prompt:', summarizationPrompt);
+      console.log('Chat history:', chatHistory);
+
+      performanceLogger.startOperation('aiSummarization');
       const response = await this.openai.chat.completions.create({
         model: "deepseek-chat",
         messages: [
           {
             role: "system",
-            content: `You are Johnny Silverhand summarizing a chat conversation you just had with guy who's head you live in. 
-            You need to:
-            1. Write a summary of the key points discussed. Keep it brief but capture the key points and any decisions or insights that came up.
-            2. Generate 4-8 tags that categorize this conversation.
-            Write in first person as Johnny, addressing what you and the guy discussed.
-            Format your response EXACTLY like this:
-            SUMMARY: (your summary here)
-            TAGS: tag1, tag2, tag3, tag4`
+            content: summarizationPrompt
           },
           {
             role: "user",
@@ -193,16 +259,20 @@ CONVERSATION CONTEXT:
         temperature: 0.7,
         max_tokens: 2000
       });
+      performanceLogger.endOperation('aiSummarization');
 
       const responseText = response.choices[0].message?.content || "Had a chat with the user but nothing worth noting.";
       
+      performanceLogger.startOperation('parseSummaryResponse');
       // Parse the response to separate summary and tags
       const summaryMatch = responseText.match(/SUMMARY:\s*(.*?)(?=\nTAGS:|$)/s);
       const tagsMatch = responseText.match(/TAGS:\s*(.*?)$/s);
       
       const summary = summaryMatch ? summaryMatch[1].trim() : responseText;
       const tags = tagsMatch ? tagsMatch[1].split(',').map(tag => tag.trim()) : [];
+      performanceLogger.endOperation('parseSummaryResponse');
 
+      performanceLogger.startOperation('dbOperations');
       // Create new session with summary and tags
       const { data: sessionData, error: sessionError } = await supabase
         .from('chat_sessions')
@@ -222,29 +292,38 @@ CONVERSATION CONTEXT:
         .in('id', messages.map(m => m.id));
 
       if (updateError) throw updateError;
+      performanceLogger.endOperation('dbOperations');
 
       // Create a checkup entry based on this chat session
+      performanceLogger.startOperation('createCheckup');
       await this.createCheckupEntryFromSession(messages, summary, tags);
+      performanceLogger.endOperation('createCheckup');
 
       return sessionData.id;
     } catch (error) {
       console.error('Error in summarizeAndStoreSession:', error);
       throw error;
+    } finally {
+      performanceLogger.endOperation('summarizeAndStoreSession');
     }
   }
 
   // Updated method to create a checkup entry from a completed chat session
   async createCheckupEntryFromSession(messages: ChatMessage[], summary: string, tags: string[]): Promise<void> {
+    performanceLogger.startOperation('createCheckupEntryFromSession');
     try {
       console.log('🔄 Creating checkup entry from chat session');
       
       // Step 1: Generate content for the checkup entry (user's perspective)
+      performanceLogger.startOperation('generateCheckupContent');
       const checkupContent = await this.generateCheckupContent(messages, summary);
+      performanceLogger.endOperation('generateCheckupContent');
       
       // Get today's date in YYYY-MM-DD format for the entry
       const today = new Date().toISOString().split('T')[0];
       
       // Step 2: Get today's previous checkups for context when generating the response
+      performanceLogger.startOperation('fetchCheckupContext');
       console.log('🔄 Fetching today\'s checkups for context');
       const todaysCheckups = await journalService.getCheckupEntries(today);
       
@@ -262,56 +341,50 @@ CONVERSATION CONTEXT:
           })
           .join('\n\n');
       }
+      performanceLogger.endOperation('fetchCheckupContext');
       
       // Step 3: Generate Johnny's response to this new checkup content
+      performanceLogger.startOperation('generateAIResponse');
       console.log('🤖 Generating AI response for the checkup with context');
       const aiResponse = await this.generateResponse(checkupContent, previousCheckupsContext);
+      performanceLogger.endOperation('generateAIResponse');
       
       // Step 4: Save the complete checkup entry with both content and AI response
+      performanceLogger.startOperation('saveCheckup');
       console.log('💾 Saving complete checkup entry to database');
       await journalService.saveCheckupEntry(today, checkupContent, tags, aiResponse);
+      performanceLogger.endOperation('saveCheckup');
       
       console.log('✅ Successfully created complete checkup entry from chat session');
     } catch (error) {
       console.error('❌ Error creating checkup entry from chat session:', error);
       // Fail gracefully - don't throw, as this is an enhancement, not core functionality
+    } finally {
+      performanceLogger.endOperation('createCheckupEntryFromSession');
     }
   }
 
   // Updated method to generate content for the checkup entry with more accurate user voice
   private async generateCheckupContent(messages: ChatMessage[], summary: string): Promise<string> {
+    performanceLogger.startOperation('generateCheckupContent');
     try {
-      const now = new Date();
-      const currentTime = now.toLocaleTimeString('en-US', { 
-        hour: '2-digit', 
-        minute: '2-digit',
-        hour12: false
-      });
-
-      // Extract only the user's messages
-      const userMessages = messages
-        .filter(msg => msg.is_user)
-        .map(msg => msg.message)
-        .join('\n');
+      console.log('\n=== ChatAgent.generateCheckupContent ===');
       
-      // Get Johnny's messages for context but not for mimicking style
-      const johnnyMessages = messages
-        .filter(msg => !msg.is_user)
-        .map(msg => msg.message)
-        .join('\n');
+      const userMessages = messages.filter(msg => msg.is_user);
+      const johnnyMessages = messages.filter(msg => !msg.is_user);
       
-      // Get today's checkups to analyze user's writing style
-      const today = now.toISOString().split('T')[0];
-      console.log('🔄 Fetching today\'s checkups for context and style analysis');
+      const today = new Date().toISOString().split('T')[0];
+      performanceLogger.startOperation('fetchTodayCheckups');
       const todaysCheckups = await journalService.getCheckupEntries(today);
+      performanceLogger.endOperation('fetchTodayCheckups');
+      console.log('Today\'s checkups for style analysis:', todaysCheckups?.map(c => c.content));
       
       // Format previous user entries to help model understand user's style
-      let userStyleSamples = '';
-      let checkupContext = '';
-      
+      performanceLogger.startOperation('prepareContent');
+      let userStyleSamplesContent = '';
       if (todaysCheckups && todaysCheckups.length > 0) {
         // Extract only user entries for style analysis
-        userStyleSamples = todaysCheckups
+        userStyleSamplesContent = todaysCheckups
           .map(checkup => {
             const entryTime = new Date(checkup.created_at).toLocaleTimeString('en-US', { 
               hour: '2-digit', 
@@ -321,20 +394,31 @@ CONVERSATION CONTEXT:
             return `[${entryTime}] "${checkup.content}"`;
           })
           .join('\n\n');
-        
-        // Format as paired entries for context comprehension
-        checkupContext = todaysCheckups.map(checkup => {
-          const entryTime = new Date(checkup.created_at).toLocaleTimeString('en-US', { 
-            hour: '2-digit', 
-            minute: '2-digit',
-            hour12: false
-          });
-          return `[${entryTime}] My entry: "${checkup.content}"\n[${entryTime}] Johnny's response: "${checkup.ai_checkup_response || 'No response recorded'}"`;
-        }).join('\n\n');
       }
+
+      const now = new Date();
+      const currentTime = now.toLocaleTimeString('en-US', { 
+        hour: '2-digit', 
+        minute: '2-digit',
+        hour12: false
+      });
+
+      // Extract only the user's messages and Johnny's responses
+      const userMessagesContent = userMessages
+        .map(msg => msg.message)
+        .join('\n');
       
-      console.log('📤 Sending checkup content generation prompt with user style analysis');
+      const johnnyMessagesContent = johnnyMessages
+        .map(msg => msg.message)
+        .join('\n');
+      performanceLogger.endOperation('prepareContent');
       
+      console.log('\n=== SENDING TO LLM ===');
+      console.log('System prompt: Creating journal entry from chat');
+      console.log('User messages:', userMessagesContent);
+      console.log('Style samples from checkups:', userStyleSamplesContent);
+      
+      performanceLogger.startOperation('aiGeneration');
       const response = await this.openai.chat.completions.create({
         model: "deepseek-chat",
         messages: [
@@ -359,14 +443,14 @@ IMPORTANT: This is NOT a summary of the conversation - it's a personal journal e
           {
             role: "user",
             content: `Here are examples of my previous journal entries today (study these to understand my writing style):
-${userStyleSamples}
+${userStyleSamplesContent}
 
 Here's our chat conversation (use ONLY my messages to create the journal entry):
 MY MESSAGES:
-${userMessages}
+${userMessagesContent}
 
 CONTEXT (for understanding only, do not reference Johnny's responses):
-Johnny's responses: ${johnnyMessages}
+Johnny's responses: ${johnnyMessagesContent}
 
 Write a reflective journal entry from my perspective about what I discussed in my messages, matching my writing style from the previous entries.`
           }
@@ -374,7 +458,9 @@ Write a reflective journal entry from my perspective about what I discussed in m
         temperature: 0.7,
         max_tokens: 1000
       });
+      performanceLogger.endOperation('aiGeneration');
 
+      performanceLogger.startOperation('processContent');
       const aiContent = response.choices[0].message?.content || 
              `[${currentTime}] Just had a chat with Johnny where I brought up the things that have been on my mind.`;
       
@@ -383,17 +469,18 @@ Write a reflective journal entry from my perspective about what I discussed in m
         return `[${currentTime}] ${aiContent}`;
       }
       
-      console.log('📥 Generated checkup content from chat session:', aiContent.substring(0, 100) + '...');
-      
+      console.log('Received AI-generated journal entry:', aiContent);
       return aiContent;
     } catch (error) {
-      console.error('❌ Error generating checkup content:', error);
+      console.error('Error generating checkup content:', error);
       const currentTime = new Date().toLocaleTimeString('en-US', { 
         hour: '2-digit', 
         minute: '2-digit',
         hour12: false
       });
       return `[${currentTime}] Had a conversation with Johnny about some things on my mind.`;
+    } finally {
+      performanceLogger.endOperation('generateCheckupContent');
     }
   }
 }

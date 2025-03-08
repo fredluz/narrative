@@ -40,6 +40,13 @@ export interface Quest extends BaseEntity {
   parent_quest_id?: number;
   start_date?: string;
   end_date?: string;
+  relevance?: string;
+  relevantTasks?: {
+    taskId: number;
+    name: string;
+    description: string;
+    relevance: string;
+  }[];
 }
 
 export interface ChatMessage extends BaseEntity {

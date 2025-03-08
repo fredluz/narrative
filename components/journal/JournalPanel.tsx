@@ -1,5 +1,5 @@
 import React, { useCallback, useState, useEffect } from 'react';
-import { View, TextInput, TouchableOpacity, Text, ActivityIndicator, ScrollView } from 'react-native';
+import { View, TextInput, TouchableOpacity, Text, ActivityIndicator, ScrollView, Image } from 'react-native';
 import { Card } from 'react-native-paper';
 import { useRouter } from 'expo-router';
 import { ThemedText } from '@/components/ui/ThemedText';
@@ -16,7 +16,17 @@ import { CheckupItem } from './CheckupItem';
 import { AIResponse } from './AIResponse';
 import { AIAnalysis } from './AIAnalysis';
 
-export function JournalPanel({ themeColor, textColor, fullColumnMode = false }: { themeColor: string; textColor: string; fullColumnMode?: boolean; }) {
+export function JournalPanel({ 
+  themeColor, 
+  textColor, 
+  fullColumnMode = false,
+  showAnalysis = false 
+}: { 
+  themeColor: string; 
+  textColor: string; 
+  fullColumnMode?: boolean;
+  showAnalysis?: boolean;
+}) {
   const { secondaryColor } = useTheme();
   const router = useRouter();
   const { 
@@ -136,6 +146,7 @@ export function JournalPanel({ themeColor, textColor, fullColumnMode = false }: 
   };
   
   const brightAccent = getBrightAccent(themeColor);
+  const amberColor = '#FFB74D'; // Define amber color for the Save Checkup button
 
   // Handle entry text changes - remove immediate update
   const handleEntryChange = useCallback((text: string) => {
@@ -377,98 +388,159 @@ export function JournalPanel({ themeColor, textColor, fullColumnMode = false }: 
         </TouchableOpacity>
         
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <ThemedText style={[questStyles.mainQuestTitle, { 
-            fontSize: 20,
-            color: '#FFFFFF',
-            textShadowColor: themeColor,
-            textShadowOffset: { width: 1, height: 1 },
-            textShadowRadius: 5
-          }]}>
-            TODAY'S JOURNAL
-          </ThemedText>
-          <View style={{
-            height: 3,
-            width: 20,
-            backgroundColor: themeColor,
-            marginLeft: 8,
-            borderRadius: 2,
-          }} />
+          <View style={{ flexDirection: 'column', alignItems: 'center' }}>
+            <ThemedText style={[questStyles.mainQuestTitle, { 
+              fontSize: 20,
+              color: '#FFFFFF',
+              textShadowColor: themeColor,
+              textShadowOffset: { width: 1, height: 1 },
+              textShadowRadius: 5
+            }]}>
+              {showAnalysis ? 'ANALYSIS' : "TODAY'S"}
+            </ThemedText>
+            <ThemedText style={{ 
+              fontSize: 12,
+              color: '#AAA',
+              marginTop: 2
+            }}>
+              {currentDate.toLocaleDateString('en-US', { 
+                day: '2-digit',
+                month: '2-digit'
+              })}
+            </ThemedText>
+          </View>
+          
           <TouchableOpacity 
-            onPress={() => router.push('/journal')}
-            style={[journalStyles.newEntryButton, { 
-              backgroundColor: 'rgba(30, 30, 30, 0.9)',
-              borderWidth: 1,
-              borderColor: themeColor,
-              marginLeft: 12,
-              paddingVertical: 5,
-              paddingHorizontal: 8,
-            }]}
+            onPress={goToNextDay}
+            style={{
+              marginHorizontal: 8,
+            }}
           >
-            <MaterialIcons name="launch" size={16} color={brightAccent} />
+            <MaterialIcons name="chevron-right" size={24} color={brightAccent} />
           </TouchableOpacity>
+
+          <View style={{ flexDirection: 'column', alignItems: 'center' }}>
+            <ThemedText style={[questStyles.mainQuestTitle, { 
+              fontSize: 20,
+              color: '#FFFFFF',
+              textShadowColor: themeColor,
+              textShadowOffset: { width: 1, height: 1 },
+              textShadowRadius: 5
+            }]}>
+              JOURNAL
+            </ThemedText>
+            <ThemedText style={{ 
+              fontSize: 12,
+              color: '#AAA',
+              marginTop: 2
+            }}>
+              {checkups.length} checkup{checkups.length !== 1 ? 's' : ''}
+            </ThemedText>
+          </View>
         </View>
         
         <View style={journalStyles.journalHeaderRight}>
-          <View style={{ flexDirection: 'column', gap: 8, marginRight: 10 }}>
-            <TouchableOpacity 
-              style={[journalStyles.updateButton, { 
-                backgroundColor: 'rgba(30, 30, 30, 0.9)',
-                borderWidth: 1,
-                borderColor: themeColor,
-                paddingVertical: 6,
-                shadowColor: themeColor,
-                shadowOffset: { width: 0, height: 0 },
-                shadowOpacity: 0.5,
-                shadowRadius: 5,
-                elevation: 5,
-                minWidth: 140 // Added minimum width to keep buttons same size
-              }]}
-              onPress={handleSaveCheckup}
-              disabled={loading || !localEntry.trim()}
-            >
-              {loading ? (
-                <ActivityIndicator size="small" color={brightAccent} />
-              ) : (
-                <ThemedText style={[journalStyles.updateButtonText, { 
-                  color: brightAccent,
-                  fontWeight: 'bold',
+          {/* Refactored buttons row - now vertical without text */}
+          {!showAnalysis && (
+            <View style={{ 
+              flexDirection: 'column', 
+              alignItems: 'center', 
+              gap: 10,
+              marginRight: 10 
+            }}>
+              {/* Button 1: Go to Journal Page */}
+              <TouchableOpacity 
+                style={[journalStyles.updateButton, { 
+                  backgroundColor: 'rgba(30, 30, 30, 0.9)',
+                  borderWidth: 1,
+                  borderColor: themeColor,
+                  padding: 10,
+                  shadowColor: themeColor,
+                  shadowOffset: { width: 0, height: 0 },
+                  shadowOpacity: 0.5,
+                  shadowRadius: 5,
+                  elevation: 5,
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }]}
+                onPress={() => router.push('/journal')}
+              >
+                <Text style={{ 
+                  color: brightAccent, 
+                  fontSize: 22,
                   textShadowColor: themeColor,
                   textShadowOffset: { width: 0, height: 0 },
                   textShadowRadius: 4
-                }]}>
-                  SAVE CHECKUP
-                </ThemedText>
-              )}
-            </TouchableOpacity>
+                }}>
+                  📓
+                </Text>
+              </TouchableOpacity>
 
-            <TouchableOpacity 
-              style={[journalStyles.updateButton, { 
-                backgroundColor: 'rgba(30, 30, 30, 0.9)',
-                borderWidth: 1,
-                borderColor: secondaryColor,
-                paddingVertical: 6,
-                shadowColor: secondaryColor,
-                shadowOffset: { width: 0, height: 0 },
-                shadowOpacity: 0.5,
-                shadowRadius: 5,
-                elevation: 5,
-                opacity: hasDailyEntry ? 0.5 : 1,
-                minWidth: 140 // Added minimum width to keep buttons same size
-              }]}
-              onPress={handleDailyEntry}
-              disabled={loading || hasDailyEntry || checkups.length === 0}
-            >
-              <ThemedText style={[journalStyles.updateButtonText, { 
-                color: secondaryColor,
-                fontWeight: 'bold',
-                textShadowColor: secondaryColor,
-                textShadowOffset: { width: 0, height: 0 },
-                textShadowRadius: 4
-              }]}>
-                SAVE DAILY ENTRY
-              </ThemedText>
-            </TouchableOpacity>
-          </View>
+              {/* Button 2: Save Checkup */}
+              <TouchableOpacity 
+                style={[journalStyles.updateButton, { 
+                  backgroundColor: 'rgba(30, 30, 30, 0.9)',
+                  borderWidth: 1,
+                  borderColor: amberColor,
+                  padding: 10,
+                  shadowColor: amberColor,
+                  shadowOffset: { width: 0, height: 0 },
+                  shadowOpacity: 0.5,
+                  shadowRadius: 5,
+                  elevation: 5,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  opacity: !localEntry.trim() || loading ? 0.5 : 1,
+                }]}
+                onPress={handleSaveCheckup}
+                disabled={loading || !localEntry.trim()}
+              >
+                {loading ? (
+                  <ActivityIndicator size="small" color={amberColor} />
+                ) : (
+                  <Text style={{ 
+                    color: brightAccent, 
+                    fontSize: 22,
+                    textShadowColor: amberColor,
+                    textShadowOffset: { width: 0, height: 0 },
+                    textShadowRadius: 4
+                  }}>
+                    💾
+                  </Text>
+                )}
+              </TouchableOpacity>
+
+              {/* Button 3: Save Daily Entry */}
+              <TouchableOpacity 
+                style={[journalStyles.updateButton, { 
+                  backgroundColor: 'rgba(30, 30, 30, 0.9)',
+                  borderWidth: 1,
+                  borderColor: secondaryColor,
+                  padding: 10,
+                  shadowColor: secondaryColor,
+                  shadowOffset: { width: 0, height: 0 },
+                  shadowOpacity: 0.5,
+                  shadowRadius: 5,
+                  elevation: 5,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  opacity: hasDailyEntry || checkups.length === 0 || loading ? 0.5 : 1,
+                }]}
+                onPress={handleDailyEntry}
+                disabled={loading || hasDailyEntry || checkups.length === 0}
+              >
+                <Text style={{ 
+                  color: brightAccent, 
+                  fontSize: 22,
+                  textShadowColor: secondaryColor,
+                  textShadowOffset: { width: 0, height: 0 },
+                  textShadowRadius: 4
+                }}>
+                  🛌
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
 
           <TouchableOpacity 
             style={{ 
@@ -524,7 +596,7 @@ export function JournalPanel({ themeColor, textColor, fullColumnMode = false }: 
             height: '100%',
           }}>
             {/* Today's checkups list */}
-            {checkups.length > 0 && (
+            {!showAnalysis && checkups.length > 0 && (
               <View style={{ maxHeight: 250 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
                   <MaterialIcons name="history" size={16} color={themeColor} style={{ marginRight: 6 }} />
@@ -538,6 +610,7 @@ export function JournalPanel({ themeColor, textColor, fullColumnMode = false }: 
                       themeColor={themeColor}
                       onPress={() => toggleCheckupExpansion(checkup.id)}
                       isExpanded={expandedCheckupId === checkup.id}
+                      secondaryColor={secondaryColor}
                     />
                   ))}
                 </ScrollView>
@@ -545,17 +618,19 @@ export function JournalPanel({ themeColor, textColor, fullColumnMode = false }: 
             )}
 
             {/* Each section gets appropriate vertical space */}
-            <View style={{ flex: 1 }}>
-              <JournalEntryInput
-                value={localEntry}
-                tagsValue={localTags}
-                onChangeText={handleEntryChange}
-                onChangeTags={handleTagsChange}
-                loading={loading}
-                fullColumnMode={fullColumnMode}
-                themeColor={themeColor}
-              />
-            </View>
+            {!showAnalysis && (
+              <View style={{ flex: 1 }}>
+                <JournalEntryInput
+                  value={localEntry}
+                  tagsValue={localTags}
+                  onChangeText={handleEntryChange}
+                  onChangeTags={handleTagsChange}
+                  loading={loading}
+                  fullColumnMode={fullColumnMode}
+                  themeColor={themeColor}
+                />
+              </View>
+            )}
             
             <View style={{ flex: 1 }}>
               <AIResponse
@@ -567,12 +642,13 @@ export function JournalPanel({ themeColor, textColor, fullColumnMode = false }: 
               />
             </View>
             
-            <View style={{ flex: 1 }}>
+            <View style={{ flex: showAnalysis ? 2 : 1 }}>
               <AIAnalysis
                 analysis={aiAnalysis}
                 loading={loading}
                 fullColumnMode={fullColumnMode}
                 themeColor={themeColor}
+                expanded={showAnalysis}
               />
             </View>
           </View>
@@ -581,3 +657,12 @@ export function JournalPanel({ themeColor, textColor, fullColumnMode = false }: 
     </Card>
   );
 }
+
+
+
+
+
+
+
+
+

@@ -9,13 +9,15 @@ interface CheckupItemProps {
   themeColor: string;
   onPress: () => void;
   isExpanded: boolean;
+  secondaryColor: string; // Add secondaryColor prop
 }
 
 export const CheckupItem: React.FC<CheckupItemProps> = ({
   checkup,
   themeColor,
   onPress,
-  isExpanded
+  isExpanded,
+  secondaryColor
 }) => {
   const checkupTime = new Date(checkup.created_at).toLocaleTimeString('en-US', { 
     hour: '2-digit', 
@@ -51,7 +53,13 @@ export const CheckupItem: React.FC<CheckupItemProps> = ({
       
       {isExpanded ? (
         <View style={{ marginTop: 8 }}>
-          <Text style={{ color: '#FFF', fontSize: 15 }}>
+          <Text style={{ 
+            color: '#FFB74D', // Changed from red to warm amber
+            fontSize: 15,
+            textShadowColor: '#FFB74D',
+            textShadowOffset: { width: 0, height: 0 },
+            textShadowRadius: 3
+          }}>
             {checkup.content}
           </Text>
           
@@ -62,7 +70,7 @@ export const CheckupItem: React.FC<CheckupItemProps> = ({
               backgroundColor: 'rgba(15, 15, 15, 0.8)',
               borderRadius: 5,
               borderLeftWidth: 3,
-              borderColor: '#D81159',
+              borderColor: secondaryColor,
             }}>
               {/* Match the header styling from AIResponse */}
               <View style={{ 
@@ -75,13 +83,13 @@ export const CheckupItem: React.FC<CheckupItemProps> = ({
                 <MaterialIcons 
                   name="psychology" 
                   size={16} 
-                  color="#D81159" 
+                  color={secondaryColor}
                   style={{ marginRight: 8 }} 
                 />
                 <ThemedText style={{
                   fontSize: 14,
                   fontWeight: 'bold',
-                  color: '#D81159',
+                  color: secondaryColor,
                 }}>
                   SILVERHAND
                 </ThemedText>
@@ -91,9 +99,9 @@ export const CheckupItem: React.FC<CheckupItemProps> = ({
               <ScrollView style={{ padding: 10, maxHeight: 150 }}>
                 <ThemedText style={{
                   fontSize: 15,
-                  color: '#BBB',
+                  color: secondaryColor,
                   fontStyle: 'italic',
-                  textShadowColor: '#D81159',
+                  textShadowColor: secondaryColor,
                   textShadowOffset: { width: 0, height: 0 },
                   textShadowRadius: 3
                 }}>
@@ -104,7 +112,14 @@ export const CheckupItem: React.FC<CheckupItemProps> = ({
           )}
         </View>
       ) : (
-        <Text style={{ color: '#FFF', marginTop: 4, fontSize: 15 }} numberOfLines={1}>
+        <Text style={{ 
+          color: '#FFB74D', // Changed from red to warm amber
+          marginTop: 4, 
+          fontSize: 15,
+          textShadowColor: '#FFB74D',
+          textShadowOffset: { width: 0, height: 0 },
+          textShadowRadius: 3
+        }} numberOfLines={1}>
           {summary}
         </Text>
       )}

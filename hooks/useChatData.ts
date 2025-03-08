@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase';
 
 const INACTIVITY_TIMEOUT = 5 * 60 * 1000; // 5 minutes in milliseconds
 const JOHNNY_RESPONSE_DELAY = 2000; // 2 seconds delay before Johnny replies
+const MESSAGE_STAGGER_DELAY = 1000; // 1 second between sequential messages
 
 export function useChatData() {
   const { themeColor } = useTheme();
@@ -185,25 +186,44 @@ export function useChatData() {
           // Clear pending messages
           pendingMessagesRef.current = [];
 
-          // Get Johnny's response to all messages
-          const response = await chatAgent.generateChatResponse(combinedMessage);
-
-          // Create and save AI response - local state will update via subscription
-          const aiMessage: ChatMessage = {
-            id: Date.now() + 1,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-            is_user: false,
-            message: response,
-            chat_session_id: currentSessionId || undefined
-          };
-
-          // Save to Supabase
-          const { error: aiSaveError } = await supabase
-            .from('chat_messages')
-            .insert([aiMessage]);
-
-          if (aiSaveError) throw aiSaveError;
+          // Get Johnny's response to all messages - returns string[] (multiple messages)
+          const responseMessages = await chatAgent.generateChatResponse(combinedMessage);
+          console.log('Received response messages:', responseMessages);
+          
+          // Process each message with a delay between them
+          for (let i = 0; i < responseMessages.length; i++) {
+            const sendAIMessage = async () => {
+              const message = responseMessages[i];
+              console.log(`Sending AI message ${i+1}/${responseMessages.length}:`, message);
+              
+              // Create AI response message
+              const aiMessage: ChatMessage = {
+                id: Date.now() + 1000 + (i * 100), // Ensure unique IDs with more spacing
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+                is_user: false,
+                message: message,
+                chat_session_id: currentSessionId || undefined
+              };
+              
+              // Save to Supabase
+              const { error: aiSaveError } = await supabase
+                .from('chat_messages')
+                .insert([aiMessage]);
+              
+              if (aiSaveError) {
+                console.error('Error inserting AI message part:', aiSaveError);
+              }
+              
+              // Only stop typing indication after last message
+              if (i === responseMessages.length - 1) {
+                setIsTyping(false);
+              }
+            };
+            
+            // Use setTimeout for sequential delays
+            setTimeout(sendAIMessage, i * MESSAGE_STAGGER_DELAY);
+          }
 
           resetInactivityTimer();
         } catch (error) {
@@ -224,9 +244,9 @@ export function useChatData() {
               .insert([errorMessage]);
           } catch (insertError) {
             console.error('Error saving error message:', insertError);
+          } finally {
+            setIsTyping(false);
           }
-        } finally {
-          setIsTyping(false);
         }
       }, JOHNNY_RESPONSE_DELAY);
 

@@ -124,7 +124,7 @@ export class JournalAgent {
       }
     }
   
-    // Updated prompt creation to make AI aware of its previous responses
+    // Updated prompt creation to better utilize task relevance information
     private async createResponsePrompt(currentEntry: string, context: Array<{ entry: string; response: string; updated_at: string }>, previousCheckupsContext?: string): Promise<string> {
       console.log('🔧 Creating response prompt with context entries:', context.length);
       
@@ -144,7 +144,7 @@ export class JournalAgent {
       });
       
       let prompt = '';
-  
+
       // First: Historical journal entries
       if (context.length > 0) {
         prompt += "For historical context, here are some recent previous daily journal entries with their dates:\n";
@@ -164,32 +164,49 @@ export class JournalAgent {
           prompt += `Your previous response: "${entry.response}"\n\n`;
         });
       }
-  
-      // Second: Quest details
+
+      // Enhanced quest and task details section
       if (relevantQuests.length > 0) {
-        prompt += `\nRELEVANT QUEST DETAILS:\n`;
+        prompt += `\nRELEVANT QUEST AND TASK DETAILS:\n`;
         relevantQuests.forEach(quest => {
           prompt += `\nQuest: ${quest.title}\n`;
           prompt += `Description: ${quest.description || 'No description available'}\n`;
           prompt += `Current Status: ${quest.status || 'Unknown'}\n`;
           
-          // Add tasks section
-          if (quest.tasks && quest.tasks.length > 0) {
-            prompt += 'Tasks:\n';
-            quest.tasks.forEach(task => {
+          // Add specifically relevant tasks section with explanations
+          if (quest.relevantTasks && quest.relevantTasks.length > 0) {
+            prompt += '\nRelevant Tasks (with explanations):\n';
+            quest.relevantTasks.forEach(task => {
+              prompt += `- ${task.name}\n`;
+              prompt += `  Description: ${task.description}\n`;
+              prompt += `  Why Relevant: ${task.relevance}\n`;
+            });
+            prompt += '\n';
+          }
+          
+          // Add other tasks for context
+          const otherTasks = quest.tasks?.filter(task => 
+            !quest.relevantTasks?.some(rt => rt.taskId === task.id)
+          );
+          
+          if (otherTasks && otherTasks.length > 0) {
+            prompt += '\nOther Related Tasks:\n';
+            otherTasks.forEach(task => {
               prompt += `- ${task.title} (${task.status})\n`;
-              if (task.description) prompt += `  ${task.description}\n`;
             });
           }
           
+          if (quest.relevance) {
+            prompt += `\nRelevance to Current Entry: ${quest.relevance}\n`;
+          }
           if (quest.analysis) {
             prompt += `Previous Analysis: ${quest.analysis}\n`;
           }
           prompt += '---\n';
         });
-        prompt += '\nKeep these quest details and their tasks in mind when responding.\n\n';
+        prompt += '\nFocus on addressing the specifically relevant tasks in your response, while keeping the broader quest context in mind.\n\n';
       }
-  
+
       // Third: Today's previous checkups
       if (previousCheckupsContext && previousCheckupsContext.trim()) {
         prompt += `IMPORTANT: Earlier today, you've already had these conversations with the user (in chronological order with timestamps):\n${previousCheckupsContext}\n\n`;
@@ -214,12 +231,36 @@ export class JournalAgent {
       console.log('📎 First 200 chars of prompt:', prompt.substring(0, 200));
       return prompt;
     }
-  
+
     private async createAnalysisPrompt(currentEntry: string, context: Array<{ entry: string; analysis: string; updated_at: string }>, previousCheckupsContext?: string): Promise<string> {
       console.log('🔧 Creating analysis prompt with context entries:', context.length);
       
+      // Get relevant quests first to incorporate into the analysis
+      const relevantQuests = await this.questAgent.findRelevantQuests(currentEntry);
+      
       let prompt = `Here's the user's latest journal entry that you need to analyze: "${currentEntry}"\n\n`;
-  
+
+      // Add quest and task context early for better analysis
+      if (relevantQuests.length > 0) {
+        prompt += `\nRELEVANT QUEST AND TASK CONTEXT:\n`;
+        relevantQuests.forEach(quest => {
+          prompt += `\nQuest: ${quest.title}\n`;
+          if (quest.relevance) {
+            prompt += `Why Relevant: ${quest.relevance}\n`;
+          }
+          
+          // Highlight specifically relevant tasks
+          if (quest.relevantTasks && quest.relevantTasks.length > 0) {
+            prompt += '\nDirectly Relevant Tasks:\n';
+            quest.relevantTasks.forEach(task => {
+              prompt += `- ${task.name}\n`;
+              prompt += `  Relevance: ${task.relevance}\n`;
+            });
+          }
+        });
+        prompt += '\nConsider these quest relationships in your analysis.\n\n';
+      }
+
       if (previousCheckupsContext) {
         prompt += `\nEarlier today, the user wrote:\n${previousCheckupsContext}\n`;
       }
@@ -244,8 +285,14 @@ export class JournalAgent {
         });
       }
   
-      prompt += "\nAnalyze the latest entry while considering both today's earlier entries and historical context to identify patterns or themes. Focus particularly on any shifts or developments throughout today. Let's hear what Johnny thinks.";
-      prompt += `Here's the user's latest journal entry that you need to analyze: "${currentEntry}"\n\n`;
+      prompt += "\nAnalyze the latest entry while considering:\n";
+      prompt += "1. Both today's earlier entries and historical context to identify patterns\n";
+      prompt += "2. How the entry relates to relevant quests and their specific tasks\n";
+      prompt += "3. Any progress or blockers mentioned regarding the relevant tasks\n";
+      prompt += "4. Shifts in focus or priority among different quests and tasks\n";
+      prompt += "5. Potential connections between tasks that might not be obvious\n";
+      
+      prompt += `\nHere's the user's latest journal entry again for final analysis: "${currentEntry}"\n\n`;
   
       console.log('✅ Analysis prompt created, length:', prompt.length);
       return prompt;
@@ -301,8 +348,11 @@ export class JournalAgent {
               3. Advice or thoughts for tomorrow
               4. Personal observations only you would make, with your characteristic edge and attitude
               5. Reference specific moments or exchanges from the day when relevant
-              6. no or few emojis
-              Don't write like it's a report, you're speaking.
+              6. How your responses may have influenced subsequent user entries
+ 
+              
+              Don't write like it's a report, you're speaking.no or few emojis
+              
               Keep your cyberpunk attitude but be genuinely helpful. This is your chance to show you've been paying attention all day.`
             },
             {
@@ -391,29 +441,43 @@ export class JournalAgent {
         });
       }
 
-      // Second: Quest details
+      // Enhanced quest details section with task relevance
       if (relevantQuests.length > 0) {
-        console.log('📝 Adding quest details to prompt');
-        prompt += `\nRELEVANT QUEST CONTEXT:\n`;
+        console.log('📝 Adding quest and task details to prompt');
+        prompt += `\nRELEVANT QUEST AND TASK PROGRESS:\n`;
         relevantQuests.forEach(quest => {
-          prompt += `Quest: ${quest.title}\n`;
+          prompt += `\nQuest: ${quest.title}\n`;
           prompt += `Status: ${quest.status}\n`;
-          const currentDescription = quest.description;
-          prompt += `Description: ${currentDescription || 'No description available'}\n`;
           
-          // Add tasks section
-          if (quest.tasks && quest.tasks.length > 0) {
-            prompt += 'Tasks:\n';
-            quest.tasks.forEach(task => {
-              prompt += `- ${task.title} (${task.status})\n`;
-              if (task.description) prompt += `  ${task.description}\n`;
+          if (quest.relevance) {
+            prompt += `Overall Relevance Today: ${quest.relevance}\n`;
+          }
+          
+          // Highlight specifically relevant tasks first
+          if (quest.relevantTasks && quest.relevantTasks.length > 0) {
+            prompt += '\nKey Tasks Discussed Today:\n';
+            quest.relevantTasks.forEach(task => {
+              prompt += `- ${task.name}\n`;
+              prompt += `  Context: ${task.description}\n`;
+              prompt += `  Relevance Today: ${task.relevance}\n`;
             });
           }
           
-          if (quest.analysis) prompt += `Previous Analysis: ${quest.analysis}\n`;
+          // Other tasks for context
+          const otherTasks = quest.tasks?.filter(task => 
+            !quest.relevantTasks?.some(rt => rt.taskId === task.id)
+          );
+          
+          if (otherTasks && otherTasks.length > 0) {
+            prompt += '\nOther Tasks to Consider:\n';
+            otherTasks.forEach(task => {
+              prompt += `- ${task.title} (${task.status})\n`;
+            });
+          }
+          
           prompt += '\n';
         });
-        prompt += 'Consider how today\'s activities relate to these quests and their specific tasks.\n\n';
+        prompt += 'Consider how discussions throughout the day have impacted or related to these quests and their specific tasks.\n\n';
       }
 
       // Third: Today's checkups and responses
