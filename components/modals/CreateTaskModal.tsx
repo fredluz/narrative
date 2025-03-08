@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, TextInput, ActivityIndicator, Modal } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { format } from 'date-fns';
@@ -6,6 +6,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { Task } from '@/app/types';
 import { TaskRecommendation } from '@/services/TaskRecommendationParser';
 import { ThemedText } from '@/components/ui/ThemedText';
+import { fetchQuests } from '@/services/questsService';
 
 type TaskStatus = 'ToDo' | 'InProgress' | 'Done';
 
@@ -17,9 +18,9 @@ interface TaskFormData {
   location?: string;
   status: TaskStatus;
   tags?: string[];
-  quest_id?: string;
+  quest_id?: number;  // Changed from string to number
   priority: 'high' | 'medium' | 'low';
-  sourceRecommendation?: TaskRecommendation;
+  subtasks?: string;
 }
 
 interface CreateTaskModalProps {
@@ -36,10 +37,11 @@ export function CreateTaskModal({
   onClose, 
   onSubmit,
   isSubmitting,
-  quests = [],
+  quests: propsQuests = [],
   recommendation
 }: CreateTaskModalProps) {
   const { themeColor, secondaryColor } = useTheme();
+  const [localQuests, setLocalQuests] = useState<Array<{ id: number; title: string }>>([]);
   const [formData, setFormData] = React.useState<TaskFormData>({
     title: recommendation?.title || '',
     description: recommendation?.description || '',
@@ -48,8 +50,37 @@ export function CreateTaskModal({
     location: '',
     tags: [],
     priority: recommendation?.priority || 'medium',
-    sourceRecommendation: recommendation
+    subtasks: ''
   });
+
+  // Load quests directly if none provided via props
+  useEffect(() => {
+    // Always fetch quests when the modal is visible to ensure we have all active quests
+    if (visible) {
+      const loadQuests = async () => {
+        try {
+          console.log('Fetching quests from service...');
+          const loadedQuests = await fetchQuests();
+          console.log('Fetched quests:', loadedQuests.length);
+          
+          // Filter out completed quests
+          const activeQuests = loadedQuests
+            .filter(q => q.status !== 'Completed')
+            .map(q => ({ id: q.id, title: q.title }));
+            
+          setLocalQuests(activeQuests);
+          
+          // If a quest_id was set but is not in active quests, try to find the first active quest
+          if (formData.quest_id && !activeQuests.some(q => q.id === formData.quest_id) && activeQuests.length > 0) {
+            setFormData(prev => ({ ...prev, quest_id: activeQuests[0].id }));
+          }
+        } catch (err) {
+          console.error('Error loading quests:', err);
+        }
+      };
+      loadQuests();
+    }
+  }, [visible]);
 
   // Reset form when recommendation changes
   React.useEffect(() => {
@@ -59,17 +90,10 @@ export function CreateTaskModal({
         title: recommendation.title,
         description: recommendation.description,
         priority: recommendation.priority,
-        sourceRecommendation: recommendation,
-        // If we have quest tags, try to find a matching quest
-        quest_id: recommendation.suggestedQuestTags.length > 0 
-          ? quests.find(q => 
-              recommendation.suggestedQuestTags.some(tag => 
-                q.title.toLowerCase().includes(tag.toLowerCase())
-              ))?.id 
-          : undefined
+        // Don't try to guess quest_id from tags
       }));
     }
-  }, [recommendation, quests]);
+  }, [recommendation, propsQuests]);
 
   const handleSubmit = async () => {
     await onSubmit(formData);
@@ -80,9 +104,13 @@ export function CreateTaskModal({
       status: 'ToDo',
       location: '',
       tags: [],
-      priority: 'medium'
+      priority: 'medium',
+      subtasks: ''
     });
   };
+
+  // Combine quests from props and local state
+  const displayQuests = localQuests;
 
   return (
     <Modal
@@ -132,38 +160,84 @@ export function CreateTaskModal({
 
           <ScrollView style={{ maxHeight: '100%' }}>
             {/* Quest Selection - New Section */}
-            <Text style={{ color: '#AAA', fontSize: 14, marginBottom: 5 }}>Quest</Text>
+            <Text style={{ color: '#AAA', fontSize: 14, marginBottom: 5 }}>Quest *</Text>
             <View style={{
               backgroundColor: '#2A2A2A',
               borderRadius: 4,
               marginBottom: 15,
+              maxHeight: 200,
               overflow: 'hidden'
             }}>
-              {quests.map(quest => (
-                <TouchableOpacity
-                  key={quest.id}
-                  style={{
-                    padding: 10,
-                    borderBottomWidth: 1,
-                    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
-                    backgroundColor: formData.quest_id === quest.id ? 'rgba(255, 255, 255, 0.1)' : 'transparent',
-                    flexDirection: 'row',
-                    alignItems: 'center'
-                  }}
-                  onPress={() => setFormData({ ...formData, quest_id: quest.id })}
-                >
-                  <MaterialIcons 
-                    name={formData.quest_id === quest.id ? 'radio-button-checked' : 'radio-button-unchecked'} 
-                    size={20} 
-                    color={formData.quest_id === quest.id ? themeColor : '#AAA'}
-                    style={{ marginRight: 10 }}
-                  />
-                  <Text style={{ color: '#FFF' }}>{quest.title}</Text>
-                </TouchableOpacity>
-              ))}
+              {displayQuests.length > 0 ? (
+                <ScrollView style={{ maxHeight: 200 }}>
+                  {displayQuests.map(quest => (
+                    <TouchableOpacity
+                      key={quest.id}
+                      style={{
+                        padding: 10,
+                        borderBottomWidth: 1,
+                        borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+                        backgroundColor: formData.quest_id === quest.id ? 'rgba(255, 255, 255, 0.1)' : 'transparent',
+                        flexDirection: 'row',
+                        alignItems: 'center'
+                      }}
+                      onPress={() => setFormData({ ...formData, quest_id: quest.id })}
+                    >
+                      <MaterialIcons 
+                        name={formData.quest_id === quest.id ? 'radio-button-checked' : 'radio-button-unchecked'} 
+                        size={20} 
+                        color={formData.quest_id === quest.id ? themeColor : '#AAA'}
+                        style={{ marginRight: 10 }}
+                      />
+                      <Text style={{ color: '#FFF' }}>{quest.title}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              ) : (
+                <View style={{ padding: 15, alignItems: 'center' }}>
+                  <Text style={{ color: '#AAA', fontStyle: 'italic' }}>
+                    {visible ? 'Loading quests...' : 'No quests available. Create a quest first.'}
+                  </Text>
+                </View>
+              )}
             </View>
 
-            {/* Priority Selection - New Section */}
+            {/* Title field */}
+            <Text style={{ color: '#AAA', fontSize: 14, marginBottom: 5 }}>Title *</Text>
+            <TextInput
+              value={formData.title}
+              onChangeText={(text) => setFormData({ ...formData, title: text })}
+              style={{
+                backgroundColor: '#2A2A2A',
+                borderRadius: 4,
+                padding: 10,
+                marginBottom: 15,
+                color: '#FFF',
+              }}
+              placeholderTextColor="#666"
+              placeholder="Enter task title"
+            />
+
+            {/* Description field */}
+            <Text style={{ color: '#AAA', fontSize: 14, marginBottom: 5 }}>Description</Text>
+            <TextInput
+              value={formData.description}
+              onChangeText={(text) => setFormData({ ...formData, description: text })}
+              style={{
+                backgroundColor: '#2A2A2A',
+                borderRadius: 4,
+                padding: 10,
+                marginBottom: 15,
+                color: '#FFF',
+                height: 80,
+                textAlignVertical: 'top',
+              }}
+              multiline={true}
+              placeholderTextColor="#666"
+              placeholder="Enter task description"
+            />
+
+            {/* Priority Selection */}
             <Text style={{ color: '#AAA', fontSize: 14, marginBottom: 5 }}>Priority</Text>
             <View style={{ 
               flexDirection: 'row', 
@@ -209,25 +283,11 @@ export function CreateTaskModal({
               ))}
             </View>
 
-            <Text style={{ color: '#AAA', fontSize: 14, marginBottom: 5 }}>Title *</Text>
+            {/* Subtasks field */}
+            <Text style={{ color: '#AAA', fontSize: 14, marginBottom: 5 }}>Subtasks</Text>
             <TextInput
-              value={formData.title}
-              onChangeText={(text) => setFormData({ ...formData, title: text })}
-              style={{
-                backgroundColor: '#2A2A2A',
-                borderRadius: 4,
-                padding: 10,
-                marginBottom: 15,
-                color: '#FFF',
-              }}
-              placeholderTextColor="#666"
-              placeholder="Enter task title"
-            />
-
-            <Text style={{ color: '#AAA', fontSize: 14, marginBottom: 5 }}>Description</Text>
-            <TextInput
-              value={formData.description}
-              onChangeText={(text) => setFormData({ ...formData, description: text })}
+              value={formData.subtasks || ''}
+              onChangeText={(text) => setFormData({ ...formData, subtasks: text })}
               style={{
                 backgroundColor: '#2A2A2A',
                 borderRadius: 4,
@@ -239,9 +299,10 @@ export function CreateTaskModal({
               }}
               multiline={true}
               placeholderTextColor="#666"
-              placeholder="Enter task description"
+              placeholder="Enter subtasks (one per line)"
             />
 
+            {/* Start Date field */}
             <Text style={{ color: '#AAA', fontSize: 14, marginBottom: 5 }}>Start Date *</Text>
             <TextInput
               value={formData.scheduled_for}
@@ -257,6 +318,7 @@ export function CreateTaskModal({
               placeholder="YYYY-MM-DD"
             />
 
+            {/* Remaining fields */}
             <Text style={{ color: '#AAA', fontSize: 14, marginBottom: 5 }}>Deadline</Text>
             <TextInput
               value={formData.deadline || ''}
@@ -339,7 +401,7 @@ export function CreateTaskModal({
               ))}
             </View>
 
-            {/* Source Recommendation - New Section */}
+            {/* Source Recommendation */}
             {recommendation && (
               <View style={{
                 marginTop: 15,
@@ -373,13 +435,14 @@ export function CreateTaskModal({
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={handleSubmit}
-                disabled={!formData.title || !formData.scheduled_for || isSubmitting}
+                disabled={!formData.title || !formData.scheduled_for || isSubmitting || !formData.quest_id}
                 style={{
-                  backgroundColor: !formData.title || !formData.scheduled_for ? 'rgba(40, 40, 40, 0.8)' : themeColor,
+                  backgroundColor: !formData.title || !formData.scheduled_for || !formData.quest_id ? 
+                    'rgba(40, 40, 40, 0.8)' : themeColor,
                   borderRadius: 4,
                   paddingHorizontal: 15,
                   paddingVertical: 8,
-                  opacity: !formData.title || !formData.scheduled_for ? 0.5 : 1,
+                  opacity: !formData.title || !formData.scheduled_for || !formData.quest_id ? 0.5 : 1,
                 }}
               >
                 {isSubmitting ? (

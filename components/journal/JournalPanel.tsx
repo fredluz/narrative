@@ -620,16 +620,6 @@ export function JournalPanel({
                 secondaryColor={secondaryColor}
               />
             </View>
-            
-            <View style={{ flex: showAnalysis ? 2 : 1 }}>
-              <AIAnalysis
-                analysis={aiAnalysis}
-                loading={loading}
-                fullColumnMode={fullColumnMode}
-                themeColor={themeColor}
-                expanded={showAnalysis}
-              />
-            </View>
           </View>
         )}
       </View>

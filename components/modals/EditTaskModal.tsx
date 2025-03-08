@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, TextInput, ActivityIndicator, Modal } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { format } from 'date-fns';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Task } from '@/app/types';
+import { fetchQuests } from '@/services/questsService';
 
 type TaskStatus = 'ToDo' | 'InProgress' | 'Done';
 
@@ -15,6 +16,9 @@ interface TaskFormData {
   location?: string;
   status: TaskStatus;
   tags?: string[];
+  quest_id?: number;  // Changed from string to number
+  priority: 'high' | 'medium' | 'low';
+  subtasks?: string;
 }
 
 interface EditTaskModalProps {
@@ -33,14 +37,46 @@ export function EditTaskModal({
   task 
 }: EditTaskModalProps) {
   const { themeColor } = useTheme();
+  const [quests, setQuests] = useState<Array<{ id: number; title: string }>>([]);
   const [formData, setFormData] = React.useState<TaskFormData>({
     title: '',
     description: '',
     scheduled_for: format(new Date(), 'yyyy-MM-dd'),
     status: 'ToDo',
     location: '',
-    tags: []
+    tags: [],
+    priority: 'medium',
+    subtasks: ''
   });
+
+  // Load quests when the modal opens
+  useEffect(() => {
+    const loadQuests = async () => {
+      try {
+        const loadedQuests = await fetchQuests();
+        
+        // Filter out completed quests
+        const activeQuests = loadedQuests
+          .filter(q => q.status !== 'Completed')
+          .map(q => ({ id: q.id, title: q.title }));
+          
+        setQuests(activeQuests);
+        
+        // If the current quest is completed, warn the user but don't change it
+        if (task && task.quest_id && 
+            !activeQuests.some(q => q.id === task.quest_id) && 
+            loadedQuests.some(q => q.id === task.quest_id)) {
+          console.warn('Task is assigned to a completed quest');
+        }
+      } catch (err) {
+        console.error('Error loading quests:', err);
+      }
+    };
+    
+    if (visible) {
+      loadQuests();
+    }
+  }, [visible, task]);
 
   React.useEffect(() => {
     if (task) {
@@ -51,7 +87,10 @@ export function EditTaskModal({
         deadline: task.deadline,
         location: task.location || '',
         status: task.status as TaskStatus,
-        tags: task.tags || []
+        tags: task.tags || [],
+        priority: task.priority || 'medium', // Changed from 'Medium' to 'medium'
+        subtasks: task.subtasks || '',
+        quest_id: task.quest_id
       });
     }
   }, [task]);
@@ -137,6 +176,103 @@ export function EditTaskModal({
               multiline={true}
               placeholderTextColor="#666"
               placeholder="Enter task description"
+            />
+
+            {/* Quest Selection - Added Section */}
+            <Text style={{ color: '#AAA', fontSize: 14, marginBottom: 5 }}>Quest</Text>
+            <View style={{
+              backgroundColor: '#2A2A2A',
+              borderRadius: 4,
+              marginBottom: 15,
+              overflow: 'hidden'
+            }}>
+              {quests.map(quest => (
+                <TouchableOpacity
+                  key={quest.id}
+                  style={{
+                    padding: 10,
+                    borderBottomWidth: 1,
+                    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+                    backgroundColor: formData.quest_id === quest.id ? 'rgba(255, 255, 255, 0.1)' : 'transparent',
+                    flexDirection: 'row',
+                    alignItems: 'center'
+                  }}
+                  onPress={() => setFormData({ ...formData, quest_id: quest.id })}
+                >
+                  <MaterialIcons 
+                    name={formData.quest_id === quest.id ? 'radio-button-checked' : 'radio-button-unchecked'} 
+                    size={20} 
+                    color={formData.quest_id === quest.id ? themeColor : '#AAA'}
+                    style={{ marginRight: 10 }}
+                  />
+                  <Text style={{ color: '#FFF' }}>{quest.title}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Priority Selection */}
+            <Text style={{ color: '#AAA', fontSize: 14, marginBottom: 5 }}>Priority</Text>
+            <View style={{ 
+              flexDirection: 'row', 
+              justifyContent: 'space-between', 
+              marginBottom: 15 
+            }}>
+              {(['high', 'medium', 'low'] as const).map((priority) => (
+                <TouchableOpacity
+                  key={priority}
+                  style={{
+                    backgroundColor: formData.priority === priority 
+                      ? priority === 'high' 
+                        ? '#D32F2F'
+                        : priority === 'medium'
+                          ? '#FB8C00'
+                          : '#388E3C'
+                      : '#2A2A2A',
+                    paddingHorizontal: 15,
+                    paddingVertical: 8,
+                    borderRadius: 4,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                  }}
+                  onPress={() => setFormData({ ...formData, priority })}
+                >
+                  <MaterialIcons 
+                    name={
+                      priority === 'high' ? 'priority-high' :
+                      priority === 'medium' ? 'remove-circle-outline' :
+                      'arrow-downward'
+                    }
+                    size={16}
+                    color={formData.priority === priority ? '#FFF' : '#AAA'}
+                    style={{ marginRight: 5 }}
+                  />
+                  <Text style={{ 
+                    color: formData.priority === priority ? '#FFF' : '#AAA',
+                    textTransform: 'capitalize'
+                  }}>
+                    {priority}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Subtasks */}
+            <Text style={{ color: '#AAA', fontSize: 14, marginBottom: 5 }}>Subtasks</Text>
+            <TextInput
+              value={formData.subtasks || ''}
+              onChangeText={(text) => setFormData({ ...formData, subtasks: text })}
+              style={{
+                backgroundColor: '#2A2A2A',
+                borderRadius: 4,
+                padding: 10,
+                marginBottom: 15,
+                color: '#FFF',
+                height: 80,
+                textAlignVertical: 'top',
+              }}
+              multiline={true}
+              placeholderTextColor="#666"
+              placeholder="Enter subtasks (one per line)"
             />
 
             <Text style={{ color: '#AAA', fontSize: 14, marginBottom: 5 }}>Start Date *</Text>

@@ -101,6 +101,9 @@ export async function createTask(taskData: {
   scheduled_for: string;
   deadline?: string;
   location?: string;
+  priority: 'high' | 'medium' | 'low';
+  subtasks?: string;
+  tags?: string[];
 }): Promise<Task> {
   console.log('Creating new task:', taskData);
   

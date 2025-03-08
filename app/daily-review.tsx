@@ -1,15 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { SafeAreaView, ScrollView, View, ActivityIndicator } from 'react-native';
-import { useTheme } from '@/contexts/ThemeContext';
+import { View, ScrollView, ActivityIndicator } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { ThemedText } from '@/components/ui/ThemedText';
-import { DailyHeader } from '@/components/journal/DailyHeader';
-import { CheckupTimeline } from '@/components/journal/CheckupTimeline';
-import { TaskProgress } from '@/components/journal/TaskProgress';
-import { AIAnalysis } from '@/components/journal/AIAnalysis';
-import { journalStyles } from '@/app/styles/journalStyles';
+import { useTheme } from '@/contexts/ThemeContext';
 import { useJournal } from '@/hooks/useJournal';
-import { EndOfDayReviewService, DailyReview } from '@/services/EndOfDayReviewService';
+import { DailyReview, EndOfDayReviewService } from '@/services/EndOfDayReviewService';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { DailyHeader } from '@/components/daily-review/DailyHeader';
+import { CheckupTimeline } from '@/components/daily-review/CheckupTimeline';
+import { TaskProgress } from '@/components/daily-review/TaskProgress';
+import { AIAnalysis } from '@/components/journal/AIAnalysis';
+import { ThemedText } from '@/components/ui/ThemedText';
+import { journalStyles } from '@/app/styles/journalStyles';
 
 export default function DailyReviewScreen() {
   const { themeColor, secondaryColor } = useTheme();

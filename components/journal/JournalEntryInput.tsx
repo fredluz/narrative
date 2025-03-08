@@ -49,26 +49,5 @@ export const JournalEntryInput: React.FC<JournalEntryInputProps> = ({
         editable={!loading}
       />
     </View>
-    
-    <TextInput
-      style={{
-        height: 40,
-        backgroundColor: 'rgba(20, 20, 20, 0.9)',
-        borderWidth: 1,
-        borderColor: themeColor,
-        borderLeftWidth: 2,
-        borderLeftColor: themeColor,
-        borderRadius: 4,
-        color: '#FFFFFF',
-        padding: 12,
-        fontSize: 14,
-        fontWeight: 'normal',
-      }}
-      value={tagsValue}
-      onChangeText={onChangeTags}
-      placeholder="Add tags (comma separated) e.g. work, meeting, idea. In the future, have Johnny assign tags himself."
-      placeholderTextColor="#666"
-      editable={!loading}
-    />
   </View>
 );

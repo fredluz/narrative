@@ -12,6 +12,8 @@ export interface Task extends BaseEntity {
   location: string;
   quest_id: number;
   deadline?: string;
+  priority: 'high' | 'medium' | 'low';
+  subtasks?: string;
   status: 'ToDo' | 'InProgress' | 'Done';
   quest?: Quest;
 }
