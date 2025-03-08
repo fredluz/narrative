@@ -286,7 +286,7 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
         user_id: userId
       };
       
-      await createQuest(questData);
+      await createQuest(questData, session.user.id);
       setCreateQuestModalVisible(false);
       reload();
     } catch (error) {
@@ -309,7 +309,7 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
         user_id: userId
       };
       
-      await updateQuest(questBeingEdited.id, questData);
+      await updateQuest(questBeingEdited.id, questData, session.user.id);
       setEditQuestModalVisible(false);
       reload();
     } catch (error) {
@@ -874,44 +874,50 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
         </Card>
       </View>
 
-      <CreateQuestModal
-        visible={isCreateQuestModalVisible}
-        onClose={() => setCreateQuestModalVisible(false)}
-        onSubmit={handleCreateQuest}
-        isSubmitting={isSubmitting}
-      />
+      {/* Modal Components - Only render if we have a valid user ID */}
+      {session?.user?.id && (
+        <>
+          <CreateQuestModal
+            visible={isCreateQuestModalVisible}
+            onClose={() => setCreateQuestModalVisible(false)}
+            onSubmit={handleCreateQuest}
+            isSubmitting={isSubmitting}
+            userId={session.user.id}
+          />
 
-      <EditQuestModal
-        visible={isEditQuestModalVisible}
-        onClose={() => {
-          setEditQuestModalVisible(false);
-          setQuestBeingEdited(undefined);
-        }}
-        onSubmit={handleUpdateQuest}
-        isSubmitting={isSubmitting}
-        quest={questBeingEdited}
-        userId={session?.user?.id}
-      />
+          <EditQuestModal
+            visible={isEditQuestModalVisible}
+            onClose={() => {
+              setEditQuestModalVisible(false);
+              setQuestBeingEdited(undefined);
+            }}
+            onSubmit={handleUpdateQuest}
+            isSubmitting={isSubmitting}
+            quest={questBeingEdited}
+            userId={session.user.id}
+          />
 
-      <CreateTaskModal
-        visible={isCreateModalVisible}
-        onClose={() => setCreateModalVisible(false)}
-        onSubmit={handleCreateTask}
-        isSubmitting={isSubmitting}
-        userId={session?.user?.id}
-      />
+          <CreateTaskModal
+            visible={isCreateModalVisible}
+            onClose={() => setCreateModalVisible(false)}
+            onSubmit={handleCreateTask}
+            isSubmitting={isSubmitting}
+            userId={session.user.id}
+          />
 
-      <EditTaskModal
-        visible={isEditModalVisible}
-        onClose={() => {
-          setEditModalVisible(false);
-          setTaskBeingEdited(undefined);
-        }}
-        onSubmit={handleUpdateTask}
-        isSubmitting={isSubmitting}
-        task={taskBeingEdited} // Remove non-null assertion
-        userId={session?.user?.id}
-      />
+          <EditTaskModal
+            visible={isEditModalVisible}
+            onClose={() => {
+              setEditModalVisible(false);
+              setTaskBeingEdited(undefined);
+            }}
+            onSubmit={handleUpdateTask}
+            isSubmitting={isSubmitting}
+            task={taskBeingEdited}
+            userId={session.user.id}
+          />
+        </>
+      )}
     </View>
   );
 }

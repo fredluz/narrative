@@ -31,6 +31,7 @@ export function TaskList({ compactMode = false }: TaskListProps) {
   const [error, setError] = useState<string | null>(null);
   const { shouldUpdate, resetUpdate } = useQuestUpdate();
   const { themeColor, secondaryColor } = useTheme();
+  const [updatingTaskId, setUpdatingTaskId] = useState<number | null>(null);
   const [containerHeight, setContainerHeight] = useState<number>(0);
   const [availableSpace, setAvailableSpace] = useState<number>(0);
   

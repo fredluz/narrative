@@ -1,3 +1,4 @@
+import { OpenAI } from 'openai';
 import { TaskRecommendation } from '@/services/TaskRecommendationParser';
 import { ChatAgent } from './ChatAgent';
 
@@ -9,73 +10,57 @@ function validateUserId(userId: string | undefined): string {
 }
 
 export class TaskStrategizer extends ChatAgent {
-  async generateRecommendations(context: {
-    dailyEntry: any;
-    checkups: any[];
-    currentTasks: any[];
-    quests: any[];
-    aiAnalysis: string;
-    userId: string; // Add userId to context
-  }): Promise<TaskRecommendation[]> {
-    const validUserId = validateUserId(context.userId);
-        3. Make progress on key quests
-        4. Help achieve longer-term goals
-
-        Format your response as a JSON array of task recommendations, with each task having:
-        - title: A clear, action-oriented title
-        - description: More detailed explanation and context
-        - priority: "high", "medium", or "low"
-        - suggestedQuestTags: Array of keywords that match potential quests
-        - originalText: The actual text from analysis that inspired this task`
-      },
-      {
-        role: 'user',
-        content: prompt
-      }
-    ]);
-
-    // Parse the JSON response into TaskRecommendation objects
+  async generateRecommendations(
+    checkups: { content: string; created_at: string }[],
+    aiAnalysis: string,
+    userId: string
+  ): Promise<TaskRecommendation[]> {
+    const validUserId = validateUserId(userId);
+    
     try {
-      const recommendations = JSON.parse(response);
-      return recommendations.map((rec: any) => ({
-        title: rec.title,
-        description: rec.description,
-        priority: rec.priority,
-        suggestedQuestTags: rec.suggestedQuestTags,
-        originalText: rec.originalText
-      }));
+      const prompt = this.createTaskRecommendationsPrompt(checkups, aiAnalysis, validUserId);
+      
+      const response = await this.openai.chat.completions.create({
+        model: "deepseek-reasoner",
+        messages: [
+          {
+            role: "system",
+            content: "You are an AI assistant analyzing daily journal entries and checkups to generate strategic task recommendations."
+          },
+          {
+            role: "user",
+            content: prompt
+          }
+        ],
+        temperature: 0.5,
+        max_tokens: 2000
+      });
+
+      const responseText = response.choices[0].message?.content;
+      if (!responseText) throw new Error('No response from AI');
+
+      try {
+        return JSON.parse(responseText);
+      } catch (parseError) {
+        console.error('Failed to parse AI response:', parseError);
+        return [];
+      }
     } catch (error) {
-      console.error('Error parsing task recommendations:', error);
+      console.error('Error generating task recommendations:', error);
       return [];
     }
   }
 
-  private buildStrategizerPrompt(context: {
-    dailyEntry: any;
-    checkups: any[];
-    currentTasks: any[];
-    quests: any[];
-    aiAnalysis: string;
-  }): string {
-    const {
-      dailyEntry,
-      checkups,
-      currentTasks,
-      quests,
-      aiAnalysis
-    } = context;
-
-    return `
-Here's the context for generating task recommendations:
-
-CURRENT QUESTS:
-${quests.map(q => `- ${q.title}: ${q.tagline}`).join('\n')}
-
-TODAY'S PROGRESS:
-${currentTasks.map(t => `- [${t.status}] ${t.title}`).join('\n')}
+  private createTaskRecommendationsPrompt(
+    checkups: { content: string; created_at: string }[],
+    aiAnalysis: string,
+    userId: string
+  ): string {
+    const validUserId = validateUserId(userId);
+    return `Generate strategic task recommendations based on the following context:
 
 CHECKUPS AND MOOD:
-${checkups.map(c => `- ${c.content}`).join('\n')}
+${checkups.map(c => c.content).join('\n')}
 
 AI ANALYSIS:
 ${aiAnalysis}
@@ -87,7 +72,17 @@ Focus on tasks that:
 3. Align with active quest objectives
 4. Balance short-term needs with long-term goals
 
-Format your response as a JSON array following the specified structure.
-`;
+Format your response as a JSON array following this structure:
+[
+  {
+    "title": "Task title",
+    "description": "Detailed task description",
+    "category": "area/category this task belongs to",
+    "priority": "high|medium|low",
+    "estimated_time": "estimated time in minutes",
+    "impact": "expected impact/benefit",
+    "quest_alignment": "related quest if any"
+  }
+]`;
   }
 }

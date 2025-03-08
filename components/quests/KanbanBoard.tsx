@@ -8,7 +8,7 @@ import { Task, Quest } from '@/app/types';
 import { useRouter } from 'expo-router';
 import { formatDateTime } from '@/utils/dateFormatters';
 import { updateTaskStatus, getNextStatus } from '@/services/tasksService';
-
+import { useSupabase } from '@/contexts/SupabaseContext';
 
 interface KanbanProps {
   mainQuest: Quest | null;
@@ -20,6 +20,7 @@ type TaskStatus = 'ToDo' | 'InProgress' | 'Done';
 export function KanbanBoard({ mainQuest, onViewAllQuests }: KanbanProps) {
   const router = useRouter();
   const { themeColor, secondaryColor } = useTheme();
+  const { session } = useSupabase();
   const [activeColumn, setActiveColumn] = useState<TaskStatus | 'all' | 'active'>('active');
   const [updatingTaskId, setUpdatingTaskId] = useState<number | null>(null);
 
@@ -110,10 +111,13 @@ export function KanbanBoard({ mainQuest, onViewAllQuests }: KanbanProps) {
 
   // Add function to handle task status toggle
   const toggleTaskCompletion = async (task: Task) => {
+    if (!session?.user?.id) return;
+
     try {
       setUpdatingTaskId(task.id);
+      const userId = validateUserId(session.user.id);
       const newStatus = getNextStatus(task.status);
-      await updateTaskStatus(task.id, newStatus);
+      await updateTaskStatus(task.id, newStatus, userId);
       
       // Update local state
       if (mainQuest && mainQuest.tasks) {

@@ -5,6 +5,14 @@ import { TaskStrategizer } from './agents/TaskStrategizer';
 import type { Task } from '@/app/types';
 import type { TaskRecommendation } from './TaskRecommendationParser';
 
+// Helper function to validate userId
+function validateUserId(userId: string | undefined): string {
+  if (!userId) {
+    throw new Error('User ID is required but was not provided');
+  }
+  return userId;
+}
+
 export interface DailyStats {
   checkupsCount: number;
   tasksCompleted: number;
@@ -27,10 +35,11 @@ export interface DailyReview {
 export class EndOfDayReviewService {
   private static taskStrategizer = new TaskStrategizer();
 
-  private static async generateDailyStats(date: string): Promise<DailyStats> {
+  private static async generateDailyStats(date: string, userId: string): Promise<DailyStats> {
     try {
-      const checkups = await journalService.getCheckupEntries(date);
-      const tasks = await getTasksByDate(date);
+      const validUserId = validateUserId(userId);
+      const checkups = await journalService.getCheckupEntries(date, validUserId);
+      const tasks = await getTasksByDate(date, validUserId);
       
       // Calculate stats
       const tasksCompleted = tasks.filter(t => t.status === 'Done').length;
@@ -96,27 +105,30 @@ export class EndOfDayReviewService {
     return Math.round(validCheckups > 0 ? totalScore / (validCheckups + 1) : 50);
   }
 
-  static async getDailyReview(date: string): Promise<DailyReview> {
+  static async getDailyReview(date: string, userId: string): Promise<DailyReview> {
     try {
+      const validUserId = validateUserId(userId);
       // Check if we already have a review
       const { data: existingReview } = await supabase
         .from('end_of_day_reviews')
         .select('*')
         .eq('date', date)
+        .eq('user_id', validUserId)
         .single();
 
       if (existingReview) {
-        return this.formatReviewData(existingReview, date);
+        return this.formatReviewData(existingReview, date, validUserId);
       }
 
       // Generate new review
       const [stats, checkups, tasks, dailyEntry, tomorrowTasks] = await Promise.all([
-        this.generateDailyStats(date),
-        journalService.getCheckupEntries(date),
-        getTasksByDate(date),
-        journalService.getEntry(date),
+        this.generateDailyStats(date, validUserId),
+        journalService.getCheckupEntries(date, validUserId),
+        getTasksByDate(date, validUserId),
+        journalService.getEntry(date, validUserId),
         getTasksByDate(
-          new Date(new Date(date).getTime() + 86400000).toISOString().split('T')[0]
+          new Date(new Date(date).getTime() + 86400000).toISOString().split('T')[0],
+          validUserId
         )
       ]);
 
@@ -130,8 +142,8 @@ export class EndOfDayReviewService {
         tomorrowTasks
       };
 
-      // Save the review
-      await this.saveDailyReview(review);
+      // Save the review with user_id
+      await this.saveDailyReview(review, validUserId);
 
       return review;
     } catch (error) {
@@ -140,8 +152,9 @@ export class EndOfDayReviewService {
     }
   }
 
-  private static async saveDailyReview(review: DailyReview) {
+  private static async saveDailyReview(review: DailyReview, userId: string) {
     try {
+      const validUserId = validateUserId(userId);
       const { error } = await supabase
         .from('end_of_day_reviews')
         .insert({
@@ -151,7 +164,8 @@ export class EndOfDayReviewService {
           key_insights: [], // Will be populated by AI
           challenges: [], // Will be populated by AI
           wins: [], // Will be populated by AI
-          focus_areas: [] // Will be populated by AI
+          focus_areas: [], // Will be populated by AI,
+          user_id: validUserId
         });
 
       if (error) throw error;
@@ -161,14 +175,16 @@ export class EndOfDayReviewService {
     }
   }
 
-  private static async formatReviewData(data: any, date: string): Promise<DailyReview> {
+  private static async formatReviewData(data: any, date: string, userId: string): Promise<DailyReview> {
+    const validUserId = validateUserId(userId);
     // Get current data for the review
     const [checkups, tasks, dailyEntry, tomorrowTasks] = await Promise.all([
-      journalService.getCheckupEntries(date),
-      getTasksByDate(date),
-      journalService.getEntry(date),
+      journalService.getCheckupEntries(date, validUserId),
+      getTasksByDate(date, validUserId),
+      journalService.getEntry(date, validUserId),
       getTasksByDate(
-        new Date(new Date(date).getTime() + 86400000).toISOString().split('T')[0]
+        new Date(new Date(date).getTime() + 86400000).toISOString().split('T')[0],
+        validUserId
       )
     ]);
 
