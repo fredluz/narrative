@@ -2,6 +2,15 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import type { Quest } from '@/app/types';
 import { RealtimePostgresChangesPayload } from '@supabase/supabase-js';
+import { useSupabase } from '@/contexts/SupabaseContext';
+
+// Helper function to validate userId
+function validateUserId(userId: string | undefined): string {
+  if (!userId) {
+    throw new Error('User ID is required but was not provided');
+  }
+  return userId;
+}
 
 // Update interface to match QuestInput structure
 interface QuestUpdate {
@@ -16,17 +25,20 @@ interface QuestUpdate {
   start_date?: string;
   end_date?: string;
   tags?: string[];
+  user_id: string;
 }
 
 // Define input types
 interface QuestInput extends Omit<Quest, 'id' | 'created_at' | 'updated_at' | 'tasks'> {
   description?: string;
+  user_id: string;
 }
 
 type QuestRealtimePayload = RealtimePostgresChangesPayload<QuestUpdate>;
 
 // Database operations
-export async function fetchQuests(): Promise<Quest[]> {
+export async function fetchQuests(userId: string): Promise<Quest[]> {
+  const validUserId = validateUserId(userId);
   console.log('Fetching quests...');
   const { data, error } = await supabase
     .from('quests')
@@ -44,8 +56,10 @@ export async function fetchQuests(): Promise<Quest[]> {
       end_date,
       analysis,
       parent_quest_id,
+      user_id,
       tasks (*)
     `)
+    .eq('user_id', validUserId)
     .order('created_at', { ascending: false });
 
   if (error) {
@@ -56,7 +70,8 @@ export async function fetchQuests(): Promise<Quest[]> {
   return data || [];
 }
 
-async function createQuest(questData: QuestInput): Promise<Quest> {
+async function createQuest(questData: QuestInput, userId: string): Promise<Quest> {
+  const validUserId = validateUserId(userId);
   // Clean up empty timestamps
   const cleanedFields = Object.fromEntries(
     Object.entries(questData).map(([key, value]) => {
@@ -73,6 +88,7 @@ async function createQuest(questData: QuestInput): Promise<Quest> {
     .from('quests')
     .insert({
       ...cleanedFields,
+      user_id: validUserId,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     })
@@ -83,7 +99,8 @@ async function createQuest(questData: QuestInput): Promise<Quest> {
   return quest;
 }
 
-async function updateQuest(questId: number, questData: QuestInput): Promise<void> {
+async function updateQuest(questId: number, questData: QuestInput, userId: string): Promise<void> {
+  const validUserId = validateUserId(userId);
   // Clean up empty timestamps
   const cleanedFields = Object.fromEntries(
     Object.entries(questData).map(([key, value]) => {
@@ -102,14 +119,19 @@ async function updateQuest(questId: number, questData: QuestInput): Promise<void
       ...cleanedFields,
       updated_at: new Date().toISOString()
     })
-    .eq('id', questId);
+    .eq('id', questId)
+    .eq('user_id', validUserId);  // Ensure user owns the quest
 
   if (questError) throw questError;
 }
 
-async function updateMainQuest(questId: number): Promise<void> {
+async function updateMainQuest(questId: number, userId: string): Promise<void> {
+  const validUserId = validateUserId(userId);
   console.log('Calling RPC to update main quest:', questId);
-  const { error } = await supabase.rpc('update_main_quest', { p_quest_id: questId });
+  const { error } = await supabase.rpc('update_main_quest', { 
+    p_quest_id: questId,
+    p_user_id: validUserId  // Added user_id parameter to RPC call
+  });
   if (error) {
     console.error('Error updating main quest via RPC:', error);
     throw error;
@@ -125,11 +147,13 @@ export function useQuests() {
   const [quests, setQuests] = useState<Quest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { session } = useSupabase(); // Add session from SupabaseContext
 
   const loadQuests = async () => {
+    if (!session?.user?.id) return;
     try {
       setLoading(true);
-      const allQuests = await fetchQuests();
+      const allQuests = await fetchQuests(session.user.id);
       setQuests(allQuests);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load quests');
@@ -139,13 +163,37 @@ export function useQuests() {
   };
 
   useEffect(() => {
+    if (!session?.user?.id) return;
+    
     loadQuests();
-  }, []);
+
+    // Set up real-time subscription for this user's quests
+    const subscription = supabase
+      .channel('quests_changes')
+      .on('postgres_changes', 
+        { 
+          event: '*', 
+          schema: 'public', 
+          table: 'quests',
+          filter: `user_id=eq.${session.user.id}`
+        },
+        (payload: QuestRealtimePayload) => {
+          console.log('Quest change received:', payload);
+          loadQuests(); // Reload all quests when any change occurs
+        }
+      )
+      .subscribe();
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [session?.user?.id]); // Add session.user.id as dependency
 
   return {
     mainQuest: quests.find(q => q.is_main) || null,
     quests,
     setQuestAsMain: async (questId: number) => {
+      if (!session?.user?.id) return;
       try {
         // Update local state first (optimistic update)
         setQuests(currentQuests => 
@@ -156,7 +204,7 @@ export function useQuests() {
         );
         
         // Then update the database
-        await updateMainQuest(questId);
+        await updateMainQuest(questId, session.user.id);
       } catch (err) {
         // If the update fails, reload from DB to get correct state
         console.error('Failed to set main quest:', err);

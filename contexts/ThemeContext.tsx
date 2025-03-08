@@ -12,7 +12,7 @@ interface ThemeContextType {
 
 const ThemeContext = createContext<ThemeContextType>({
   themeColor: '#2c8c0f',
-  secondaryColor: '#1D64AB',
+  secondaryColor: '#35b8bf',
   setThemeColor: () => {},
   setSecondaryColor: () => {},
   textColor: '#fff',
@@ -20,7 +20,7 @@ const ThemeContext = createContext<ThemeContextType>({
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [themeColor, setThemeColorState] = useState('#2c8c0f');
-  const [secondaryColor, setSecondaryColorState] = useState('#1D64AB');
+  const [secondaryColor, setSecondaryColorState] = useState('#35b8bf');
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {

@@ -10,6 +10,7 @@ import { journalStyles } from '@/app/styles/journalStyles';
 import { questStyles } from '@/app/styles/questStyles';
 import { journalService, JournalEntry, CheckupEntry } from '@/services/journalService';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useSupabase } from '@/contexts/SupabaseContext';
 
 import { JournalEntryInput } from './JournalEntryInput';
 import { CheckupItem } from './CheckupItem';
@@ -28,6 +29,7 @@ export function JournalPanel({
 }) {
   const { secondaryColor } = useTheme();
   const router = useRouter();
+  const { session } = useSupabase();
   const { 
     currentDate, 
     getEntry, 
@@ -61,15 +63,16 @@ export function JournalPanel({
   // Load current entries whenever date changes or after refresh
   useEffect(() => {
     const loadEntries = async () => {
+      if (!session?.user?.id) return;
       const dateStr = currentDate.toISOString().split('T')[0];
       
-      // Get daily entry first
-      const dailyEntryForDate = await journalService.getEntry(dateStr);
+      // Get daily entry first with user_id
+      const dailyEntryForDate = await journalService.getEntry(dateStr, session.user.id);
       setDailyEntry(dailyEntryForDate);
       setHasDailyEntry(!!dailyEntryForDate);
 
-      // Get today's checkups (both linked and unlinked)
-      const todaysCheckups = await journalService.getCheckupEntries(dateStr);
+      // Get today's checkups with user_id
+      const todaysCheckups = await journalService.getCheckupEntries(dateStr, session.user.id);
       setCheckups(todaysCheckups);
 
       // Set current entry and responses
@@ -100,10 +103,12 @@ export function JournalPanel({
     };
 
     loadEntries();
-  }, [currentDate, getAiResponses]);
+  }, [currentDate, getAiResponses, session?.user?.id]);
 
   // Refresh entries initially to make sure we have the latest data
   useEffect(() => {
+    if (!session?.user?.id) return;
+    
     console.log('JournalPanel: Initial load, fetching entries...');
     refreshEntries().then(() => {
       // After refreshing, get the entry again to ensure we have the latest data
@@ -112,7 +117,7 @@ export function JournalPanel({
       setLocalEntry(entry?.user_entry || '');
       setOriginalEntry(entry?.user_entry || '');
     });
-  }, []);
+  }, [session?.user?.id]); // Add session.user.id as dependency
   
   useEffect(() => {
     // Check if getAiAnalysis is a function
@@ -164,9 +169,8 @@ export function JournalPanel({
   }, []);
 
   // Modified save handler to update local entries before saving and generate AI response
-  // FIXED: Replace saveEntry call with saveCheckupEntry
   const handleSaveEntry = useCallback(async () => {
-    if (!localEntry) return;
+    if (!localEntry || !session?.user?.id) return;
     
     try {
       setLocalLoading(true);
@@ -180,14 +184,14 @@ export function JournalPanel({
       
       updateLocalEntry(currentDate, localEntry);
       
-      // Replace saveEntry with saveCheckupEntry
+      // Use saveCheckupEntry with user_id
       const dateStr = currentDate.toISOString().split('T')[0];
-      await journalService.saveCheckupEntry(dateStr, localEntry, processedTags);
+      await journalService.saveCheckupEntry(dateStr, localEntry, session.user.id, processedTags);
       
       await refreshEntries();
       
       // Get updated entries after saving
-      const todaysCheckups = await journalService.getCheckupEntries(dateStr);
+      const todaysCheckups = await journalService.getCheckupEntries(dateStr, session.user.id);
       setCheckups(todaysCheckups);
 
       const aiResponses = getAiResponses(currentDate);
@@ -204,11 +208,11 @@ export function JournalPanel({
       setLocalLoading(false);
       setAiGenerating(false);
     }
-  }, [currentDate, localEntry, localTags, updateLocalEntry, refreshEntries, getAiResponses]);
+  }, [currentDate, localEntry, localTags, updateLocalEntry, refreshEntries, getAiResponses, session?.user?.id]);
 
   // Save a checkup entry (without linking to a daily entry yet)
   const handleSaveCheckup = useCallback(async () => {
-    if (!localEntry) return;
+    if (!localEntry || !session?.user?.id) return;
     
     try {
       setLocalLoading(true);
@@ -222,13 +226,18 @@ export function JournalPanel({
       
       // Save to checkup_entries table with null daily_entry_id
       const dateStr = currentDate.toISOString().split('T')[0];
-      const newCheckup = await journalService.saveCheckupEntry(dateStr, localEntry, processedTags);
+      const newCheckup = await journalService.saveCheckupEntry(
+        dateStr, 
+        localEntry, 
+        session.user.id,
+        processedTags
+      );
       
       // Refresh entries
       await refreshEntries();
 
       // Get updated entries and set them
-      const todaysCheckups = await journalService.getCheckupEntries(dateStr);
+      const todaysCheckups = await journalService.getCheckupEntries(dateStr, session.user.id);
       setCheckups(todaysCheckups);
 
       // ONLY set the AI response from the newly created checkup, clean it first
@@ -253,21 +262,23 @@ export function JournalPanel({
       setLocalLoading(false);
       setAiGenerating(false);
     }
-  }, [currentDate, localEntry, localTags, refreshEntries, getAiResponses, aiAnalysis]);
+  }, [currentDate, localEntry, localTags, refreshEntries, getAiResponses, aiAnalysis, session?.user?.id]);
 
   // Create a daily entry and link all unlinked checkups via foreign key
   const handleDailyEntry = useCallback(async () => {
+    if (!session?.user?.id) return;
+    
     try {
       setLocalLoading(true);
       setAiGenerating(true);
       setLocalError(null);
       
-      // Navigate to daily review page immediately
-      router.push('/daily-review');
-      
       const dateStr = currentDate.toISOString().split('T')[0];
-      // This creates a journal entry and updates the checkup_entries.daily_entry_id
-      const newDailyEntry = await journalService.saveDailyEntry(dateStr);
+      // Create daily entry before navigation to ensure it exists
+      const newDailyEntry = await journalService.saveDailyEntry(dateStr, session.user.id);
+      
+      // Only navigate after successful creation
+      router.push('/daily-review');
       
       // Refresh entries
       await refreshEntries();
@@ -299,7 +310,7 @@ export function JournalPanel({
       setLocalLoading(false);
       setAiGenerating(false);
     }
-  }, [currentDate, refreshEntries, router, getAiResponses]);
+  }, [currentDate, refreshEntries, router, getAiResponses, session?.user?.id]);
 
   const loading = localLoading;
   const error = localError;

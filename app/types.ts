@@ -3,6 +3,7 @@ export interface BaseEntity {
   created_at: string;
   updated_at: string;
   tags?: string[];
+  user_id: string;
 }
 
 export interface Task extends BaseEntity {

@@ -10,11 +10,12 @@ type QuestStatus = 'Active' | 'On-Hold' | 'Completed';
 interface QuestFormData {
   title: string;
   tagline: string;
-  description: string;
+  description?: string;
   status: QuestStatus;
   start_date?: string;
   end_date?: string;
   is_main: boolean;
+  user_id: string; // Add user_id field
 }
 
 interface CreateQuestModalProps {
@@ -22,13 +23,15 @@ interface CreateQuestModalProps {
   onClose: () => void;
   onSubmit: (data: QuestFormData) => Promise<void>;
   isSubmitting: boolean;
+  userId: string; // Add userId prop
 }
 
 export function CreateQuestModal({ 
   visible, 
   onClose, 
   onSubmit,
-  isSubmitting 
+  isSubmitting,
+  userId
 }: CreateQuestModalProps) {
   const { themeColor, secondaryColor } = useTheme();
   const [formData, setFormData] = React.useState<QuestFormData>({
@@ -37,24 +40,23 @@ export function CreateQuestModal({
     description: '',
     status: 'Active',
     start_date: format(new Date(), 'yyyy-MM-dd'),
-    is_main: false
+    is_main: false,
+    user_id: userId
   });
 
   const handleSubmit = async () => {
-    // Clean up empty date strings
-    const cleanedData = {
+    await onSubmit({
       ...formData,
-      start_date: formData.start_date || undefined,
-      end_date: formData.end_date || undefined
-    };
-    await onSubmit(cleanedData);
+      user_id: userId
+    });
     setFormData({
       title: '',
       tagline: '',
       description: '',
       status: 'Active',
       start_date: format(new Date(), 'yyyy-MM-dd'),
-      is_main: false
+      is_main: false,
+      user_id: userId
     });
   };
 

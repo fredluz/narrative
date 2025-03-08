@@ -2,7 +2,13 @@ import OpenAI from 'openai';
 import { supabase } from '../../lib/supabase';
 import { QuestAgent } from './QuestAgent';
 
-
+// Helper function to validate userId
+function validateUserId(userId: string | undefined): string {
+  if (!userId) {
+    throw new Error('User ID is required but was not provided');
+  }
+  return userId;
+}
 
 export class JournalAgent {
     private openai: OpenAI;
@@ -16,32 +22,34 @@ export class JournalAgent {
       });
       this.questAgent = new QuestAgent();
     }
-  
-    // Updated to handle paired format for checkup entries too
-    async generateResponse(currentEntry: string, previousCheckupsContext?: string): Promise<string> {
+
+    // Updated to require userId and properly handle it
+    async generateResponse(currentEntry: string, previousCheckupsContext?: string, userId?: string): Promise<string> {
       console.log('🚀 JournalAgent.generateResponse called with entry:', currentEntry.substring(0, 100) + '...');
       console.log('🔄 Previous context available:', !!previousCheckupsContext);
       
       try {
         // Fetch last 3 daily entries for secondary context with updated_at field
+        const validUserId = validateUserId(userId);
         const { data: recentEntries, error } = await supabase
           .from('journal_entries')
           .select('user_entry, ai_response, updated_at')
+          .eq('user_id', validUserId)
           .order('created_at', { ascending: false })
           .limit(3);
-  
+
         if (error) throw error;
-  
+
         // Format context for OpenAI, now including timestamp information
         const context = recentEntries?.map(entry => ({
           entry: entry.user_entry,
           response: entry.ai_response,
           updated_at: entry.updated_at
         })) || [];
-  
-        // Create the prompt with consistent paired format - now awaiting since it's async
-        const prompt = await this.createResponsePrompt(currentEntry, context, previousCheckupsContext);
-  
+
+        // Create the prompt with consistent paired format
+        const prompt = await this.createResponsePrompt(currentEntry, context, previousCheckupsContext, validUserId);
+
         console.log('📤 Sending prompt to AI:', prompt);
         
         // Get OpenAI response
@@ -60,7 +68,7 @@ export class JournalAgent {
           temperature: 0.7,
           max_tokens: 8000
         });
-  
+
         const aiResponse = response.choices[0].message?.content || "Listen up, got nothing to say right now. Come back when you've got something interesting.";
         console.log('📥 Received AI response:', aiResponse);
         
@@ -70,31 +78,33 @@ export class JournalAgent {
         throw error;
       }
     }
-  
-    async generateAnalysis(currentEntry: string, previousCheckupsContext?: string): Promise<string> {
+
+    async generateAnalysis(currentEntry: string, previousCheckupsContext?: string, userId?: string): Promise<string> {
       console.log('🚀 JournalAgent.generateAnalysis called with entry:', currentEntry.substring(0, 100) + '...');
       console.log('🔄 Previous context available:', !!previousCheckupsContext);
       
       try {
         // Fetch last 3 entries for context with updated_at field
+        const validUserId = validateUserId(userId);
         const { data: recentEntries, error } = await supabase
           .from('journal_entries')
           .select('user_entry, ai_analysis, updated_at')
+          .eq('user_id', validUserId)
           .order('created_at', { ascending: false })
           .limit(3);
-  
+
         if (error) throw error;
-  
+
         // Format context for OpenAI with timestamp info
         const context = recentEntries?.map(entry => ({
           entry: entry.user_entry,
           analysis: entry.ai_analysis,
           updated_at: entry.updated_at
         })) || [];
-  
+
         // Create the prompt with previous checkups context if available
-        const prompt = await this.createAnalysisPrompt(currentEntry, context, previousCheckupsContext);
-  
+        const prompt = await this.createAnalysisPrompt(currentEntry, context, previousCheckupsContext, validUserId);
+
         console.log('📤 Sending analysis prompt to AI:', prompt);
         
         // Get OpenAI response
@@ -113,7 +123,7 @@ export class JournalAgent {
           temperature: 0.7,
           max_tokens: 8000
         });
-  
+
         const aiAnalysis = response.choices[0].message?.content || 'Not seeing any patterns worth mentioning yet. Keep writing and I might find something.';
         console.log('📥 Received AI analysis:', aiAnalysis);
         
@@ -123,14 +133,15 @@ export class JournalAgent {
         throw error;
       }
     }
-  
+
     // Updated prompt creation to better utilize task relevance information
-    private async createResponsePrompt(currentEntry: string, context: Array<{ entry: string; response: string; updated_at: string }>, previousCheckupsContext?: string): Promise<string> {
+    private async createResponsePrompt(currentEntry: string, context: Array<{ entry: string; response: string; updated_at: string }>, previousCheckupsContext?: string, userId?: string): Promise<string> {
       console.log('🔧 Creating response prompt with context entries:', context.length);
       
       // First get relevant quests
       console.log('🔄 Finding relevant quests for entry');
-      const relevantQuests = await this.questAgent.findRelevantQuests(currentEntry);
+      const validUserId = validateUserId(userId);
+      const relevantQuests = await this.questAgent.findRelevantQuests(currentEntry, validUserId);
       console.log('✨ Found relevant quests:', relevantQuests.map(q => q.title));
       
       const currentTime = new Date().toLocaleTimeString([], { 
@@ -227,16 +238,14 @@ export class JournalAgent {
       // Fifth: Current entry (repeated at end for LLM focus)
       prompt += `Here's the user's latest checkup entry that you need to respond to:\n[${currentDate}, ${currentTime}] USER: ${currentEntry}\n`;
   
-      console.log('✅ Response prompt created, length:', prompt.length);
-      console.log('📎 First 200 chars of prompt:', prompt.substring(0, 200));
+      console.log('📎 Checkup Response prompt:', prompt);
       return prompt;
     }
 
-    private async createAnalysisPrompt(currentEntry: string, context: Array<{ entry: string; analysis: string; updated_at: string }>, previousCheckupsContext?: string): Promise<string> {
-      console.log('🔧 Creating analysis prompt with context entries:', context.length);
-      
+    private async createAnalysisPrompt(currentEntry: string, context: Array<{ entry: string; analysis: string; updated_at: string }>, previousCheckupsContext?: string, userId?: string): Promise<string> {
+      const validUserId = validateUserId(userId);
       // Get relevant quests first to incorporate into the analysis
-      const relevantQuests = await this.questAgent.findRelevantQuests(currentEntry);
+      const relevantQuests = await this.questAgent.findRelevantQuests(currentEntry, validUserId);
       
       let prompt = `Here's the user's latest journal entry that you need to analyze: "${currentEntry}"\n\n`;
 
@@ -294,21 +303,21 @@ export class JournalAgent {
       
       prompt += `\nHere's the user's latest journal entry again for final analysis: "${currentEntry}"\n\n`;
   
-      console.log('✅ Analysis prompt created, length:', prompt.length);
+      console.log('✅ Analysis prompt created, ', prompt);
       return prompt;
     }
-  
-    // Process journal entry with optional context from previous checkups
-    async processJournalEntry(currentEntry: string, previousCheckupsContext?: string): Promise<{ response: string; analysis: string }> {
+
+    // Process journal entry with mandatory userId
+    async processJournalEntry(currentEntry: string, previousCheckupsContext?: string, userId?: string): Promise<{ response: string; analysis: string }> {
       console.log('🚀 JournalAgent.processJournalEntry called with entry:', currentEntry.substring(0, 100) + '...');
       
       try {
         console.log('🔄 Processing journal entry with Promise.all for response and analysis');
         const [response, analysis] = await Promise.all([
-          this.generateResponse(currentEntry, previousCheckupsContext),
-          this.generateAnalysis(currentEntry, previousCheckupsContext)
+          this.generateResponse(currentEntry, previousCheckupsContext, userId),
+          this.generateAnalysis(currentEntry, previousCheckupsContext, userId)
         ]);
-  
+
         console.log('✅ processJournalEntry complete, response length:', response.length, 'analysis length:', analysis.length);
         return {
           response,
@@ -319,13 +328,14 @@ export class JournalAgent {
         throw error;
       }
     }
-  
+
     // Updated to recognize paired checkup/response format
-    async processEndOfDay(allCheckupEntries: string): Promise<{ response: string; analysis: string }> {
+    async processEndOfDay(allCheckupEntries: string, userId?: string): Promise<{ response: string; analysis: string }> {
       console.log('🚀 JournalAgent.processEndOfDay called with entries length:', allCheckupEntries.length);
       
       try {
-        const prompt = await this.createEndOfDayPrompt(allCheckupEntries);
+        const validUserId = validateUserId(userId);
+        const prompt = await this.createEndOfDayPrompt(allCheckupEntries, validUserId);
         console.log('📤 Sending end-of-day prompt to AI:', prompt);
         
         // Generate response with improved Johnny Silverhand system prompt
@@ -363,7 +373,7 @@ export class JournalAgent {
           temperature: 0.7,
           max_tokens: 8000
         });
-  
+
         // Analysis prompt updated to also consider the paired responses
         console.log('🔄 Generating end-of-day analysis');
         const analysis = await this.openai.chat.completions.create({
@@ -392,13 +402,13 @@ export class JournalAgent {
           temperature: 0.5,
           max_tokens: 8000
         });
-  
+
         const responseText = response.choices[0]?.message?.content || "Error generating end-of-day response";
         const analysisText = analysis.choices[0]?.message?.content || "Error generating end-of-day analysis";
         
         console.log('📥 Received end-of-day response:', responseText.substring(0, 100) + '...');
         console.log('📥 Received end-of-day analysis:', analysisText.substring(0, 100) + '...');
-  
+
         return {
           response: responseText,
           analysis: analysisText
@@ -408,13 +418,15 @@ export class JournalAgent {
         throw error;
       }
     }
-  
-    private async createEndOfDayPrompt(allCheckupEntriesWithResponses: string): Promise<string> {
+
+    private async createEndOfDayPrompt(allCheckupEntriesWithResponses: string, userId: string): Promise<string> {
       console.log('🔧 Creating end-of-day prompt with entries length:', allCheckupEntriesWithResponses.length);
+      
+      const validUserId = validateUserId(userId);
       
       // First get relevant quests based on all checkups content
       console.log('🔄 Finding relevant quests for end of day analysis');
-      const relevantQuests = await this.questAgent.findRelevantQuests(allCheckupEntriesWithResponses);
+      const relevantQuests = await this.questAgent.findRelevantQuests(allCheckupEntriesWithResponses, validUserId);
       console.log('✨ Found relevant quests:', relevantQuests.map(q => q.title));
 
       // Get recent journal entries for context
@@ -422,6 +434,7 @@ export class JournalAgent {
       const { data: recentEntries, error } = await supabase
         .from('journal_entries')
         .select('user_entry, ai_analysis, updated_at')
+        .eq('user_id', validUserId)
         .order('created_at', { ascending: false })
         .limit(3);
 

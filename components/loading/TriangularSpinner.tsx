@@ -7,7 +7,7 @@ interface Props {
   color?: string;
 }
 
-const TriangularSpinner = ({ size = 24, color = "#BBB" }: Props) => {
+export const TriangularSpinner = ({ size = 24, color = "#BBB" }: Props) => {
   // Define the fixed positions of the triangle in clockwise order
   const positions = [
     { x: 50, y: 30 }, // Top (index 0)

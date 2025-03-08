@@ -3,6 +3,7 @@ import { ChatMessage } from '@/app/types';
 import { useTheme } from '@/contexts/ThemeContext';
 import { ChatAgent } from '@/services/agents/ChatAgent';
 import { supabase } from '@/lib/supabase';
+import { useSupabase } from '@/contexts/SupabaseContext';
 
 const INACTIVITY_TIMEOUT = 5 * 60 * 1000; // 5 minutes in milliseconds
 const JOHNNY_RESPONSE_DELAY = 2000; // 2 seconds delay before Johnny replies
@@ -10,6 +11,7 @@ const MESSAGE_STAGGER_DELAY = 1000; // 1 second between sequential messages
 
 export function useChatData() {
   const { themeColor } = useTheme();
+  const { session } = useSupabase();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isTyping, setIsTyping] = useState(false);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
@@ -18,7 +20,7 @@ export function useChatData() {
   const chatAgent = new ChatAgent();
   const inactivityTimerRef = useRef<NodeJS.Timeout | null>(null);
   const currentSessionMessagesRef = useRef<ChatMessage[]>([]);
-  const pendingMessagesRef = useRef<ChatMessage[]>([]); // Changed from string[] to ChatMessage[]
+  const pendingMessagesRef = useRef<ChatMessage[]>([]);
   const johnnyResponseTimerRef = useRef<NodeJS.Timeout | null>(null);
   const lastMessageRef = useRef<string>('');
 
@@ -85,9 +87,12 @@ export function useChatData() {
   useEffect(() => {
     // Load initial messages
     const loadMessages = async () => {
+      if (!session?.user?.id) return;
+
       const { data, error } = await supabase
         .from('chat_messages')
         .select('*')
+        .eq('user_id', session.user.id)
         .is('chat_session_id', null)  // Only get messages without a session ID
         .order('created_at', { ascending: true });
 
@@ -108,7 +113,8 @@ export function useChatData() {
         { 
           event: '*', 
           schema: 'public', 
-          table: 'chat_messages' 
+          table: 'chat_messages',
+          filter: `user_id=eq.${session?.user?.id}`
         }, 
         (payload) => {
           if (payload.eventType === 'INSERT') {
@@ -130,7 +136,7 @@ export function useChatData() {
         clearTimeout(inactivityTimerRef.current);
       }
     };
-  }, [resetInactivityTimer]);
+  }, [resetInactivityTimer, session?.user?.id]);
 
   // Handle user typing
   const handleTyping = useCallback((text: string) => {
@@ -144,7 +150,7 @@ export function useChatData() {
 
   // Handle message sending
   const sendMessage = useCallback(async (messageText: string) => {
-    if (!messageText.trim()) return;
+    if (!messageText.trim() || !session?.user?.id) return;
 
     // Create user message
     const userMessage: ChatMessage = {
@@ -153,7 +159,8 @@ export function useChatData() {
       updated_at: new Date().toISOString(),
       is_user: true,
       message: messageText.trim(),
-      chat_session_id: currentSessionId || undefined
+      chat_session_id: currentSessionId || undefined,
+      user_id: session.user.id
     };
 
     // Add to pending messages
@@ -203,7 +210,8 @@ export function useChatData() {
                 updated_at: new Date().toISOString(),
                 is_user: false,
                 message: message,
-                chat_session_id: currentSessionId || undefined
+                chat_session_id: currentSessionId || undefined,
+                user_id: session.user.id
               };
               
               // Save to Supabase
@@ -234,7 +242,8 @@ export function useChatData() {
             updated_at: new Date().toISOString(),
             is_user: false,
             message: "Damn netrunners must be messing with our connection. Try again in a bit.",
-            chat_session_id: currentSessionId || undefined
+            chat_session_id: currentSessionId || undefined,
+            user_id: session.user.id
           };
 
           // Save error message to Supabase - local state will update via subscription
@@ -253,7 +262,7 @@ export function useChatData() {
     } catch (error) {
       console.error('Error in sendMessage:', error);
     }
-  }, [currentSessionId, resetInactivityTimer]);
+  }, [currentSessionId, resetInactivityTimer, session?.user?.id]);
 
   // Cleanup timers on unmount
   useEffect(() => {

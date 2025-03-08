@@ -7,6 +7,7 @@ import { Task } from '@/app/types';
 import { TaskRecommendation } from '@/services/TaskRecommendationParser';
 import { ThemedText } from '@/components/ui/ThemedText';
 import { fetchQuests } from '@/services/questsService';
+import { useSupabase } from '@/contexts/SupabaseContext';
 
 type TaskStatus = 'ToDo' | 'InProgress' | 'Done';
 
@@ -21,6 +22,7 @@ interface TaskFormData {
   quest_id?: number;  // Changed from string to number
   priority: 'high' | 'medium' | 'low';
   subtasks?: string;
+  user_id: string; // Add user_id field
 }
 
 interface CreateTaskModalProps {
@@ -30,6 +32,7 @@ interface CreateTaskModalProps {
   isSubmitting: boolean;
   quests?: Array<{ id: string; title: string; }>;
   recommendation?: TaskRecommendation;
+  userId: string; // Add userId prop
 }
 
 export function CreateTaskModal({ 
@@ -38,9 +41,11 @@ export function CreateTaskModal({
   onSubmit,
   isSubmitting,
   quests: propsQuests = [],
-  recommendation
+  recommendation,
+  userId
 }: CreateTaskModalProps) {
   const { themeColor, secondaryColor } = useTheme();
+  const { session } = useSupabase();
   const [localQuests, setLocalQuests] = useState<Array<{ id: number; title: string }>>([]);
   const [formData, setFormData] = React.useState<TaskFormData>({
     title: recommendation?.title || '',
@@ -50,37 +55,26 @@ export function CreateTaskModal({
     location: '',
     tags: [],
     priority: recommendation?.priority || 'medium',
-    subtasks: ''
+    subtasks: '',
+    user_id: userId // Initialize with userId
   });
 
   // Load quests directly if none provided via props
   useEffect(() => {
-    // Always fetch quests when the modal is visible to ensure we have all active quests
+    const loadQuests = async () => {
+      if (!session?.user?.id) return;
+      try {
+        const loadedQuests = await fetchQuests(session.user.id);
+        setLocalQuests(loadedQuests);
+      } catch (err) {
+        console.error('Error loading quests:', err);
+      }
+    };
+    
     if (visible) {
-      const loadQuests = async () => {
-        try {
-          console.log('Fetching quests from service...');
-          const loadedQuests = await fetchQuests();
-          console.log('Fetched quests:', loadedQuests.length);
-          
-          // Filter out completed quests
-          const activeQuests = loadedQuests
-            .filter(q => q.status !== 'Completed')
-            .map(q => ({ id: q.id, title: q.title }));
-            
-          setLocalQuests(activeQuests);
-          
-          // If a quest_id was set but is not in active quests, try to find the first active quest
-          if (formData.quest_id && !activeQuests.some(q => q.id === formData.quest_id) && activeQuests.length > 0) {
-            setFormData(prev => ({ ...prev, quest_id: activeQuests[0].id }));
-          }
-        } catch (err) {
-          console.error('Error loading quests:', err);
-        }
-      };
       loadQuests();
     }
-  }, [visible]);
+  }, [visible, session?.user?.id]);
 
   // Reset form when recommendation changes
   React.useEffect(() => {
@@ -96,7 +90,10 @@ export function CreateTaskModal({
   }, [recommendation, propsQuests]);
 
   const handleSubmit = async () => {
-    await onSubmit(formData);
+    await onSubmit({
+      ...formData,
+      user_id: userId
+    });
     setFormData({
       title: '',
       description: '',
@@ -105,7 +102,8 @@ export function CreateTaskModal({
       location: '',
       tags: [],
       priority: 'medium',
-      subtasks: ''
+      subtasks: '',
+      user_id: userId // Reset with userId
     });
   };
 

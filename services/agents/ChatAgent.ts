@@ -6,6 +6,14 @@ import { journalService } from '../journalService';
 import { QuestAgent } from './QuestAgent';
 import { performanceLogger } from '@/utils/performanceLogger';
 
+// Helper function to validate userId
+function validateUserId(userId: string | undefined): string {
+  if (!userId) {
+    throw new Error('User ID is required but was not provided');
+  }
+  return userId;
+}
+
 export class ChatAgent {
   private openai: OpenAI;
   private questAgent: QuestAgent;
@@ -20,13 +28,15 @@ export class ChatAgent {
   }
 
   // Add this method to generate responses using the JournalAgent's method
-  async generateResponse(content: string, previousCheckupsContext?: string): Promise<string> {
+  async generateResponse(content: string, previousCheckupsContext?: string, userId?: string): Promise<string> {
     performanceLogger.startOperation('generateResponse');
     console.log('🚀 ChatAgent.generateResponse called for checkup content');
     
     try {
+      // Validate userId since it's required by journalService
+      const validUserId = validateUserId(userId);
       // Use journalService to generate a response, which will in turn use JournalAgent
-      const response = await journalService.generateResponse(content);
+      const response = await journalService.generateResponse(content, validUserId);
       console.log('📥 Generated response for checkup content:', response.substring(0, 100) + '...');
       return response;
     } catch (error) {
@@ -43,22 +53,7 @@ export class ChatAgent {
       console.log('\n=== ChatAgent.generateChatResponse ===');
       console.log('Current message:', message);
       
-      // First check for relevant quests based on the message
-      console.log('Checking for relevant quests');
-      performanceLogger.startOperation('findRelevantQuests');
-      const relevantQuests = await this.questAgent.findRelevantQuests(message);
-      performanceLogger.endOperation('findRelevantQuests');
-      console.log('Found relevant quests:', relevantQuests.map(q => q.title));
-
-      // Get today's checkups first
-      const today = new Date().toISOString().split('T')[0];
-      console.log('Fetching today\'s checkups');
-      performanceLogger.startOperation('fetchCheckups');
-      const todaysCheckups = await journalService.getCheckupEntries(today);
-      performanceLogger.endOperation('fetchCheckups');
-      console.log('Found', todaysCheckups.length, 'checkups from today');
-      
-      // Fetch current conversation messages (those without a session_id)
+      // Get user_id from current messages
       performanceLogger.startOperation('fetchCurrentMessages');
       const { data: currentMessages, error: currentError } = await supabase
         .from('chat_messages')
@@ -68,7 +63,26 @@ export class ChatAgent {
       performanceLogger.endOperation('fetchCurrentMessages');
         
       if (currentError) throw currentError;
+      const userId = currentMessages?.[0]?.user_id;
+      if (!userId) {
+        throw new Error('No user_id found in current messages');
+      }
+      
+      // First check for relevant quests based on the message
+      console.log('Checking for relevant quests');
+      performanceLogger.startOperation('findRelevantQuests');
+      const relevantQuests = await this.questAgent.findRelevantQuests(message, userId);
+      performanceLogger.endOperation('findRelevantQuests');
+      console.log('Found relevant quests:', relevantQuests.map(q => q.title));
 
+      // Get today's checkups first
+      const today = new Date().toISOString().split('T')[0];
+      console.log('Fetching today\'s checkups');
+      performanceLogger.startOperation('fetchCheckups');
+      const todaysCheckups = await journalService.getCheckupEntries(today, userId);
+      performanceLogger.endOperation('fetchCheckups');
+      console.log('Found', todaysCheckups.length, 'checkups from today');
+      
       // Format quest context 
       performanceLogger.startOperation('buildContext');
       let questContext = '';
@@ -218,6 +232,16 @@ CONVERSATION CONTEXT:
   async summarizeAndStoreSession(messages: ChatMessage[]): Promise<string> {
     performanceLogger.startOperation('summarizeAndStoreSession');
     try {
+      if (!messages || messages.length === 0) {
+        throw new Error('No messages to summarize');
+      }
+
+      // Get the user_id from the first message (all messages should have the same user_id)
+      const userId = messages[0].user_id;
+      if (!userId) {
+        throw new Error('No user_id found in messages');
+      }
+
       console.log('\n=== ChatAgent.summarizeAndStoreSession ===');
       console.log('Messages to summarize:', messages.map(m => ({
         role: m.is_user ? 'user' : 'assistant',
@@ -273,12 +297,13 @@ CONVERSATION CONTEXT:
       performanceLogger.endOperation('parseSummaryResponse');
 
       performanceLogger.startOperation('dbOperations');
-      // Create new session with summary and tags
+      // Create new session with summary, tags, and user_id
       const { data: sessionData, error: sessionError } = await supabase
         .from('chat_sessions')
         .insert([{ 
           summary,
-          tags
+          tags,
+          user_id: userId  // Add user_id to the session
         }])
         .select('id')
         .single();
@@ -314,6 +339,12 @@ CONVERSATION CONTEXT:
     try {
       console.log('🔄 Creating checkup entry from chat session');
       
+      // Get the user_id from the first message
+      const userId = messages[0]?.user_id;
+      if (!userId) {
+        throw new Error('No user_id found in messages');
+      }
+      
       // Step 1: Generate content for the checkup entry (user's perspective)
       performanceLogger.startOperation('generateCheckupContent');
       const checkupContent = await this.generateCheckupContent(messages, summary);
@@ -325,7 +356,7 @@ CONVERSATION CONTEXT:
       // Step 2: Get today's previous checkups for context when generating the response
       performanceLogger.startOperation('fetchCheckupContext');
       console.log('🔄 Fetching today\'s checkups for context');
-      const todaysCheckups = await journalService.getCheckupEntries(today);
+      const todaysCheckups = await journalService.getCheckupEntries(today, userId);
       
       // Format previous checkups as context with paired responses
       let previousCheckupsContext = "";
@@ -346,13 +377,13 @@ CONVERSATION CONTEXT:
       // Step 3: Generate Johnny's response to this new checkup content
       performanceLogger.startOperation('generateAIResponse');
       console.log('🤖 Generating AI response for the checkup with context');
-      const aiResponse = await this.generateResponse(checkupContent, previousCheckupsContext);
+      const aiResponse = await this.generateResponse(checkupContent, previousCheckupsContext, userId);
       performanceLogger.endOperation('generateAIResponse');
       
       // Step 4: Save the complete checkup entry with both content and AI response
       performanceLogger.startOperation('saveCheckup');
       console.log('💾 Saving complete checkup entry to database');
-      await journalService.saveCheckupEntry(today, checkupContent, tags, aiResponse);
+      await journalService.saveCheckupEntry(today, checkupContent, userId, tags, aiResponse);
       performanceLogger.endOperation('saveCheckup');
       
       console.log('✅ Successfully created complete checkup entry from chat session');
@@ -372,10 +403,15 @@ CONVERSATION CONTEXT:
       
       const userMessages = messages.filter(msg => msg.is_user);
       const johnnyMessages = messages.filter(msg => !msg.is_user);
+      const userId = messages[0]?.user_id;
+      
+      if (!userId) {
+        throw new Error('No user_id found in messages');
+      }
       
       const today = new Date().toISOString().split('T')[0];
       performanceLogger.startOperation('fetchTodayCheckups');
-      const todaysCheckups = await journalService.getCheckupEntries(today);
+      const todaysCheckups = await journalService.getCheckupEntries(today, userId);
       performanceLogger.endOperation('fetchTodayCheckups');
       console.log('Today\'s checkups for style analysis:', todaysCheckups?.map(c => c.content));
       
@@ -415,8 +451,7 @@ CONVERSATION CONTEXT:
       
       console.log('\n=== SENDING TO LLM ===');
       console.log('System prompt: Creating journal entry from chat');
-      console.log('User messages:', userMessagesContent);
-      console.log('Style samples from checkups:', userStyleSamplesContent);
+
       
       performanceLogger.startOperation('aiGeneration');
       const response = await this.openai.chat.completions.create({

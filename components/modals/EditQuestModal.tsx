@@ -14,6 +14,7 @@ interface QuestFormData {
   start_date?: string;
   end_date?: string;
   is_main: boolean;
+  user_id: string; // Add user_id field
 }
 
 interface EditQuestModalProps {
@@ -22,6 +23,7 @@ interface EditQuestModalProps {
   onSubmit: (data: QuestFormData) => Promise<void>;
   isSubmitting: boolean;
   quest?: Quest; // Make quest optional
+  userId: string; // Add userId prop
 }
 
 export function EditQuestModal({ 
@@ -29,7 +31,8 @@ export function EditQuestModal({
   onClose, 
   onSubmit,
   isSubmitting,
-  quest 
+  quest,
+  userId
 }: EditQuestModalProps) {
   const { themeColor, secondaryColor } = useTheme();
   const [formData, setFormData] = React.useState<QuestFormData>({
@@ -39,7 +42,8 @@ export function EditQuestModal({
     status: 'Active',
     start_date: '',
     end_date: '',
-    is_main: false
+    is_main: false,
+    user_id: userId
   });
 
   React.useEffect(() => {
@@ -51,19 +55,17 @@ export function EditQuestModal({
         status: quest.status,
         start_date: quest.start_date || '',
         end_date: quest.end_date || '',
-        is_main: quest.is_main
+        is_main: quest.is_main,
+        user_id: userId
       });
     }
-  }, [quest]);
+  }, [quest, userId]);
 
-  const handleSubmit = () => {
-    // Clean up empty date strings
-    const cleanedData = {
+  const handleSubmit = async () => {
+    await onSubmit({
       ...formData,
-      start_date: formData.start_date || undefined,
-      end_date: formData.end_date || undefined
-    };
-    onSubmit(cleanedData);
+      user_id: userId
+    });
   };
 
   // Don't render the modal if there's no quest to edit

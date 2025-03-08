@@ -5,6 +5,7 @@ import { format } from 'date-fns';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Task } from '@/app/types';
 import { fetchQuests } from '@/services/questsService';
+import { useSupabase } from '@/contexts/SupabaseContext';
 
 type TaskStatus = 'ToDo' | 'InProgress' | 'Done';
 
@@ -19,6 +20,7 @@ interface TaskFormData {
   quest_id?: number;  // Changed from string to number
   priority: 'high' | 'medium' | 'low';
   subtasks?: string;
+  user_id: string; // Add user_id field
 }
 
 interface EditTaskModalProps {
@@ -27,6 +29,7 @@ interface EditTaskModalProps {
   onSubmit: (data: TaskFormData) => Promise<void>;
   isSubmitting: boolean;
   task?: Task; // Make task optional
+  userId: string; // Add userId prop
 }
 
 export function EditTaskModal({ 
@@ -34,8 +37,10 @@ export function EditTaskModal({
   onClose, 
   onSubmit,
   isSubmitting,
-  task 
+  task,
+  userId
 }: EditTaskModalProps) {
+  const { session } = useSupabase();
   const { themeColor } = useTheme();
   const [quests, setQuests] = useState<Array<{ id: number; title: string }>>([]);
   const [formData, setFormData] = React.useState<TaskFormData>({
@@ -46,28 +51,17 @@ export function EditTaskModal({
     location: '',
     tags: [],
     priority: 'medium',
-    subtasks: ''
+    subtasks: '',
+    user_id: userId // Initialize with userId
   });
 
   // Load quests when the modal opens
   useEffect(() => {
     const loadQuests = async () => {
+      if (!session?.user?.id) return;
       try {
-        const loadedQuests = await fetchQuests();
-        
-        // Filter out completed quests
-        const activeQuests = loadedQuests
-          .filter(q => q.status !== 'Completed')
-          .map(q => ({ id: q.id, title: q.title }));
-          
-        setQuests(activeQuests);
-        
-        // If the current quest is completed, warn the user but don't change it
-        if (task && task.quest_id && 
-            !activeQuests.some(q => q.id === task.quest_id) && 
-            loadedQuests.some(q => q.id === task.quest_id)) {
-          console.warn('Task is assigned to a completed quest');
-        }
+        const loadedQuests = await fetchQuests(session.user.id);
+        setQuests(loadedQuests);
       } catch (err) {
         console.error('Error loading quests:', err);
       }
@@ -76,7 +70,7 @@ export function EditTaskModal({
     if (visible) {
       loadQuests();
     }
-  }, [visible, task]);
+  }, [visible, session?.user?.id]);
 
   React.useEffect(() => {
     if (task) {
@@ -90,10 +84,21 @@ export function EditTaskModal({
         tags: task.tags || [],
         priority: task.priority || 'medium', // Changed from 'Medium' to 'medium'
         subtasks: task.subtasks || '',
-        quest_id: task.quest_id
+        quest_id: task.quest_id,
+        user_id: userId // Set user_id when loading task data
       });
     }
-  }, [task]);
+  }, [task, userId]);
+
+  // Update handleSubmit to include user_id
+  const handleSubmit = async () => {
+    const processedTags = formData.tags || []; // Handle undefined tags
+    await onSubmit({
+      ...formData,
+      tags: processedTags,
+      user_id: userId // Add user_id to submission
+    });
+  };
 
   // Don't render the modal if there's no task to edit
   if (!task) return null;
@@ -386,7 +391,7 @@ export function EditTaskModal({
                 <Text style={{ color: '#AAA' }}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                onPress={() => onSubmit(formData)}
+                onPress={handleSubmit}
                 disabled={!formData.title || !formData.scheduled_for || isSubmitting}
                 style={{
                   backgroundColor: !formData.title || !formData.scheduled_for ? 'rgba(40, 40, 40, 0.8)' : themeColor,

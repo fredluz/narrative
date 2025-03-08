@@ -13,6 +13,7 @@ import { CreateQuestModal } from '../modals/CreateQuestModal';
 import { EditQuestModal } from '../modals/EditQuestModal';
 import { CreateTaskModal } from '../modals/CreateTaskModal';
 import { EditTaskModal } from '../modals/EditTaskModal';
+import { useSupabase } from '@/contexts/SupabaseContext';
 
 type QuestStatus = 'Active' | 'On-Hold' | 'Completed';
 type TaskStatus = 'ToDo' | 'InProgress' | 'Done';
@@ -51,6 +52,7 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
   const windowHeight = Dimensions.get('window').height;
   const [updatingTaskId, setUpdatingTaskId] = useState<number | null>(null);
   const { reload } = useQuests(); // Get the reload function from useQuests
+  const { session } = useSupabase();
   
   // Update selectedQuest when currentMainQuest changes
   React.useEffect(() => {
@@ -170,6 +172,7 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
 
   // Update an existing task
   const handleUpdateTask = async (data: any) => {
+    
     if (!taskBeingEdited) return;
     
     try {
@@ -275,7 +278,7 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
         is_main: data.is_main,
       };
       
-      await createQuest(questData);
+      await createQuest(questData,);
       setCreateQuestModalVisible(false);
       reload();
     } catch (error) {
@@ -882,7 +885,8 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
         }}
         onSubmit={handleUpdateQuest}
         isSubmitting={isSubmitting}
-        quest={questBeingEdited} // Remove non-null assertion
+        quest={questBeingEdited}
+        userId={session?.user?.id}
       />
 
       <CreateTaskModal
@@ -890,6 +894,7 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
         onClose={() => setCreateModalVisible(false)}
         onSubmit={handleCreateTask}
         isSubmitting={isSubmitting}
+        userId={session?.user?.id}
       />
 
       <EditTaskModal
@@ -901,6 +906,7 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
         onSubmit={handleUpdateTask}
         isSubmitting={isSubmitting}
         task={taskBeingEdited} // Remove non-null assertion
+        userId={session?.user?.id}
       />
     </View>
   );
