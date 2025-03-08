@@ -17,12 +17,15 @@ import styles, { colors } from '@/app/styles/global';
 
 import { useTasks, updateTaskStatus, getNextStatus, TaskStatus } from '@/services/tasksService';
 import { useQuestUpdate } from '@/contexts/QuestUpdateContext';
+import { useSupabase } from '@/contexts/SupabaseContext';
+import { validateUserId } from '@/utils/authHelpers';
 
 interface TaskListProps {
   compactMode?: boolean;
 }
 
 export function TaskList({ compactMode = false }: TaskListProps) {
+  const { session } = useSupabase();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -77,9 +80,12 @@ export function TaskList({ compactMode = false }: TaskListProps) {
   }, [shouldUpdate]);
 
   const toggleTaskCompletion = async (taskId: number, currentStatus: string) => {
+    if (!session?.user?.id) return;
+    
     try {
+      const userId = validateUserId(session.user.id);
       const newStatus = getNextStatus(currentStatus);
-      await updateTaskStatus(taskId, newStatus);
+      await updateTaskStatus(taskId, newStatus, userId);
       
       // Update the local state
       const updatedTasks = tasks.map(task => 

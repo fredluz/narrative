@@ -1,6 +1,13 @@
 import { TaskRecommendation } from '@/services/TaskRecommendationParser';
 import { ChatAgent } from './ChatAgent';
 
+function validateUserId(userId: string | undefined): string {
+  if (!userId) {
+    throw new Error('User ID is required but was not provided');
+  }
+  return userId;
+}
+
 export class TaskStrategizer extends ChatAgent {
   async generateRecommendations(context: {
     dailyEntry: any;
@@ -8,16 +15,9 @@ export class TaskStrategizer extends ChatAgent {
     currentTasks: any[];
     quests: any[];
     aiAnalysis: string;
+    userId: string; // Add userId to context
   }): Promise<TaskRecommendation[]> {
-    const prompt = this.buildStrategizerPrompt(context);
-    const response = await this.getCompletion([
-      {
-        role: 'system',
-        content: `You are a tactical strategist AI that helps plan and prioritize tasks. You analyze the user's current situation, progress, and goals to suggest the most impactful next actions.
-        
-        Given the user's daily journal entries, checkups, current tasks, active quests, and general analysis, your job is to suggest 3-4 specific, actionable tasks for tomorrow that will:
-        1. Maintain momentum on important work
-        2. Address any blockers or challenges identified
+    const validUserId = validateUserId(context.userId);
         3. Make progress on key quests
         4. Help achieve longer-term goals
 

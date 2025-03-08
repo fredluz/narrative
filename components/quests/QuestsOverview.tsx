@@ -14,6 +14,7 @@ import { EditQuestModal } from '../modals/EditQuestModal';
 import { CreateTaskModal } from '../modals/CreateTaskModal';
 import { EditTaskModal } from '../modals/EditTaskModal';
 import { useSupabase } from '@/contexts/SupabaseContext';
+import { validateUserId } from '@/utils/authHelpers';
 
 type QuestStatus = 'Active' | 'On-Hold' | 'Completed';
 type TaskStatus = 'ToDo' | 'InProgress' | 'Done';
@@ -142,14 +143,16 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
 
   // Create a new task
   const handleCreateTask = async (data: any) => {
-    if (!selectedQuest) return;
+    if (!selectedQuest || !session?.user?.id) return;
     
     try {
       setIsSubmitting(true);
+      const userId = validateUserId(session.user.id);
       
       const taskData = {
         ...data,
-        quest_id: selectedQuest.id
+        quest_id: selectedQuest.id,
+        user_id: userId
       };
       
       const newTask = await createTask(taskData);
@@ -173,14 +176,16 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
   // Update an existing task
   const handleUpdateTask = async (data: any) => {
     
-    if (!taskBeingEdited) return;
+    if (!taskBeingEdited || !session?.user?.id) return;
     
     try {
       setIsSubmitting(true);
+      const userId = validateUserId(session.user.id);
       
       // Ensure location is never undefined for the database
       const updatedTask = {
         ...data,
+        user_id: userId,
         updated_at: new Date().toISOString()
       };
       
@@ -188,6 +193,7 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
         .from('tasks')
         .update(updatedTask)
         .eq('id', taskBeingEdited.id)
+        .eq('user_id', userId)
         .select();
       
       if (error) throw error;
@@ -214,10 +220,14 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
 
   // Add function to handle task status toggle
   const toggleTaskCompletion = async (task: any) => {
+    if (!session?.user?.id) return;
+
     try {
       setUpdatingTaskId(task.id);
+      const userId = validateUserId(session.user.id);
       const newStatus = getNextStatus(task.status);
-      await updateTaskStatus(task.id, newStatus);
+      
+      await updateTaskStatus(task.id, newStatus, userId);
       
       // Update local state
       if (selectedQuest && selectedQuest.tasks) {
@@ -265,20 +275,18 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
 
   // Create a new quest
   const handleCreateQuest = async (data: QuestFormData) => {
+    if (!session?.user?.id) return;
+
     try {
       setIsSubmitting(true);
+      const userId = validateUserId(session.user.id);
       
       const questData = {
-        title: data.title,
-        tagline: data.tagline,
-        description: data.description,
-        status: data.status,
-        start_date: data.start_date,
-        end_date: data.end_date,
-        is_main: data.is_main,
+        ...data,
+        user_id: userId
       };
       
-      await createQuest(questData,);
+      await createQuest(questData);
       setCreateQuestModalVisible(false);
       reload();
     } catch (error) {
@@ -290,19 +298,15 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
 
   // Update an existing quest
   const handleUpdateQuest = async (data: QuestFormData) => {
-    if (!questBeingEdited) return;
+    if (!questBeingEdited || !session?.user?.id) return;
     
     try {
       setIsSubmitting(true);
+      const userId = validateUserId(session.user.id);
       
       const questData = {
-        title: data.title,
-        tagline: data.tagline,
-        description: data.description,
-        status: data.status,
-        start_date: data.start_date,
-        end_date: data.end_date,
-        is_main: data.is_main,
+        ...data,
+        user_id: userId
       };
       
       await updateQuest(questBeingEdited.id, questData);
