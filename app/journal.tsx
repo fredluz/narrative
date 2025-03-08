@@ -164,27 +164,6 @@ export default function JournalScreen() {
                 : "Explore patterns and insights from your journal entries. I analyze your entries to help you understand your journey better."}
             </ThemedText>
           </Card>
-
-          {/* Main Content */}
-          <JournalPanel 
-            themeColor={themeColor} 
-            textColor="#FFF" 
-            fullColumnMode={true}
-            showAnalysis={selectedSection === 'analysis'}
-            currentDate={selectedDate}
-            onDailyEntrySaved={() => setSelectedSection('analysis')}
-          >
-            {selectedSection === 'analysis' && (
-              <AIAnalysis
-                analysis={getAiResponses(selectedDate)?.analysis || null}
-                loading={false}
-                themeColor={themeColor}
-                expanded={true}
-                quests={quests}
-                onCreateTask={handleCreateTask}
-              />
-            )}
-          </JournalPanel>
         </View>
       </ScrollView>
     </SafeAreaView>

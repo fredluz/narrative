@@ -263,6 +263,9 @@ export function JournalPanel({
       setAiGenerating(true);
       setLocalError(null);
       
+      // Navigate to daily review page immediately
+      router.push('/daily-review');
+      
       const dateStr = currentDate.toISOString().split('T')[0];
       // This creates a journal entry and updates the checkup_entries.daily_entry_id
       const newDailyEntry = await journalService.saveDailyEntry(dateStr);
@@ -280,11 +283,11 @@ export function JournalPanel({
       // Clean response and analysis
       if (cleanResponse) {
         cleanResponse = cleanResponse.replace(/^["']|["']$/g, ''); // Remove surrounding quotes
-        cleanResponse = cleanResponse.replace(/^johnny silverhands response:\s*/i, ''); // Remove prefix
+        cleanResponse = cleanResponse.replace(/^Johnny Silverhands response:\s*/i, ''); // Remove prefix
       }
       if (cleanAnalysis) {
         cleanAnalysis = cleanAnalysis.replace(/^["']|["']$/g, ''); // Remove surrounding quotes
-        cleanAnalysis = cleanAnalysis.replace(/^johnny silverhands response:\s*/i, ''); // Remove prefix
+        cleanAnalysis = cleanAnalysis.replace(/^Johnny Silverhand's response:\s*/i, ''); // Remove prefix
       }
       
       setAiResponse(cleanResponse);
@@ -297,7 +300,7 @@ export function JournalPanel({
       setLocalLoading(false);
       setAiGenerating(false);
     }
-  }, [currentDate, refreshEntries, getAiResponses]);
+  }, [currentDate, refreshEntries, router, getAiResponses]);
 
   const loading = localLoading;
   const error = localError;

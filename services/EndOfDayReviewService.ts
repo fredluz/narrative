@@ -1,7 +1,9 @@
 import { supabase } from '@/lib/supabase';
 import { journalService, JournalEntry, CheckupEntry } from './journalService';
 import { getTasksByDate } from './tasksService';
+import { TaskStrategizer } from './agents/TaskStrategizer';
 import type { Task } from '@/app/types';
+import type { TaskRecommendation } from './TaskRecommendationParser';
 
 export interface DailyStats {
   checkupsCount: number;
@@ -18,14 +20,15 @@ export interface DailyReview {
   checkups: CheckupEntry[];
   tasks: Task[];
   analysis: string | null;
-  recommendations: any[]; // Will be replaced with proper type
+  recommendations: TaskRecommendation[];
   tomorrowTasks: Task[];
 }
 
 export class EndOfDayReviewService {
-  static async generateDailyStats(date: string): Promise<DailyStats> {
+  private static taskStrategizer = new TaskStrategizer();
+
+  private static async generateDailyStats(date: string): Promise<DailyStats> {
     try {
-      // Get all relevant data for the day
       const checkups = await journalService.getCheckupEntries(date);
       const tasks = await getTasksByDate(date);
       

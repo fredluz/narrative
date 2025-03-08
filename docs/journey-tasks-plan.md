@@ -1,124 +1,186 @@
 # Journey Tasks Feature
 
 ## Overview
-Implement automatic task creation from Johnny's AI analysis recommendations in journal entries. 
-The system will parse the analysis output for task suggestions and create appropriate tasks with 
-proper categorization and quest linking.
+A system for managing tasks within quests, with intelligent task suggestions and progression tracking. Integrates with daily reviews and journal entries to provide context-aware task recommendations.
+
+## Components
+
+### Data Layer
+1. Task Management
+   - Task creation, updating, deletion
+   - Status tracking
+   - Quest associations
+   - Priority levels
+   - Scheduling and deadlines
+
+2. Task Recommendations
+   - Context gathering from multiple sources
+   - AI-powered task suggestions
+   - Priority inference
+   - Quest alignment detection
+   - User feedback tracking
+
+### UI Components
+Displayed as a component in a section of daily-review.tsx
+1. Task List Display
+   - Grouped by status
+   - Priority indicators
+   - Quest associations
+   - Progress tracking
+
+2. Task Creation/Edit Forms
+   - Basic task details
+   - Quest linking
+   - Priority setting
+   - Scheduling options
+
+3. Recommendation Interface
+   - AI suggested tasks display
+   - Quick-add buttons
+   - Edit before adding capability
+   - Quest matching preview
 
 ## Implementation Steps
-1. Create a TaskRecommendationParser service
-   - ✅ Parse analysis text for task sections
-   - ✅ Extract task details (title, description, priority)
-   - ✅ Map recommendations to appropriate quests
 
-2. Extend CreateTaskModal
-   - ✅ Add support for quest_id selection
-   - ✅ Add priority field
-   - ✅ Support task recommendations display
-   - ✅ Add quest matching suggestions
-   - ✅ Smart quest auto-selection based on tags
+1. Core Task Management
+   - ✅ Create task database schema
+   - ✅ Implement basic CRUD operations
+   - ✅ Add status management
+   - ✅ Set up quest associations
 
-3. Add TaskRecommendation component
-   - ✅ Display parsed recommendations
-   - ✅ Create standalone TaskRecommendation component
-   - ✅ Integrate with AIAnalysis component
-   - ✅ Show quest matching suggestions
-   - ✅ Add task creation interface
+2. Task Creation Flow
+   - ✅ Build create/edit forms
+   - ✅ Add validation
+   - ✅ Implement quest linking
+   - ✅ Add priority settings
 
-4. Update JournalService
-   - Add methods to extract task recommendations
-   - Link tasks to journal entries
-   - Store reference to originating analysis
+3. Task Recommendations (New)
+   - [ ] Create TaskStrategizer agent
+     * Context gathering from journal entries
+     * Analysis of current tasks and quests
+     * Priority inference logic
+     * Quest matching algorithms
+   - [ ] Integrate with daily review
+     * Generate recommendations during review
+     * Store recommendations in review data
+     * Update recommendations on journal changes
+   - [ ] Add recommendation UI
+     * Display suggested tasks
+     * Quick-add functionality
+     * Edit-before-add capability
+     * Quest match preview
+   - [ ] Add feedback tracking
+     * Track acceptance rate
+     * Monitor task completion
+     * Gather quest match accuracy
+     * Store effectiveness metrics
+
+4. Task Progress Tracking
+   - [ ] Implement status updates
+   - [ ] Add progress indicators
+   - [ ]Create timeline view
+   - [ ] Add milestone tracking
+
+5. Integration Features
+   - ✅ Connect with journal entries
+   - ✅ Link to daily reviews
+   - [ ] Implement task sharing
+   - [ ] Add export options
 
 ## Technical Requirements
-- Pattern matching for task extraction
-- Quest categorization algorithm
-- Task priority inference
-- Batch task creation API
 
-## Database Changes
-- Add task_recommendations table
-  - recommendation_id
-  - journal_entry_id
-  - analysis_text
-  - created_at
-  - status (pending/accepted/rejected)
+### AI Integration
+1. Context Collection
+   - Journal entries and analysis
+   - Current task status
+   - Active quests
+   - Recent progress patterns
+   - User preferences
 
-- Add fields to tasks table
-  - recommendation_id (nullable, foreign key)
-  - analysis_context (text)
-  - priority_score
+2. Recommendation Generation
+   - Priority inference rules
+   - Quest matching logic
+   - Task dependency awareness
+   - Workload balancing
 
-## UI Components
-1. TaskRecommendationCard
-   - ✅ Display single recommendation
-   - ✅ Show matching quest tags
-   - ✅ Priority indicator with color coding
-   - ✅ Create task button
+3. Feedback Loop
+   - Track recommendation acceptance
+   - Monitor completion rates
+   - Measure quest match accuracy
+   - Adjust based on patterns
 
-2. TaskRecommendationList
-   - ✅ List all recommendations
-   - ✅ Integrated task creation
-   - ✅ Priority-based styling
+### UI/UX Requirements
+1. Quick Task Addition
+   - One-click accept button
+   - Edit before accepting
+   - Batch accept option
+   - Custom priority override
 
-3. Extended CreateTaskModal
-   - ✅ Quest selection dropdown
-   - ✅ Priority field with visual indicators
-   - ✅ Source recommendation display
-   - ✅ Auto-population of fields from recommendation
+2. Quest Matching
+   - Show potential quest matches
+   - Confidence indicators
+   - Manual override options
+   - Quick-link interface
+
+3. Visual Feedback
+   - Priority color coding
+   - Quest match highlighting
+   - Progress indicators
+   - Status transitions
 
 ## Testing Strategy
-1. Parser Tests
-   - Various analysis formats
-   - Edge cases
+1. Unit Tests
+   - Task CRUD operations
+   - Recommendation generation
+   - Quest matching logic
    - Priority inference
 
-2. UI Tests
-   - Recommendation display
-   - Task creation flow
-   - Quest matching
-
-3. Integration Tests
-   - End-to-end flow
+2. Integration Tests
+   - Journal entry integration
+   - Review system connection
    - Database consistency
-   - Analysis linking
+   - API interactions
+
+3. UI Tests
+   - Task creation flow
+   - Recommendation interactions
+   - Quest linking
+   - Status updates
+
+## Performance Considerations
+- Batch recommendation processing
+- Caching of context data
+- Lazy loading of task history
+- Efficient quest matching
+- Optimized database queries
 
 ## WORK SO FAR
 ### Completed
-- ✅ Created planning document
-- ✅ Implemented TaskRecommendationParser service with priority inference
-- ✅ Extended CreateTaskModal with quest and priority support
-- ✅ Added recommendation handling to CreateTaskModal
-- ✅ Implemented smart quest matching based on task tags
-- ✅ Created TaskRecommendation component
-- ✅ Integrated TaskRecommendation into AIAnalysis
-- ✅ Added automatic quest matching from recommendation tags
-- ✅ Implemented task priority inference from recommendation text
-- ✅ Added support for switching to Analysis view after daily entry
-- ✅ Integrated task creation workflow in journal interface
+- ✅ Basic task management
+- ✅ Task creation/edit UI
+- ✅ Status tracking
+- ✅ Quest associations
+- ✅ Priority system
+- ✅ Basic progress tracking
 
 ### In Progress
-- [ ] Testing recommendation parsing with various AI response formats
-- [ ] Adding persistence layer for recommendations
-- [ ] Implementing status tracking for recommendations
+- 🔄 TaskStrategizer agent development
+- 🔄 Recommendation UI components
+- [ ] Feedback tracking system
+- [ ] Performance optimizations
 
 ### Next Steps
-1. Add database schema for recommendation tracking
-2. Implement recommendation persistence in JournalService
-3. Add task status tracking for recommendations
-4. Add batch task creation support
-5. Add success/error notifications for task creation
+1. Complete TaskStrategizer agent
+2. Implement recommendation UI
+3. Add recommendation storage
+4. Set up feedback tracking
+5. Test recommendation quality
+6. Optimize performance
+7. Add batch operations
 
-### Today's Progress Notes
-1. Successfully implemented task creation from Johnny's analysis recommendations
-2. Integrated recommendation parsing into AIAnalysis component
-3. Added smart quest matching based on task content
-4. Improved task priority inference system
-5. Added automatic view switching after daily entry creation
-
-Key features implemented:
-- Task recommendations parsed from Battle Plan sections
-- Priority inference from recommendation text
-- Quest tag suggestions based on task content
-- Seamless integration with existing task creation flow
-- Improved UX with automatic view transitions
+### Known Issues
+1. Task suggestions need more context
+2. Quest matching needs refinement
+3. Priority inference needs tuning
+4. Performance with large datasets
+5. UI responsiveness
