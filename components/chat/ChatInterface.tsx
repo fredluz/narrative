@@ -144,29 +144,6 @@ export function ChatInterface({
         backgroundColor: '#151515',
       }} />
       
-      {/* Digital noise effect */}
-      <View style={{
-        position: 'absolute',
-        top: 0,
-        height: '100%',
-        width: 40,
-        right: 20,
-        opacity: 0.05,
-        backgroundColor: themeColor,
-      }} />
-
-      {/* Glitch line - very cyberpunk */}
-      <View style={{
-        position: 'absolute',
-        top: '40%',
-        left: -10,
-        width: '120%',
-        height: 1,
-        backgroundColor: secondaryColor,
-        opacity: 0.15,
-        transform: [{ rotate: '0.5deg' }],
-      }} />
-      
       {/* Chat header */}
       <View style={{ 
         flexDirection: 'row',

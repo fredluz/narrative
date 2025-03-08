@@ -12,9 +12,10 @@ import { fetchQuests } from '@/services/questsService';
 
 export default function JournalScreen() {
   const { themeColor, secondaryColor } = useTheme();
-  const { currentDate, goToPreviousDay, goToNextDay, setCurrentDate } = useJournal();
+  const { currentDate, getAiResponses } = useJournal();
   const [selectedSection, setSelectedSection] = useState<'entries' | 'analysis'>('entries');
   const [quests, setQuests] = useState<Array<{ id: number; title: string }>>([]);
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
 
   // Load quests on mount
   useEffect(() => {
@@ -54,7 +55,7 @@ export default function JournalScreen() {
   };
 
   const handleDateSelect = (date: Date) => {
-    setCurrentDate(date);
+    setSelectedDate(date);
   };
 
   return (
@@ -82,7 +83,7 @@ export default function JournalScreen() {
                 key={date.toISOString()}
                 style={[
                   journalStyles.dateButton,
-                  date.toDateString() === currentDate.toDateString() && {
+                  date.toDateString() === selectedDate.toDateString() && {
                     borderColor: themeColor,
                     backgroundColor: 'rgba(30, 30, 30, 0.9)',
                   }
@@ -91,7 +92,7 @@ export default function JournalScreen() {
               >
                 <ThemedText style={[
                   journalStyles.dateText,
-                  date.toDateString() === currentDate.toDateString() && {
+                  date.toDateString() === selectedDate.toDateString() && {
                     color: themeColor,
                   }
                 ]}>
@@ -170,10 +171,20 @@ export default function JournalScreen() {
             textColor="#FFF" 
             fullColumnMode={true}
             showAnalysis={selectedSection === 'analysis'}
-            quests={quests}
-            onCreateTask={handleCreateTask}
+            currentDate={selectedDate}
             onDailyEntrySaved={() => setSelectedSection('analysis')}
-          />
+          >
+            {selectedSection === 'analysis' && (
+              <AIAnalysis
+                analysis={getAiResponses(selectedDate)?.analysis || null}
+                loading={false}
+                themeColor={themeColor}
+                expanded={true}
+                quests={quests}
+                onCreateTask={handleCreateTask}
+              />
+            )}
+          </JournalPanel>
         </View>
       </ScrollView>
     </SafeAreaView>

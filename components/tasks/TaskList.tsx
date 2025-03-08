@@ -138,17 +138,6 @@ export function TaskList({ compactMode = false }: TaskListProps) {
         backgroundColor: themeColor,
       }} />
 
-      {/* Glitch line - very cyberpunk */}
-      <View style={{
-        position: 'absolute',
-        top: '70%',
-        left: -10,
-        width: '120%',
-        height: 1,
-        backgroundColor: secondaryColor,
-        opacity: 0.15,
-        transform: [{ rotate: '-1deg' }],
-      }} />
       
       <View style={{ 
         flexDirection: 'row',

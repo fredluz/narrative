@@ -1,7 +1,3 @@
----
-description: GitHub Copilot Instructions
-globs: *.md
----
 <copilot>
   <header>
     GitHub Copilot Instructions
@@ -78,6 +74,8 @@ globs: *.md
     </guidelines>
     
    <template>
+
+  <section>
     <issue>
 
       <problem>
@@ -109,7 +107,9 @@ globs: *.md
       </explanation>
       
     </issue>
+</section>
 
+  <section>
     <issue>
       <problem>
       LLM prompt effectiveness diminished by poor content ordering
@@ -140,7 +140,9 @@ globs: *.md
       to the last thing said.
       </explanation>
     </issue>
+</section>
 
+  <section>
     <issue>
       <problem>
       Feature Implementation Planning and Progress Tracking
@@ -200,6 +202,60 @@ globs: *.md
       - No critical components are overlooked
       </explanation>
     </issue>
+  </section>
+
+  <section>
+    <title>Function Import Practices</title>
+    <context>
+    When importing functions between services or components, we need to be careful about what we import and how we use it. Import only what's needed for the specific use case, and avoid importing UI-specific hooks in service files.
+    </context>
+
+    <guidelines>
+    1. Service-to-Service Imports
+       - Import direct database operation functions, not React hooks
+       - Example: Import getTasksByDate(), not useTasks()
+       - Service files should be pure business logic without UI dependencies
+
+    2. React Hook Usage
+       - Only use hooks in React components or custom hooks
+       - Never import hooks into service files
+       - If you need data in a service, import the underlying data function
+
+    3. Common Pitfalls
+       - Trying to use React hooks (useTasks, useJournal, etc.) in service files
+       - Importing entire service modules when only specific functions are needed
+       - Circular dependencies from mixing UI and business logic
+
+    4. Best Practices
+       - Keep service files focused on data operations and business logic
+       - Export both hooks (for components) and pure functions (for services)
+       - Use clear naming: get* for data fetching, use* for React hooks
+    </guidelines>
+
+    <examples>
+    - Good: import { getTasksByDate } from './tasksService'
+    - Bad: import { useTasks } from './tasksService'
+
+    - Good:
+    ```typescript
+    // In tasksService.ts
+    export async function getTasksByDate() { /* ... */ }
+    export function useTasks() { /* ... */ }
+
+    // In EndOfDayReviewService.ts
+    import { getTasksByDate } from './tasksService'
+    ```
+
+    - Bad:
+    ```typescript
+    // In EndOfDayReviewService.ts
+    import { useTasks } from './tasksService'
+    ```
+    </examples>
+
+    <explanation>
+    This pattern ensures proper separation of concerns between UI logic (React hooks) and business/data logic (service functions). Services should never depend on React-specific features, making them more portable and easier to test.
+    </explanation>
   </section>
 
   <metadata>

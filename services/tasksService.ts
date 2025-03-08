@@ -44,6 +44,37 @@ async function fetchTasksByQuest(questId: number): Promise<Task[]> {
   return data || [];
 }
 
+export async function getTasksByDate(date: string): Promise<Task[]> {
+  console.log('Fetching tasks for date:', date);
+  const startOfDay = `${date}T00:00:00`;
+  const endOfDay = `${date}T23:59:59`;
+
+  const { data, error } = await supabase
+    .from('tasks')
+    .select(`
+      *,
+      quest:quests!quest_id (
+        id,
+        title,
+        tagline,
+        is_main,
+        status,
+        start_date,
+        end_date
+      )
+    `)
+    .gte('scheduled_for', startOfDay)
+    .lte('scheduled_for', endOfDay)
+    .order('scheduled_for', { ascending: true });
+
+  if (error) {
+    console.error('Error fetching tasks by date:', error);
+    throw error;
+  }
+
+  return data || [];
+}
+
 // New function to update task status in Supabase
 export async function updateTaskStatus(taskId: number, newStatus: TaskStatus): Promise<void> {
   console.log(`Updating task ${taskId} to ${newStatus} in Supabase`);

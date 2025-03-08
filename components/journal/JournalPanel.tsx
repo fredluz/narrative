@@ -363,17 +363,6 @@ export function JournalPanel({
         }} />
       </View>
 
-      {/* Glitch line - very cyberpunk */}
-      <View style={{
-        position: 'absolute',
-        top: '30%',
-        left: -10,
-        width: '120%',
-        height: 2,
-        backgroundColor: themeColor,
-        opacity: 0.15,
-        transform: [{ rotate: '-1deg' }],
-      }} />
 
       <View style={[journalStyles.journalHeader, { padding: 15, borderBottomWidth: 1, borderBottomColor: 'rgba(255, 255, 255, 0.1)' }]}>
         <TouchableOpacity 
@@ -560,20 +549,7 @@ export function JournalPanel({
         padding: 15, 
         flexDirection: 'column' 
       }}>
-        <ThemedText style={[styles.cardDetails, { 
-          paddingLeft: 15,
-          paddingBottom: 10,
-          borderLeftWidth: 3,
-          borderLeftColor: 'rgba(255, 255, 255, 0.1)',
-          marginLeft: 15,
-          fontSize: 14,
-          color: '#AAA',
-        }]}>
-          {formattedDate}
-          {checkups.length > 0 && (
-            <Text style={{ color: '#888' }}> • {checkups.length} checkup{checkups.length !== 1 ? 's' : ''} today</Text>
-          )}
-        </ThemedText>
+       
         
         {error ? (
           <View style={{ 

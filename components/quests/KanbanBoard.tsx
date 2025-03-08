@@ -177,19 +177,6 @@ export function KanbanBoard({ mainQuest, onViewAllQuests }: KanbanProps) {
           }}
         />
 
-        {/* Glitch line */}
-        <View
-          style={{
-            position: 'absolute',
-            top: '50%',
-            left: -10,
-            width: '120%',
-            height: 1,
-            backgroundColor: secondaryColor,
-            opacity: 0.15,
-            transform: [{ rotate: '0.3deg' }],
-          }}
-        />
 
         {/* Main quest header section */}
         <View style={[questStyles.cardHeader, { borderBottomColor: 'rgba(255, 255, 255, 0.1)' }]}>
@@ -317,19 +304,6 @@ export function KanbanBoard({ mainQuest, onViewAllQuests }: KanbanProps) {
         }}
       />
 
-      {/* Glitch line */}
-      <View
-        style={{
-          position: 'absolute',
-          top: '50%',
-          left: -10,
-          width: '120%',
-          height: 1,
-          backgroundColor: secondaryColor,
-          opacity: 0.15,
-          transform: [{ rotate: '0.3deg' }],
-        }}
-      />
 
       {/* Main quest header section */}
       <View style={[questStyles.cardHeader, { borderBottomColor: 'rgba(255, 255, 255, 0.1)' }]}>
