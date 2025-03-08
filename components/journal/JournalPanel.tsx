@@ -14,7 +14,6 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { JournalEntryInput } from './JournalEntryInput';
 import { CheckupItem } from './CheckupItem';
 import { AIResponse } from './AIResponse';
-import { AIAnalysis } from './AIAnalysis';
 
 export function JournalPanel({ 
   themeColor, 
@@ -311,9 +310,10 @@ export function JournalPanel({
       borderColor: themeColor, 
       borderWidth: 1, 
       borderLeftWidth: 3, 
-      height: fullColumnMode ? '100%' : 'auto',
+      height: fullColumnMode ? 'auto' : 'auto',
       flex: fullColumnMode ? 1 : undefined, // Changed 'auto' to undefined
       marginTop: fullColumnMode ? 0 : 20,
+      marginBottom: fullColumnMode ? -5 : 20,
     }]}>
       {/* Background with subtle gradient effect */}
       <View style={{ 
@@ -324,226 +324,159 @@ export function JournalPanel({
         borderLeftColor: themeColor,
         borderLeftWidth: 3,
       }} />
-      
-      {/* Create cyberpunk-style overlay effect - more performance-friendly */}
-      <View style={{
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        opacity: 0.07,
-        height: '100%',
-      }}>
-        {/* Horizontal lines */}
-        <View style={{ 
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          height: '100%',
-          width: '100%',
-          backgroundColor: 'transparent',
-          borderStyle: 'dotted',
-          borderTopWidth: 1,
-          borderBottomWidth: 0,
-          borderLeftWidth: 0,
-          borderRightWidth: 0,
-          borderColor: 'rgba(255,255,255,0.1)',
-          borderRadius: 1
-        }} />
+    
+      <View style={[journalStyles.journalHeader, { 
+        padding: 15, 
+        borderBottomWidth: 1, 
+        borderBottomColor: 'rgba(255, 255, 255, 0.1)', 
+        alignItems: 'center', // Center items vertically
+        justifyContent: 'space-between', // Align items to the right
+        flexDirection: 'row', // Ensure row direction for header, starting from the right
+        width: '100%', // Ensure full width
+        gap: 10 // Add consistent space between items
+      }]}>
         
-        {/* Digital noise effect */}
-        <View style={{
-          position: 'absolute',
-          top: 0,
-          height: '100%',
-          width: 60,
-          right: 20,
-          opacity: 0.05,
-          backgroundColor: themeColor,
-        }} />
-      </View>
-
-
-      <View style={[journalStyles.journalHeader, { padding: 15, borderBottomWidth: 1, borderBottomColor: 'rgba(255, 255, 255, 0.1)' }]}>
+        <TouchableOpacity 
+            style={[journalStyles.updateButton, { 
+              backgroundColor: 'rgba(30, 30, 30, 0.9)',
+              borderWidth: 1,
+              borderColor: themeColor,
+              padding: 10,
+              shadowColor: themeColor,
+              shadowOffset: { width: 0, height: 0 },
+              shadowOpacity: 0.5,
+              shadowRadius: 5,
+              elevation: 5,
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginHorizontal: 10 // Add margin for consistent spacing
+            }]}
+            onPress={() => router.push('/journal')}
+          >
+            <Text style={{ 
+              color: brightAccent, 
+              fontSize: 22,
+              textShadowColor: themeColor,
+              textShadowOffset: { width: 0, height: 0 },
+              textShadowRadius: 4
+            }}>
+              📓
+            </Text>
+          </TouchableOpacity>
+        <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
         <TouchableOpacity 
           style={{ 
             padding: 8, 
             borderRadius: 4, 
-            backgroundColor: 'rgba(20, 20, 20, 0.7)'
+            backgroundColor: 'rgba(20, 20, 20, 0.7)',
+            marginHorizontal: 10 // Add margin for consistent spacing
           }}
           onPress={goToPreviousDay}
         >
           <MaterialIcons name="chevron-left" size={24} color={brightAccent} />
         </TouchableOpacity>
-        
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <View style={{ flexDirection: 'column', alignItems: 'center' }}>
-            <ThemedText style={[questStyles.mainQuestTitle, { 
-              fontSize: 20,
-              color: '#FFFFFF',
-              textShadowColor: themeColor,
-              textShadowOffset: { width: 1, height: 1 },
-              textShadowRadius: 5
-            }]}>
-              {showAnalysis ? 'ANALYSIS' : "TODAY'S"}
-            </ThemedText>
-            <ThemedText style={{ 
-              fontSize: 12,
-              color: '#AAA',
-              marginTop: 2
-            }}>
-              {currentDate.toLocaleDateString('en-US', { 
-                day: '2-digit',
-                month: '2-digit'
-              })}
-            </ThemedText>
-          </View>
+        <View style={{ flexDirection: 'column', alignItems: 'center', flex: 1 }}>
+          <ThemedText style={[questStyles.mainQuestTitle, { 
+            fontSize: 20,
+            color: '#FFFFFF',
+            textShadowColor: themeColor,
+            textShadowOffset: { width: 1, height: 1 },
+            textShadowRadius: 5,
+            textAlign: 'center',
+          }]}>
+            {showAnalysis ? 'ANALYSIS' : "TODAY'S JOURNAL"}
+          </ThemedText>
+          <ThemedText style={{ 
+            fontSize: 12,
+            color: '#AAA',
+            marginTop: 0
+          }}>
+            {currentDate.toLocaleDateString('pt-pt', { 
+              day: '2-digit',
+              month: '2-digit'
+            })}
+          </ThemedText>
           
-          <TouchableOpacity 
-            onPress={goToNextDay}
-            style={{
-              marginHorizontal: 8,
-            }}
-          >
-            <MaterialIcons name="chevron-right" size={24} color={brightAccent} />
-          </TouchableOpacity>
-
-          <View style={{ flexDirection: 'column', alignItems: 'center' }}>
-            <ThemedText style={[questStyles.mainQuestTitle, { 
-              fontSize: 20,
-              color: '#FFFFFF',
-              textShadowColor: themeColor,
-              textShadowOffset: { width: 1, height: 1 },
-              textShadowRadius: 5
-            }]}>
-              JOURNAL
-            </ThemedText>
-            <ThemedText style={{ 
-              fontSize: 12,
-              color: '#AAA',
-              marginTop: 2
-            }}>
-              {checkups.length} checkup{checkups.length !== 1 ? 's' : ''}
-            </ThemedText>
-          </View>
         </View>
         
-        <View style={journalStyles.journalHeaderRight}>
-          {/* Refactored buttons row - now vertical without text */}
-          {!showAnalysis && (
-            <View style={{ 
-              flexDirection: 'column', 
-              alignItems: 'center', 
-              gap: 10,
-              marginRight: 10 
-            }}>
-              {/* Button 1: Go to Journal Page */}
-              <TouchableOpacity 
-                style={[journalStyles.updateButton, { 
-                  backgroundColor: 'rgba(30, 30, 30, 0.9)',
-                  borderWidth: 1,
-                  borderColor: themeColor,
-                  padding: 10,
-                  shadowColor: themeColor,
-                  shadowOffset: { width: 0, height: 0 },
-                  shadowOpacity: 0.5,
-                  shadowRadius: 5,
-                  elevation: 5,
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }]}
-                onPress={() => router.push('/journal')}
-              >
+        <TouchableOpacity 
+          onPress={goToNextDay}
+          style={{ 
+            padding: 8, 
+            borderRadius: 4, 
+            backgroundColor: 'rgba(20, 20, 20, 0.7)',
+            marginHorizontal: 10 // Add margin for consistent spacing
+          }}
+        >
+          <MaterialIcons name="chevron-right" size={24} color={brightAccent} />
+        </TouchableOpacity>
+        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flex: 1 }}>
+          
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <TouchableOpacity 
+              style={[journalStyles.updateButton, { 
+                backgroundColor: 'rgba(30, 30, 30, 0.9)',
+                borderWidth: 1,
+                borderColor: amberColor,
+                padding: 10,
+                shadowColor: amberColor,
+                shadowOffset: { width: 0, height: 0 },
+                shadowOpacity: 0.5,
+                shadowRadius: 5,
+                elevation: 5,
+                alignItems: 'center',
+                justifyContent: 'center',
+                opacity: !localEntry.trim() || loading ? 0.5 : 1,
+                marginHorizontal: 10 // Add margin for consistent spacing
+              }]}
+              onPress={handleSaveCheckup}
+              disabled={loading || !localEntry.trim()}
+            >
+              {loading ? (
+                <ActivityIndicator size="small" color={amberColor} />
+              ) : (
                 <Text style={{ 
                   color: brightAccent, 
                   fontSize: 22,
-                  textShadowColor: themeColor,
+                  textShadowColor: amberColor,
                   textShadowOffset: { width: 0, height: 0 },
                   textShadowRadius: 4
                 }}>
-                  📓
+                  💾
                 </Text>
-              </TouchableOpacity>
-
-              {/* Button 2: Save Checkup */}
-              <TouchableOpacity 
-                style={[journalStyles.updateButton, { 
-                  backgroundColor: 'rgba(30, 30, 30, 0.9)',
-                  borderWidth: 1,
-                  borderColor: amberColor,
-                  padding: 10,
-                  shadowColor: amberColor,
-                  shadowOffset: { width: 0, height: 0 },
-                  shadowOpacity: 0.5,
-                  shadowRadius: 5,
-                  elevation: 5,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  opacity: !localEntry.trim() || loading ? 0.5 : 1,
-                }]}
-                onPress={handleSaveCheckup}
-                disabled={loading || !localEntry.trim()}
-              >
-                {loading ? (
-                  <ActivityIndicator size="small" color={amberColor} />
-                ) : (
-                  <Text style={{ 
-                    color: brightAccent, 
-                    fontSize: 22,
-                    textShadowColor: amberColor,
-                    textShadowOffset: { width: 0, height: 0 },
-                    textShadowRadius: 4
-                  }}>
-                    💾
-                  </Text>
-                )}
-              </TouchableOpacity>
-
-              {/* Button 3: Save Daily Entry */}
-              <TouchableOpacity 
-                style={[journalStyles.updateButton, { 
-                  backgroundColor: 'rgba(30, 30, 30, 0.9)',
-                  borderWidth: 1,
-                  borderColor: secondaryColor,
-                  padding: 10,
-                  shadowColor: secondaryColor,
-                  shadowOffset: { width: 0, height: 0 },
-                  shadowOpacity: 0.5,
-                  shadowRadius: 5,
-                  elevation: 5,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  opacity: hasDailyEntry || checkups.length === 0 || loading ? 0.5 : 1,
-                }]}
-                onPress={handleDailyEntry}
-                disabled={loading || hasDailyEntry || checkups.length === 0}
-              >
-                <Text style={{ 
-                  color: brightAccent, 
-                  fontSize: 22,
-                  textShadowColor: secondaryColor,
-                  textShadowOffset: { width: 0, height: 0 },
-                  textShadowRadius: 4
-                }}>
-                  🛌
-                </Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          <TouchableOpacity 
-            style={{ 
-              padding: 8, 
-              borderRadius: 4, 
-              backgroundColor: 'rgba(20, 20, 20, 0.7)'
-            }}
-            onPress={goToNextDay}
-          >
-            <MaterialIcons name="chevron-right" size={24} color={brightAccent} />
-          </TouchableOpacity>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[journalStyles.updateButton, { 
+                backgroundColor: 'rgba(30, 30, 30, 0.9)',
+                borderWidth: 1,
+                borderColor: secondaryColor,
+                padding: 10,
+                shadowColor: secondaryColor,
+                shadowOffset: { width: 0, height: 0 },
+                shadowOpacity: 0.5,
+                shadowRadius: 5,
+                elevation: 5,
+                alignItems: 'center',
+                justifyContent: 'center',
+                opacity: hasDailyEntry || checkups.length === 0 || loading ? 0.5 : 1,
+                marginHorizontal: 10 // Add margin for consistent spacing
+              }]}
+              onPress={handleDailyEntry}
+              disabled={loading || hasDailyEntry || checkups.length === 0}
+            >
+              <Text style={{ 
+                color: brightAccent, 
+                fontSize: 22,
+                textShadowColor: secondaryColor,
+                textShadowOffset: { width: 0, height: 0 },
+                textShadowRadius: 4
+              }}>
+                🛌
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
 
@@ -579,7 +512,12 @@ export function JournalPanel({
               <View style={{ maxHeight: 250 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
                   <MaterialIcons name="history" size={16} color={themeColor} style={{ marginRight: 6 }} />
-                  <Text style={{ color: themeColor, fontWeight: 'bold', fontSize: 14 }}>TODAY'S CHECKUPS</Text>
+                  <Text style={{ color: themeColor, fontWeight: 'bold', fontSize: 14 }}>
+                    TODAY'S <Text style=
+                            {{ color: brightAccent, fontWeight: 'bold', fontSize: 14
+                               }}>
+              {checkups.length}</Text> CHECKUP{checkups.length !== 1 ? 'S' : ''}
+                  </Text>
                 </View>
                 <ScrollView style={{ maxHeight: 210 }}>
                   {checkups.map((checkup) => (
