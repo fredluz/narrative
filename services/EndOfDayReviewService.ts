@@ -5,14 +5,6 @@ import { TaskStrategizer } from './agents/TaskStrategizer';
 import type { Task } from '@/app/types';
 import type { TaskRecommendation } from './TaskRecommendationParser';
 
-// Helper function to validate userId
-function validateUserId(userId: string | undefined): string {
-  if (!userId) {
-    throw new Error('User ID is required but was not provided');
-  }
-  return userId;
-}
-
 export interface DailyStats {
   checkupsCount: number;
   tasksCompleted: number;
@@ -37,9 +29,10 @@ export class EndOfDayReviewService {
 
   private static async generateDailyStats(date: string, userId: string): Promise<DailyStats> {
     try {
-      const validUserId = validateUserId(userId);
-      const checkups = await journalService.getCheckupEntries(date, validUserId);
-      const tasks = await getTasksByDate(date, validUserId);
+      const [checkups, tasks] = await Promise.all([
+        journalService.getCheckupEntries(date, userId),
+        getTasksByDate(date, userId)
+      ]);
       
       // Calculate stats
       const tasksCompleted = tasks.filter(t => t.status === 'Done').length;
@@ -107,28 +100,27 @@ export class EndOfDayReviewService {
 
   static async getDailyReview(date: string, userId: string): Promise<DailyReview> {
     try {
-      const validUserId = validateUserId(userId);
       // Check if we already have a review
       const { data: existingReview } = await supabase
         .from('end_of_day_reviews')
         .select('*')
         .eq('date', date)
-        .eq('user_id', validUserId)
+        .eq('user_id', userId)
         .single();
 
       if (existingReview) {
-        return this.formatReviewData(existingReview, date, validUserId);
+        return this.formatReviewData(existingReview, date, userId);
       }
 
       // Generate new review
       const [stats, checkups, tasks, dailyEntry, tomorrowTasks] = await Promise.all([
-        this.generateDailyStats(date, validUserId),
-        journalService.getCheckupEntries(date, validUserId),
-        getTasksByDate(date, validUserId),
-        journalService.getEntry(date, validUserId),
+        this.generateDailyStats(date, userId),
+        journalService.getCheckupEntries(date, userId),
+        getTasksByDate(date, userId),
+        journalService.getEntry(date, userId),
         getTasksByDate(
           new Date(new Date(date).getTime() + 86400000).toISOString().split('T')[0],
-          validUserId
+          userId
         )
       ]);
 
@@ -138,12 +130,12 @@ export class EndOfDayReviewService {
         checkups,
         tasks,
         analysis: dailyEntry?.ai_analysis || null,
-        recommendations: [], // Will be populated by AI
+        recommendations: [],
         tomorrowTasks
       };
 
       // Save the review with user_id
-      await this.saveDailyReview(review, validUserId);
+      await this.saveDailyReview(review, userId);
 
       return review;
     } catch (error) {
@@ -154,18 +146,17 @@ export class EndOfDayReviewService {
 
   private static async saveDailyReview(review: DailyReview, userId: string) {
     try {
-      const validUserId = validateUserId(userId);
       const { error } = await supabase
         .from('end_of_day_reviews')
         .insert({
           date: review.date,
           productivity_score: review.stats.productivity,
           mood_score: review.stats.mood,
-          key_insights: [], // Will be populated by AI
-          challenges: [], // Will be populated by AI
-          wins: [], // Will be populated by AI
-          focus_areas: [], // Will be populated by AI,
-          user_id: validUserId
+          key_insights: [],
+          challenges: [],
+          wins: [],
+          focus_areas: [],
+          user_id: userId
         });
 
       if (error) throw error;
@@ -176,15 +167,14 @@ export class EndOfDayReviewService {
   }
 
   private static async formatReviewData(data: any, date: string, userId: string): Promise<DailyReview> {
-    const validUserId = validateUserId(userId);
     // Get current data for the review
     const [checkups, tasks, dailyEntry, tomorrowTasks] = await Promise.all([
-      journalService.getCheckupEntries(date, validUserId),
-      getTasksByDate(date, validUserId),
-      journalService.getEntry(date, validUserId),
+      journalService.getCheckupEntries(date, userId),
+      getTasksByDate(date, userId),
+      journalService.getEntry(date, userId),
       getTasksByDate(
         new Date(new Date(date).getTime() + 86400000).toISOString().split('T')[0],
-        validUserId
+        userId
       )
     ]);
 

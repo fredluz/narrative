@@ -14,7 +14,6 @@ import { EditQuestModal } from '../modals/EditQuestModal';
 import { CreateTaskModal } from '../modals/CreateTaskModal';
 import { EditTaskModal } from '../modals/EditTaskModal';
 import { useSupabase } from '@/contexts/SupabaseContext';
-import { validateUserId } from '@/utils/authHelpers';
 
 type QuestStatus = 'Active' | 'On-Hold' | 'Completed';
 type TaskStatus = 'ToDo' | 'InProgress' | 'Done';
@@ -43,6 +42,9 @@ interface QuestFormData {
   start_date?: string;
   end_date?: string;
   is_main: boolean;
+  user_id: string;  // Made optional since it's added in handleCreateQuest
+  created_at?: string;
+  updated_at?: string;
 }
 
 export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: QuestsOverviewProps) {
@@ -84,7 +86,8 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
     tagline: '',
     description: '', // Initialize description field
     status: 'Active',
-    is_main: false
+    is_main: false,
+    user_id: session?.user?.id || ''  // Initialize user_id field
   });
 
   const filteredQuests = quests.filter(q => q.status === activeTab);
@@ -128,6 +131,17 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
 
   // Open edit task modal and populate with existing task data
   const openEditTaskModal = (task: Task) => {
+    if (!session?.user?.id) {
+      console.warn("User not logged in. Cannot edit task.");
+      return;
+    }
+    
+    // Verify task ownership
+    if (task.user_id !== session.user.id) {
+      console.error("Cannot edit task: User does not own this task");
+      return;
+    }
+
     setTaskBeingEdited(task);
     setFormData({
       title: task.title,
@@ -147,12 +161,10 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
     
     try {
       setIsSubmitting(true);
-      const userId = validateUserId(session.user.id);
-      
       const taskData = {
         ...data,
         quest_id: selectedQuest.id,
-        user_id: userId
+        user_id: session.user.id
       };
       
       const newTask = await createTask(taskData);
@@ -160,8 +172,6 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
       // Update local state
       if (selectedQuest && selectedQuest.tasks) {
         selectedQuest.tasks = [...selectedQuest.tasks, newTask];
-        
-        // Force a re-render
         setSelectedQuest({...selectedQuest});
       }
       
@@ -175,17 +185,13 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
 
   // Update an existing task
   const handleUpdateTask = async (data: any) => {
-    
     if (!taskBeingEdited || !session?.user?.id) return;
     
     try {
       setIsSubmitting(true);
-      const userId = validateUserId(session.user.id);
-      
-      // Ensure location is never undefined for the database
       const updatedTask = {
         ...data,
-        user_id: userId,
+        user_id: session.user.id,
         updated_at: new Date().toISOString()
       };
       
@@ -193,7 +199,7 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
         .from('tasks')
         .update(updatedTask)
         .eq('id', taskBeingEdited.id)
-        .eq('user_id', userId)
+        .eq('user_id', session.user.id)
         .select();
       
       if (error) throw error;
@@ -205,8 +211,6 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
             ? { ...t, ...data } 
             : t
         );
-        
-        // Force a re-render
         setSelectedQuest({...selectedQuest});
       }
       
@@ -219,15 +223,14 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
   };
 
   // Add function to handle task status toggle
-  const toggleTaskCompletion = async (task: any) => {
+  const toggleTaskCompletion = async (task: Task) => {
     if (!session?.user?.id) return;
 
     try {
       setUpdatingTaskId(task.id);
-      const userId = validateUserId(session.user.id);
       const newStatus = getNextStatus(task.status);
       
-      await updateTaskStatus(task.id, newStatus, userId);
+      await updateTaskStatus(task.id, newStatus, session.user.id);
       
       // Update local state
       if (selectedQuest && selectedQuest.tasks) {
@@ -236,7 +239,6 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
         );
       }
       
-      // Force a re-render
       setSelectedQuest({...selectedQuest!});
     } catch (error) {
       console.error('Failed to update task status:', error);
@@ -247,19 +249,35 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
 
   // Reset form data for new quest
   const openCreateQuestModal = () => {
+    if (!session?.user?.id) {
+      console.warn("User not logged in. Cannot create quest.");
+      return;
+    }
     setQuestFormData({
       title: '',
       tagline: '',
-      description: '', // Initialize description field
+      description: '',
       status: 'Active',
       start_date: format(new Date(), 'yyyy-MM-dd'),
-      is_main: false
+      is_main: false,
+      user_id: session.user.id
     });
     setCreateQuestModalVisible(true);
   };
 
   // Open edit quest modal and populate with existing quest data
   const openEditQuestModal = (quest: Quest) => {
+    if (!session?.user?.id) {
+      console.warn("User not logged in. Cannot edit quest.");
+      return;
+    }
+
+    // Verify quest ownership
+    if (quest.user_id !== session.user.id) {
+      console.error("Cannot edit quest: User does not own this quest");
+      return;
+    }
+
     setQuestBeingEdited(quest);
     setQuestFormData({
       title: quest.title,
@@ -268,25 +286,29 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
       status: quest.status,
       start_date: quest.start_date || '',
       end_date: quest.end_date || '',
-      is_main: quest.is_main
+      is_main: quest.is_main,
+      user_id: session.user.id
     });
     setEditQuestModalVisible(true);
   };
 
   // Create a new quest
   const handleCreateQuest = async (data: QuestFormData) => {
-    if (!session?.user?.id) return;
+    if (!session?.user?.id) {
+      console.error("User not logged in. Cannot create quest.");
+      return;
+    }
 
     try {
       setIsSubmitting(true);
-      const userId = validateUserId(session.user.id);
-      
       const questData = {
         ...data,
-        user_id: userId
+        user_id: session.user.id,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
       };
       
-      await createQuest(questData, session.user.id);
+      await createQuest(questData);
       setCreateQuestModalVisible(false);
       reload();
     } catch (error) {
@@ -298,18 +320,20 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
 
   // Update an existing quest
   const handleUpdateQuest = async (data: QuestFormData) => {
-    if (!questBeingEdited || !session?.user?.id) return;
+    if (!questBeingEdited || !session?.user?.id) {
+      console.error("User not logged in or no quest selected. Cannot update quest.");
+      return;
+    }
     
     try {
       setIsSubmitting(true);
-      const userId = validateUserId(session.user.id);
-      
       const questData = {
         ...data,
-        user_id: userId
+        user_id: session.user.id,
+        updated_at: new Date().toISOString()
       };
       
-      await updateQuest(questBeingEdited.id, questData, session.user.id);
+      await updateQuest(questBeingEdited.id, questData);
       setEditQuestModalVisible(false);
       reload();
     } catch (error) {

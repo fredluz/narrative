@@ -4,10 +4,12 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { ChatAgent } from '@/services/agents/ChatAgent';
 import { supabase } from '@/lib/supabase';
 import { useSupabase } from '@/contexts/SupabaseContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const INACTIVITY_TIMEOUT = 5 * 60 * 1000; // 5 minutes in milliseconds
-const JOHNNY_RESPONSE_DELAY = 2000; // 2 seconds delay before Johnny replies
-const MESSAGE_STAGGER_DELAY = 1000; // 1 second between sequential messages
+const INACTIVITY_TIMEOUT = 5 * 60 * 1000;
+const JOHNNY_RESPONSE_DELAY = 2000;
+const MESSAGE_STAGGER_DELAY = 1000;
+const LOCAL_STORAGE_KEY = 'chat_messages_local'; // key for local storage
 
 export function useChatData() {
   const { themeColor } = useTheme();
@@ -17,6 +19,7 @@ export function useChatData() {
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [sessionEnded, setSessionEnded] = useState(false);
   const [checkupCreated, setCheckupCreated] = useState(false);
+  const [error, setError] = useState<string | null>(null); // Add error state for auth issues
   const chatAgent = new ChatAgent();
   const inactivityTimerRef = useRef<NodeJS.Timeout | null>(null);
   const currentSessionMessagesRef = useRef<ChatMessage[]>([]);
@@ -34,8 +37,18 @@ export function useChatData() {
     currentSessionMessagesRef.current = getCurrentSessionMessages();
   }, [messages, getCurrentSessionMessages]);
 
-  // Reset inactivity timer
+  // Reset inactivity timer with stronger auth check
   const resetInactivityTimer = useCallback(() => {
+    // Clear any existing error
+    setError(null);
+    
+    // Strong guard clause for authentication
+    if (!session?.user?.id) {
+      console.error('Cannot reset inactivity timer: No user ID');
+      setError('Authentication required');
+      return;
+    }
+
     if (inactivityTimerRef.current) {
       clearTimeout(inactivityTimerRef.current);
     }
@@ -43,10 +56,32 @@ export function useChatData() {
     setCheckupCreated(false);
 
     inactivityTimerRef.current = setTimeout(async () => {
+      const userId = session.user.id; // Cache userId for use in closure
+      if (!userId) {
+        console.error('User ID missing in timer execution');
+        return;
+      }
+      
       const sessionMessages = currentSessionMessagesRef.current;
       if (sessionMessages.length > 0) {
         try {
-          const sessionId = await chatAgent.summarizeAndStoreSession(sessionMessages);
+          // Verify all messages belong to current user before proceeding
+          const allMessagesOwnedByUser = sessionMessages.every(msg => 
+            !msg.user_id || msg.user_id === userId);
+            
+          if (!allMessagesOwnedByUser) {
+            console.error('Security issue: Found messages not owned by current user');
+            return;
+          }
+          
+          // All messages should have the same user_id
+          const sessionMessagesWithUserId = sessionMessages.map(msg => ({
+            ...msg,
+            user_id: userId
+          }));
+          
+          const sessionId = await chatAgent.summarizeAndStoreSession(sessionMessagesWithUserId);
+          
           // Update local messages with new session ID
           setMessages(prev => prev.map(msg => 
             sessionMessages.some(sMsg => sMsg.id === msg.id) 
@@ -61,82 +96,154 @@ export function useChatData() {
         }
       }
     }, INACTIVITY_TIMEOUT);
-  }, []);
+  }, [session?.user?.id]);
 
+  // End session with stronger auth check
   const endSession = useCallback(async () => {
-    const sessionMessages = currentSessionMessagesRef.current;
-    if (sessionMessages.length > 0) {
-      try {
-        const sessionId = await chatAgent.summarizeAndStoreSession(sessionMessages);
-        // Update local messages with new session ID
-        setMessages(prev => prev.map(msg => 
-          sessionMessages.some(sMsg => sMsg.id === msg.id) 
-            ? { ...msg, chat_session_id: sessionId }
-            : msg
-        ));
-        setCurrentSessionId(null);
-        setSessionEnded(true);
-        setCheckupCreated(true); // Mark that we've created a checkup
-      } catch (error) {
-        console.error('Error summarizing session:', error);
-      }
+    // Strong guard clause for authentication
+    if (!session?.user?.id) {
+      console.error('Cannot end session: No user ID');
+      setError('Authentication required to end session');
+      return;
     }
-  }, []);
 
-  // Load initial messages and set up real-time subscription
-  useEffect(() => {
-    // Load initial messages
-    const loadMessages = async () => {
-      if (!session?.user?.id) return;
-
-      const { data, error } = await supabase
-        .from('chat_messages')
-        .select('*')
-        .eq('user_id', session.user.id)
-        .is('chat_session_id', null)  // Only get messages without a session ID
-        .order('created_at', { ascending: true });
-
-      if (error) {
-        console.error('Error loading messages:', error);
+    const userId = session.user.id;
+    const sessionMessages = currentSessionMessagesRef.current;
+    
+    // If no messages, just end the session without creating a record
+    if (sessionMessages.length === 0) {
+      setSessionEnded(true);
+      return;
+    }
+    
+    try {
+      // Verify all messages belong to current user
+      const allMessagesOwnedByUser = sessionMessages.every(msg => 
+        !msg.user_id || msg.user_id === userId);
+        
+      if (!allMessagesOwnedByUser) {
+        console.error('Security issue: Found messages not owned by current user');
+        setError('Cannot end session: Message ownership verification failed');
         return;
       }
+      
+      // Ensure all messages have user_id
+      const sessionMessagesWithUserId = sessionMessages.map(msg => ({
+        ...msg,
+        user_id: userId
+      }));
+      
+      const sessionId = await chatAgent.summarizeAndStoreSession(sessionMessagesWithUserId);
+      
+      // Update local messages with new session ID
+      setMessages(prev => prev.map(msg => 
+        sessionMessages.some(sMsg => sMsg.id === msg.id) 
+          ? { ...msg, chat_session_id: sessionId }
+          : msg
+      ));
+      setCurrentSessionId(null);
+      setSessionEnded(true);
+      setCheckupCreated(true); // Mark that we've created a checkup
+    } catch (error) {
+      console.error('Error summarizing session:', error);
+      setError('Failed to end session: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    }
+  }, [session?.user?.id]);
 
-      setMessages(data || []);
-    };
-
-    loadMessages();
-
-    // Set up real-time subscription
-    const subscription = supabase
-      .channel('chat_messages')
-      .on('postgres_changes', 
-        { 
-          event: '*', 
-          schema: 'public', 
-          table: 'chat_messages',
-          filter: `user_id=eq.${session?.user?.id}`
-        }, 
-        (payload) => {
-          if (payload.eventType === 'INSERT') {
-            const newMessage = payload.new as ChatMessage;
-            // Only add message if it's not part of a session
-            if (!newMessage.chat_session_id) {
-              setMessages(prev => [...prev, newMessage]);
-              resetInactivityTimer();
-            }
-          }
+  // Remove real-time subscription useEffect block completely
+  useEffect(() => {
+    // Instead load messages from DB and local storage once
+    setMessages([]);
+    if (!session?.user?.id) {
+      console.log('No active user session, skipping message loading');
+      return;
+    }
+    const userId = session.user.id;
+    
+    const loadLocalMessages = async () => {
+      try {
+        const key = `${LOCAL_STORAGE_KEY}_${userId}`;
+        const stored = await AsyncStorage.getItem(key);
+        if (stored) {
+          const parsed: ChatMessage[] = JSON.parse(stored);
+          const valid = parsed.filter(msg => !msg.chat_session_id && msg.user_id === userId);
+          setMessages(valid);
         }
-      )
-      .subscribe();
-
-    // Cleanup subscription
-    return () => {
-      subscription.unsubscribe();
-      if (inactivityTimerRef.current) {
-        clearTimeout(inactivityTimerRef.current);
+      } catch (err) {
+        console.error('Error loading messages from local storage:', err);
       }
     };
+    
+    const loadDatabaseMessages = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('chat_messages')
+          .select('*')
+          .eq('user_id', userId)
+          .is('chat_session_id', null)
+          .order('created_at', { ascending: true });
+        if (error) {
+          console.error('Error loading messages from database:', error);
+          return;
+        }
+        const valid = data?.filter(msg => msg.user_id === userId) || [];
+        setMessages(prev => {
+          const map = new Map(prev.map(msg => [String(msg.id), msg]));
+          valid.forEach(msg => map.set(String(msg.id), msg));
+          return Array.from(map.values()).sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+        });
+      } catch (err) {
+        console.error('Exception loading messages from DB:', err);
+      }
+    };
+    
+    loadLocalMessages().then(loadDatabaseMessages);
   }, [resetInactivityTimer, session?.user?.id]);
+
+  // Save local messages whenever they change
+  useEffect(() => {
+    const saveLocal = async () => {
+      if (!session?.user?.id) return;
+      try {
+        const key = `${LOCAL_STORAGE_KEY}_${session.user.id}`;
+        await AsyncStorage.setItem(key, JSON.stringify(getCurrentSessionMessages()));
+      } catch (err) {
+        console.error('Error saving messages to local storage:', err);
+      }
+    };
+    saveLocal();
+  }, [messages, getCurrentSessionMessages, session?.user?.id]);
+
+  // Add helper: sync unsynced messages to DB
+  const syncMessages = useCallback(async () => {
+    if (!session?.user?.id) return;
+    const userId = session.user.id;
+    try {
+      // Read from local storage
+      const key = `${LOCAL_STORAGE_KEY}_${userId}`;
+      const stored = await AsyncStorage.getItem(key);
+      if (!stored) return;
+      const localMessages: ChatMessage[] = JSON.parse(stored);
+      // For example, assume messages with string id starting with "client" are unsynced
+      const unsynced = localMessages.filter(msg => String(msg.id).startsWith('client'));
+      for (const msg of unsynced) {
+        try {
+          const { data, error } = await supabase
+            .from('chat_messages')
+            .insert([msg])
+            .select()
+            .single();
+          if (error) throw error;
+          // Update local state: replace client id with server id
+          setMessages(prev => prev.map(m => (m.id === msg.id ? { ...data, id: data.id } : m)));
+        } catch (syncError) {
+          console.error('Error syncing message:', syncError);
+        }
+      }
+    } catch (err) {
+      console.error('Error in syncMessages:', err);
+    }
+  }, [session?.user?.id]);
 
   // Handle user typing
   const handleTyping = useCallback((text: string) => {
@@ -148,121 +255,123 @@ export function useChatData() {
     lastMessageRef.current = text;
   }, []);
 
-  // Handle message sending
-  const sendMessage = useCallback(async (messageText: string) => {
-    if (!messageText.trim() || !session?.user?.id) return;
-
-    // Create user message
+  // Modify sendMessage to only update local storage & state immediately for AI responses
+  const sendMessage = useCallback(async (messageText: string, userId?: string) => {
+    // Clear any existing errors first
+    setError(null);
+    
+    // Strong auth check - prefer explicit userId parameter, fallback to session
+    const authenticatedUserId = userId || session?.user?.id;
+    
+    if (!messageText.trim() || !authenticatedUserId) {
+      const errorMsg = !authenticatedUserId 
+        ? 'Authentication required to send messages'
+        : 'Message cannot be empty';
+        
+      console.error(`Cannot send message: ${errorMsg}`);
+      setError(errorMsg);
+      return;
+    }
+    
+    // Use a client-generated numeric id (negative) for optimistic update
+    const clientUserId = -Date.now();
     const userMessage: ChatMessage = {
-      id: Date.now(),
+      id: clientUserId,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       is_user: true,
       message: messageText.trim(),
       chat_session_id: currentSessionId || undefined,
-      user_id: session.user.id
+      user_id: authenticatedUserId
     };
 
-    // Add to pending messages
+    // OPTIMISTIC UPDATE: Add message to local state first for immediate UI update
+    setMessages(prev => [...prev, userMessage]);
+    
+    // Add to pending messages for AI response
     pendingMessagesRef.current.push(userMessage);
 
-    try {
-      // Save user message to Supabase - local state will update via subscription
-      const { error: saveError } = await supabase
-        .from('chat_messages')
-        .insert([userMessage]);
+    // Instead of awaiting DB insert immediately, let the sync function handle it later
+    // (Optional: you can trigger syncMessages() after a delay if desired.)
 
-      if (saveError) throw saveError;
+    // Clear any existing timer
+    if (johnnyResponseTimerRef.current) {
+      clearTimeout(johnnyResponseTimerRef.current);
+    }
 
-      // Clear any existing timer
-      if (johnnyResponseTimerRef.current) {
-        clearTimeout(johnnyResponseTimerRef.current);
-      }
+    // Set new timer for Johnny's response
+    johnnyResponseTimerRef.current = setTimeout(async () => {
+      setIsTyping(true);
+      try {
+        // Get all pending messages and ensure they have user_id
+        const pendingMessages = [...pendingMessagesRef.current].map(msg => ({
+          ...msg,
+          user_id: authenticatedUserId
+        }));
+        
+        const combinedMessage = pendingMessages
+          .map(msg => msg.message)
+          .join('\n');
 
-      // Set new timer for Johnny's response
-      johnnyResponseTimerRef.current = setTimeout(async () => {
-        // Only proceed with response if user hasn't started typing again
-        setIsTyping(true);
-        try {
-          // Get all pending messages and combine them
-          const pendingMessages = [...pendingMessagesRef.current];
-          const combinedMessage = pendingMessages
-            .map(msg => msg.message)
-            .join('\n');
+        // Clear pending messages
+        pendingMessagesRef.current = [];
 
-          // Clear pending messages
-          pendingMessagesRef.current = [];
-
-          // Get Johnny's response to all messages - returns string[] (multiple messages)
-          const responseMessages = await chatAgent.generateChatResponse(combinedMessage);
-          console.log('Received response messages:', responseMessages);
-          
-          // Process each message with a delay between them
-          for (let i = 0; i < responseMessages.length; i++) {
-            const sendAIMessage = async () => {
-              const message = responseMessages[i];
-              console.log(`Sending AI message ${i+1}/${responseMessages.length}:`, message);
-              
-              // Create AI response message
-              const aiMessage: ChatMessage = {
-                id: Date.now() + 1000 + (i * 100), // Ensure unique IDs with more spacing
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-                is_user: false,
-                message: message,
-                chat_session_id: currentSessionId || undefined,
-                user_id: session.user.id
-              };
-              
-              // Save to Supabase
-              const { error: aiSaveError } = await supabase
-                .from('chat_messages')
-                .insert([aiMessage]);
-              
-              if (aiSaveError) {
-                console.error('Error inserting AI message part:', aiSaveError);
-              }
-              
-              // Only stop typing indication after last message
-              if (i === responseMessages.length - 1) {
-                setIsTyping(false);
-              }
+        // Pass userId explicitly to generateChatResponse
+        const responseMessages = await chatAgent.generateChatResponse(combinedMessage, authenticatedUserId);
+        
+        // Process each message with a delay between them
+        for (let i = 0; i < responseMessages.length; i++) {
+          const sendAIMessage = async () => {
+            const message = responseMessages[i];
+            
+            // Use a client-generated numeric id (negative) for AI message
+            const clientAiId = -(Date.now() + i);
+            const aiMessage: ChatMessage = {
+              id: clientAiId,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+              is_user: false,
+              message: message,
+              chat_session_id: currentSessionId || undefined,
+              user_id: authenticatedUserId // Explicit user ID assignment
             };
             
-            // Use setTimeout for sequential delays
-            setTimeout(sendAIMessage, i * MESSAGE_STAGGER_DELAY);
-          }
-
-          resetInactivityTimer();
-        } catch (error) {
-          console.error('Error in Johnny\'s response:', error);
-          const errorMessage: ChatMessage = {
-            id: Date.now() + 1,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-            is_user: false,
-            message: "Damn netrunners must be messing with our connection. Try again in a bit.",
-            chat_session_id: currentSessionId || undefined,
-            user_id: session.user.id
+            // OPTIMISTIC UPDATE: Add AI message to local state immediately
+            setMessages(prev => [...prev, aiMessage]);
+            
+            // Also let syncMessages() handle sending to DB later.
+            if (i === responseMessages.length - 1) {
+              setIsTyping(false);
+            }
           };
-
-          // Save error message to Supabase - local state will update via subscription
-          try {
-            await supabase
-              .from('chat_messages')
-              .insert([errorMessage]);
-          } catch (insertError) {
-            console.error('Error saving error message:', insertError);
-          } finally {
-            setIsTyping(false);
-          }
+          
+          setTimeout(sendAIMessage, i * MESSAGE_STAGGER_DELAY);
         }
-      }, JOHNNY_RESPONSE_DELAY);
 
-    } catch (error) {
-      console.error('Error in sendMessage:', error);
-    }
-  }, [currentSessionId, resetInactivityTimer, session?.user?.id]);
+        resetInactivityTimer();
+      } catch (error) {
+        console.error('Error in Johnny\'s response:', error);
+        
+        // Handle error with proper user_id
+        const clientErrorId = -Date.now();
+        const errorMessage: ChatMessage = {
+          id: clientErrorId,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          is_user: false,
+          message: "Damn netrunners must be messing with our connection. Try again in a bit.",
+          chat_session_id: currentSessionId || undefined,
+          user_id: authenticatedUserId // Explicit user ID assignment
+        };
+
+        // OPTIMISTIC UPDATE: Add error message to local state
+        setMessages(prev => [...prev, errorMessage]);
+
+        setIsTyping(false);
+      }
+    }, JOHNNY_RESPONSE_DELAY);
+
+  }, [currentSessionId, resetInactivityTimer, session?.user?.id, getCurrentSessionMessages]);
 
   // Cleanup timers on unmount
   useEffect(() => {
@@ -283,6 +392,9 @@ export function useChatData() {
     endSession,
     isTyping,
     sessionEnded,
-    checkupCreated, // Add new state to be exposed
+    checkupCreated,
+    error, // Expose error state for UI feedback
+    authenticated: !!session?.user?.id, // Add authentication status
+    syncMessages // Expose sync function so you can trigger it externally if needed
   };
 }

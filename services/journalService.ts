@@ -12,6 +12,7 @@ export interface JournalEntry {
   ai_analysis: string;
   ai_response: string;
   date?: string; // Client-side convenience property
+  user_id: string; // ADDED
 }
 
 // Checkup entries from checkup_entries table
@@ -23,22 +24,18 @@ export interface CheckupEntry {
   // Foreign key to journal_entries.id (linking each checkup to its associated daily entry)
   daily_entry_id?: number;
   ai_checkup_response?: string; // Add AI response for individual checkups
+  user_id: string; // ADDED
 }
 
 const journalAgent = new JournalAgent();
 
-// Helper function to validate userId
-function validateUserId(userId: string | undefined): string {
-  if (!userId) {
-    throw new Error('User ID is required but was not provided');
-  }
-  return userId;
-}
-
 export const journalService = {
   // Get daily entry for a specific date
   async getEntry(date: string, userId: string): Promise<JournalEntry | null> {
-    const validUserId = validateUserId(userId);
+    if (!userId) {
+      console.error('User ID is missing for getEntry.');
+      return null;
+    }
     console.log('📁 journalService.getEntry called for date:', date);
     const startOfDay = `${date}T00:00:00`;
     const endOfDay = `${date}T23:59:59`;
@@ -46,7 +43,7 @@ export const journalService = {
     const { data, error } = await supabase
       .from('journal_entries')
       .select('*')
-      .eq('user_id', validUserId)
+      .eq('user_id', userId)
       .gte('created_at', startOfDay)
       .lte('created_at', endOfDay)
       .order('created_at', { ascending: false })
@@ -70,19 +67,21 @@ export const journalService = {
 
   // Get daily entries for a date range
   async getEntries(startDate: string, endDate: string, userId: string): Promise<JournalEntry[]> {
-    const validUserId = validateUserId(userId);
+    if (!userId) {
+      console.error('User ID is missing for getEntries.');
+      return [];
+    }
     console.log('📁 journalService.getEntries called for range:', startDate, 'to', endDate);
     const startDateTime = `${startDate}T00:00:00`;
     const endDateTime = `${endDate}T23:59:59`;
     
-    let query = supabase
+    const { data, error } = await supabase
       .from('journal_entries')
       .select('*')
-      .eq('user_id', validUserId)
+      .eq('user_id', userId)
       .gte('created_at', startDateTime)
-      .lte('created_at', endDateTime);
-
-    const { data, error } = await query.order('created_at', { ascending: true });
+      .lte('created_at', endDateTime)
+      .order('created_at', { ascending: true });
 
     if (error) {
       console.error('Error fetching journal entries:', error);
@@ -101,7 +100,7 @@ export const journalService = {
     console.log('🤖 journalService.generateAIResponses called for entry ID:', entryId);
     console.log('📝 Content length:', content.length);
     try {
-      const result = await journalAgent.processJournalEntry(content, undefined, userId);
+      const result = await journalAgent.processJournalEntry(content, userId);
       console.log('✅ AI responses generated, response length:', result.response.length, 'analysis length:', result.analysis.length);
       return result;
     } catch (err) {
@@ -114,7 +113,7 @@ export const journalService = {
   async generateResponse(content: string, userId: string): Promise<string> {
     console.log('🤖 journalService.generateResponse called with content length:', content.length);
     try {
-      const response = await journalAgent.generateResponse(content, undefined, userId);
+      const response = await journalAgent.generateResponse(content, userId);
       console.log('✅ AI response generated, length:', response.length);
       return response;
     } catch (err) {
@@ -127,7 +126,7 @@ export const journalService = {
   async generateAnalysis(content: string, userId: string): Promise<string> {
     console.log('🤖 journalService.generateAnalysis called with content length:', content.length);
     try {
-      const analysis = await journalAgent.generateAnalysis(content, undefined, userId);
+      const analysis = await journalAgent.generateAnalysis(content, userId);
       console.log('✅ AI analysis generated, length:', analysis.length);
       return analysis;
     } catch (err) {
@@ -138,7 +137,10 @@ export const journalService = {
 
   // Get all checkup entries for a specific date (regardless of daily entry association)
   async getCheckupEntries(date: string, userId: string): Promise<CheckupEntry[]> {
-    const validUserId = validateUserId(userId);
+    if (!userId) {
+      console.error('User ID is missing for getCheckupEntries.');
+      return [];
+    }
     console.log('📁 journalService.getCheckupEntries called for date:', date);
     const startOfDay = `${date}T00:00:00`;
     const endOfDay = `${date}T23:59:59`;
@@ -146,7 +148,7 @@ export const journalService = {
     const { data, error } = await supabase
       .from('checkup_entries')
       .select('*')
-      .eq('user_id', validUserId)
+      .eq('user_id', userId)
       .gte('created_at', startOfDay)
       .lte('created_at', endOfDay)
       .order('created_at', { ascending: true });
@@ -162,13 +164,16 @@ export const journalService = {
 
   // Enhanced saveCheckupEntry to accept an optional AI response parameter
   async saveCheckupEntry(date: string, content: string, userId: string, tags: string[] = [], aiResponse?: string): Promise<CheckupEntry> {
-    const validUserId = validateUserId(userId);
+    if (!userId) {
+      console.error('User ID is required for saveCheckupEntry.');
+      throw new Error('User ID is required');
+    }
     console.log('💾 journalService.saveCheckupEntry called for date:', date);
     console.log('📝 Content length:', content.length, 'Tags:', tags, 'AI response provided:', !!aiResponse);
     try {
       // Get previous checkups for today to provide context
       console.log('🔄 Fetching existing checkups for context');
-      const todaysCheckups = await this.getCheckupEntries(date, validUserId);
+      const todaysCheckups = await this.getCheckupEntries(date, userId);
       
       // Format previous checkups as context with paired responses including full datetime info
       console.log('🔄 Formatting', todaysCheckups.length, 'checkups as context');
@@ -191,7 +196,7 @@ export const journalService = {
       let checkupResponse = aiResponse;
       if (!checkupResponse) {
         console.log('🤖 Generating AI response with context');
-        checkupResponse = await journalAgent.generateResponse(content, previousCheckupsContext, validUserId);
+        checkupResponse = await journalAgent.generateResponse(content, userId, previousCheckupsContext);
       } else {
         console.log('ℹ️ Using provided AI response');
       }
@@ -216,7 +221,7 @@ export const journalService = {
           tags,
           daily_entry_id: null,
           ai_checkup_response: checkupResponse,
-          user_id: validUserId
+          user_id: userId
         }])
         .select()
         .single();
@@ -257,7 +262,10 @@ export const journalService = {
 
   // Get checkup entries that aren't yet linked to a daily entry
   async getUnsavedCheckupEntries(date: string, userId: string): Promise<CheckupEntry[]> {
-    const validUserId = validateUserId(userId);
+    if (!userId) {
+      console.error('User ID is missing for getUnsavedCheckupEntries.');
+      return [];
+    }
     console.log('📁 journalService.getUnsavedCheckupEntries called for date:', date);
     const startOfDay = `${date}T00:00:00`;
     const endOfDay = `${date}T23:59:59`;
@@ -265,7 +273,7 @@ export const journalService = {
     const { data, error } = await supabase
       .from('checkup_entries')
       .select('*')
-      .eq('user_id', validUserId)
+      .eq('user_id', userId)
       .gte('created_at', startOfDay)
       .lte('created_at', endOfDay)
       .is('daily_entry_id', null)
@@ -282,20 +290,21 @@ export const journalService = {
 
   // Updated to optionally include current text as final checkup
   async saveDailyEntry(date: string, userId: string, currentText?: string): Promise<JournalEntry> {
-    const validUserId = validateUserId(userId);
+    if (!userId) {
+      console.error('User ID is required for saveDailyEntry.');
+      throw new Error('User ID is required');
+    }
     console.log('💾 journalService.saveDailyEntry called for date:', date);
     try {
       // If there's current text, save it as a final checkup first
       if (currentText?.trim()) {
         console.log('📝 Saving current text as final checkup');
-        await this.saveCheckupEntry(date, currentText, validUserId, []);
+        await this.saveCheckupEntry(date, currentText, userId, []);
       }
 
       // Get all unlinked checkups for this date
       console.log('🔄 Fetching unlinked checkups for the day');
-      const unsavedCheckups = await this.getUnsavedCheckupEntries(date, validUserId);
-      console.log('ℹ️ Found', unsavedCheckups.length, 'checkups to link to daily entry');
-      // Format checkups with their AI responses paired together with full datetime info
+      const unsavedCheckups = await this.getUnsavedCheckupEntries(date, userId);
       console.log('🔄 Formatting checkups with responses for daily entry');
       const checkupsWithResponses = unsavedCheckups
         .map(entry => {
@@ -327,7 +336,7 @@ export const journalService = {
 
       // Generate AI responses using the enhanced end-of-day prompt with paired data
       console.log('🤖 Generating end-of-day responses');
-      const { response, analysis } = await journalAgent.processEndOfDay(formattedContent, validUserId);
+      const { response, analysis } = await journalAgent.processEndOfDay(formattedContent, userId);
 
       // Use the date parameter to create an end-of-day timestamp
       const entryTimestamp = `${date}T23:59:59`;
@@ -344,7 +353,7 @@ export const journalService = {
           tags: [],
           ai_response: response,  // Use the end-of-day response
           ai_analysis: analysis,   // Use the end-of-day analysis
-          user_id: validUserId
+          user_id: userId
         }])
         .select()
         .single();
@@ -360,7 +369,7 @@ export const journalService = {
       const { error: updateError } = await supabase
         .from('checkup_entries')
         .update({ daily_entry_id: dailyEntryId }) // Set the foreign key
-        .eq('user_id', validUserId)
+        .eq('user_id', userId)
         .is('daily_entry_id', null) // Only update checkups without a daily entry link
         .gte('created_at', `${date}T00:00:00`)
         .lte('created_at', `${date}T23:59:59`);
@@ -380,13 +389,16 @@ export const journalService = {
 
   // Find all checkups associated with a specific daily entry using the foreign key
   async getCheckupsForDailyEntry(dailyEntryId: string, userId: string): Promise<CheckupEntry[]> {
-    const validUserId = validateUserId(userId);
+    if (!userId) {
+      console.error('User ID is missing for getCheckupsForDailyEntry.');
+      return [];
+    }
     console.log('📁 journalService.getCheckupsForDailyEntry called for entry ID:', dailyEntryId);
     try {
       const { data, error } = await supabase
         .from('checkup_entries')
         .select('*')
-        .eq('user_id', validUserId)
+        .eq('user_id', userId)
         .eq('daily_entry_id', dailyEntryId)
         .order('created_at', { ascending: true });
       

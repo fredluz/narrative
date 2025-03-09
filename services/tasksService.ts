@@ -6,17 +6,8 @@ import { useSupabase } from '@/contexts/SupabaseContext';
 // Define types for status
 export type TaskStatus = 'ToDo' | 'InProgress' | 'Done';
 
-// Helper function to validate userId
-function validateUserId(userId: string | undefined): string {
-  if (!userId) {
-    throw new Error('User ID is required but was not provided');
-  }
-  return userId;
-}
-
 // Database operations
 async function fetchTasks(userId: string): Promise<Task[]> {
-  const validUserId = validateUserId(userId);
   console.log('Fetching tasks...');
   const { data, error } = await supabase
     .from('tasks')
@@ -32,7 +23,7 @@ async function fetchTasks(userId: string): Promise<Task[]> {
         end_date
       )
     `)
-    .eq('user_id', validUserId)
+    .eq('user_id', userId)
     .order('scheduled_for', { ascending: true });
 
   if (error) {
@@ -45,12 +36,11 @@ async function fetchTasks(userId: string): Promise<Task[]> {
 }
 
 async function fetchTasksByQuest(questId: number, userId: string): Promise<Task[]> {
-  const validUserId = validateUserId(userId);
   const { data, error } = await supabase
     .from('tasks')
     .select('*')
     .eq('quest_id', questId)
-    .eq('user_id', validUserId)
+    .eq('user_id', userId)
     .order('scheduled_for', { ascending: true });
 
   if (error) throw error;
@@ -58,7 +48,6 @@ async function fetchTasksByQuest(questId: number, userId: string): Promise<Task[
 }
 
 export async function getTasksByDate(date: string, userId: string): Promise<Task[]> {
-  const validUserId = validateUserId(userId);
   console.log('Fetching tasks for date:', date);
   const startOfDay = `${date}T00:00:00`;
   const endOfDay = `${date}T23:59:59`;
@@ -77,7 +66,7 @@ export async function getTasksByDate(date: string, userId: string): Promise<Task
         end_date
       )
     `)
-    .eq('user_id', validUserId)
+    .eq('user_id', userId)
     .gte('scheduled_for', startOfDay)
     .lte('scheduled_for', endOfDay)
     .order('scheduled_for', { ascending: true });
@@ -92,14 +81,13 @@ export async function getTasksByDate(date: string, userId: string): Promise<Task
 
 // New function to update task status in Supabase
 export async function updateTaskStatus(taskId: number, newStatus: TaskStatus, userId: string): Promise<void> {
-  const validUserId = validateUserId(userId);
   console.log(`Updating task ${taskId} to ${newStatus} in Supabase`);
   
   const { error } = await supabase
     .from('tasks')
     .update({ status: newStatus, updated_at: new Date().toISOString() })
     .eq('id', taskId)
-    .eq('user_id', validUserId);
+    .eq('user_id', userId);
   
   if (error) {
     console.error('Error updating task status:', error);
@@ -123,12 +111,10 @@ export async function createTask(taskData: {
   tags?: string[];
   user_id: string;
 }): Promise<Task> {
-  const validUserId = validateUserId(taskData.user_id);
   console.log('Creating new task:', taskData);
   
   const newTask = {
     ...taskData,
-    user_id: validUserId,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
   };
@@ -166,13 +152,12 @@ export function getNextStatus(currentStatus: string): TaskStatus {
 
 // New function to fetch quest tasks in Supabase
 export async function fetchQuestTasks(questId: number, userId: string) {
-  const validUserId = validateUserId(userId);
   try {
     const { data: tasks, error } = await supabase
       .from('tasks')
       .select('*')
       .eq('quest_id', questId)
-      .eq('user_id', validUserId)
+      .eq('user_id', userId)
       .order('scheduled_for', { ascending: true });
 
     if (error) {

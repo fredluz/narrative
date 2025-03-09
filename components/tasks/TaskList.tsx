@@ -18,7 +18,6 @@ import styles, { colors } from '@/app/styles/global';
 import { useTasks, updateTaskStatus, getNextStatus, TaskStatus } from '@/services/tasksService';
 import { useQuestUpdate } from '@/contexts/QuestUpdateContext';
 import { useSupabase } from '@/contexts/SupabaseContext';
-import { validateUserId } from '@/utils/authHelpers';
 
 interface TaskListProps {
   compactMode?: boolean;
@@ -31,7 +30,6 @@ export function TaskList({ compactMode = false }: TaskListProps) {
   const [error, setError] = useState<string | null>(null);
   const { shouldUpdate, resetUpdate } = useQuestUpdate();
   const { themeColor, secondaryColor } = useTheme();
-  const [updatingTaskId, setUpdatingTaskId] = useState<number | null>(null);
   const [containerHeight, setContainerHeight] = useState<number>(0);
   const [availableSpace, setAvailableSpace] = useState<number>(0);
   
@@ -81,10 +79,14 @@ export function TaskList({ compactMode = false }: TaskListProps) {
   }, [shouldUpdate]);
 
   const toggleTaskCompletion = async (taskId: number, currentStatus: string) => {
-    if (!session?.user?.id) return;
+    if (!session?.user?.id) {
+      console.warn("User not logged in. Cannot update task.");
+      setError("User not logged in. Cannot update task.");
+      return;
+    }
     
     try {
-      const userId = validateUserId(session.user.id);
+      const userId = session.user.id;
       const newStatus = getNextStatus(currentStatus);
       await updateTaskStatus(taskId, newStatus, userId);
       

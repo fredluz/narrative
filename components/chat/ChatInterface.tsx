@@ -19,12 +19,13 @@ import { useNavigation } from '@react-navigation/native';
 
 interface Props {
   recentMessages: ChatMessage[];
-  onSendMessage?: (message: string) => Promise<void>;
+  onSendMessage?: (message: string, userId: string) => Promise<void>;
   handleTyping?: (text: string) => void;
   isTyping?: boolean;
   sessionEnded?: boolean;
   checkupCreated?: boolean; // Add new prop
   onEndSession?: () => void;
+  userId: string; // Add required userId prop for RLS
 }
 
 export function ChatInterface({ 
@@ -34,10 +35,12 @@ export function ChatInterface({
   isTyping, 
   sessionEnded,
   checkupCreated,
-  onEndSession
+  onEndSession,
+  userId
 }: Props) {
   const [message, setMessage] = useState('');
   const scrollViewRef = useRef<ScrollView>(null);
+  const [error, setError] = useState<string | null>(null); // Add error state for handling auth issues
   
   // Remove the unused dot animations as we'll use the TriangularSpinner component
   const { themeColor, secondaryColor } = useTheme();
@@ -86,11 +89,23 @@ export function ChatInterface({
   const handleSend = async () => {
     if (message.trim() === '') return;
     
+    // Guard clause for user authentication
+    if (!userId) {
+      console.warn("User not logged in. Cannot send message.");
+      setError("You must be logged in to send messages");
+      return;
+    }
+    
     const messageToSend = message;
     setMessage(''); // Clear immediately for better UX
     
     if (onSendMessage) {
-      await onSendMessage(messageToSend);
+      try {
+        await onSendMessage(messageToSend, userId);
+      } catch (err) {
+        console.error("Error sending message:", err);
+        setError("Failed to send message");
+      }
     }
   };
 
@@ -189,6 +204,7 @@ export function ChatInterface({
               alignItems: 'center',
             }}
             onPress={onEndSession}
+            disabled={!userId} // Disable if not authenticated
           >
             <MaterialIcons 
               name="timer-off" 
@@ -218,6 +234,26 @@ export function ChatInterface({
           contentContainerStyle={{ paddingBottom: 20 }}
           ref={scrollViewRef}
         >
+          {/* Display error message if authentication fails */}
+          {error && (
+            <View style={{
+              padding: 12,
+              marginVertical: 5,
+              borderRadius: 5,
+              backgroundColor: 'rgba(255, 50, 50, 0.2)',
+              borderWidth: 1,
+              borderColor: 'rgba(255, 50, 50, 0.5)',
+              marginBottom: 16,
+            }}>
+              <Text style={{
+                color: '#FFA0A0',
+                fontSize: 14,
+                textAlign: 'center',
+              }}>
+                {error}
+              </Text>
+            </View>
+          )}
           {recentMessages.map((msg, index) => {
             // Clean message text if it's from the AI (not user)
             let messageText = msg.message;
@@ -402,11 +438,11 @@ export function ChatInterface({
             value={message}
             onChangeText={handleMessageChange}
             onKeyPress={handleKeyPress}
-            placeholder="Type your message..."
+            placeholder={!userId ? "Please log in to chat" : "Type your message..."}
             placeholderTextColor="#666"
             blurOnSubmit={false}
             multiline={false} // Changed to false to better handle Enter key
-            editable={!sessionEnded} // Disable input when session has ended
+            editable={!sessionEnded && !!userId} // Disable input when session has ended
           />
           <TouchableOpacity 
             style={{
@@ -422,10 +458,10 @@ export function ChatInterface({
               shadowOpacity: 0.5,
               shadowRadius: 5,
               elevation: 5,
-              opacity: sessionEnded ? 0.5 : 1, // Fade out when disabled
+              opacity: sessionEnded || !userId ? 0.5 : 1, // Fade out when disabled or not authenticated
             }} 
             onPress={handleSend}
-            disabled={sessionEnded} // Disable button when session has ended
+            disabled={sessionEnded || !userId} // Disable button when session has ended
           >
             <MaterialIcons name="send" size={24} color="#FFF" />
           </TouchableOpacity>

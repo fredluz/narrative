@@ -6,14 +6,6 @@ import { journalService } from '../journalService';
 import { QuestAgent } from './QuestAgent';
 import { performanceLogger } from '@/utils/performanceLogger';
 
-// Helper function to validate userId
-function validateUserId(userId: string | undefined): string {
-  if (!userId) {
-    throw new Error('User ID is required but was not provided');
-  }
-  return userId;
-}
-
 export class ChatAgent {
   private openai: OpenAI;
   private questAgent: QuestAgent;
@@ -33,10 +25,14 @@ export class ChatAgent {
     console.log('🚀 ChatAgent.generateResponse called for checkup content');
     
     try {
-      // Validate userId since it's required by journalService
-      const validUserId = validateUserId(userId);
+      // Replace validateUserId with direct check and guard clause
+      if (!userId) {
+        console.error('User ID is required for generateResponse');
+        return "I need to know who you are to respond properly. Authentication issue.";
+      }
+      
       // Use journalService to generate a response, which will in turn use JournalAgent
-      const response = await journalService.generateResponse(content, validUserId);
+      const response = await journalService.generateResponse(content, userId);
       console.log('📥 Generated response for checkup content:', response.substring(0, 100) + '...');
       return response;
     } catch (error) {
@@ -47,25 +43,30 @@ export class ChatAgent {
     }
   }
 
-  async generateChatResponse(message: string): Promise<string[]> { // Changed return type to string[]
+  async generateChatResponse(message: string, userId: string): Promise<string[]> { // Changed return type to string[]
     performanceLogger.startOperation('generateChatResponse');
     try {
+      if (!userId) {
+        console.error('User ID is required for generateChatResponse');
+        return ["Authentication required. Please log in."];
+      }
+
       console.log('\n=== ChatAgent.generateChatResponse ===');
       console.log('Current message:', message);
       
-      // Get user_id from current messages
+      // Get current messages with user_id filter
       performanceLogger.startOperation('fetchCurrentMessages');
       const { data: currentMessages, error: currentError } = await supabase
         .from('chat_messages')
         .select('*')
         .is('chat_session_id', null)
+        .eq('user_id', userId)
         .order('created_at', { ascending: true });
       performanceLogger.endOperation('fetchCurrentMessages');
         
-      if (currentError) throw currentError;
-      const userId = currentMessages?.[0]?.user_id;
-      if (!userId) {
-        throw new Error('No user_id found in current messages');
+      if (currentError) {
+        console.error('Error fetching chat messages:', currentError);
+        throw currentError;
       }
       
       // First check for relevant quests based on the message
@@ -124,16 +125,22 @@ export class ChatAgent {
       // Fetch recent journal entries for additional context
       const { data: recentEntries, error: journalError } = await supabase
         .from('journal_entries')
-        .select('user_entry, ai_response')
+        .select('user_entry, ai_response, user_id')
+        .eq('user_id', userId) // Added user_id filtering
         .order('created_at', { ascending: false })
         .limit(2);
 
-      if (journalError) throw journalError;
+      if (journalError) {
+        console.error('Error fetching journal entries:', journalError);
+        throw journalError;
+      }
       
       // Format journal context
       let journalContext = '';
       if (recentEntries && recentEntries.length > 0) {
-        journalContext = recentEntries.map(entry => 
+        journalContext = recentEntries
+          .filter(entry => entry.user_id === userId)
+          .map(entry => 
           `Journal Entry: "${entry.user_entry}"\nMy Response: "${entry.ai_response}"`
         ).join('\n\n');
       }
@@ -242,6 +249,12 @@ CONVERSATION CONTEXT:
         throw new Error('No user_id found in messages');
       }
 
+      // Verify all messages belong to the same user
+      const invalidMessages = messages.filter(msg => msg.user_id !== userId);
+      if (invalidMessages.length > 0) {
+        throw new Error('Session contains messages from multiple users');
+      }
+
       console.log('\n=== ChatAgent.summarizeAndStoreSession ===');
       console.log('Messages to summarize:', messages.map(m => ({
         role: m.is_user ? 'user' : 'assistant',
@@ -310,18 +323,23 @@ CONVERSATION CONTEXT:
 
       if (sessionError) throw sessionError;
 
-      // Update all messages with the session ID
+      // Update all messages with the session ID, ensuring we only update user's own messages
       const { error: updateError } = await supabase
         .from('chat_messages')
         .update({ chat_session_id: sessionData.id })
-        .in('id', messages.map(m => m.id));
+        .in('id', messages.map(m => m.id))
+        .eq('user_id', userId); // Added user_id filtering here
 
       if (updateError) throw updateError;
       performanceLogger.endOperation('dbOperations');
 
       // Create a checkup entry based on this chat session
       performanceLogger.startOperation('createCheckup');
-      await this.createCheckupEntryFromSession(messages, summary, tags);
+      await this.createCheckupEntryFromSession(
+        messages.filter(m => m.user_id === userId), // Extra safety: only include user's messages
+        summary,
+        tags
+      );
       performanceLogger.endOperation('createCheckup');
 
       return sessionData.id;
@@ -408,6 +426,11 @@ CONVERSATION CONTEXT:
       if (!userId) {
         throw new Error('No user_id found in messages');
       }
+
+      // Verify all messages are from the same user
+      if (messages.some(m => m.user_id !== userId)) {
+        throw new Error('Cannot generate checkup content: Messages from multiple users');
+      }
       
       const today = new Date().toISOString().split('T')[0];
       performanceLogger.startOperation('fetchTodayCheckups');
@@ -480,18 +503,16 @@ IMPORTANT: This is NOT a summary of the conversation - it's a personal journal e
             content: `Here are examples of my previous journal entries today (study these to understand my writing style):
 ${userStyleSamplesContent}
 
-Here's our chat conversation (use ONLY my messages to create the journal entry):
-MY MESSAGES:
-${userMessagesContent}
+Here's our chat conversation:
+${messages}
 
-CONTEXT (for understanding only, do not reference Johnny's responses):
-Johnny's responses: ${johnnyMessagesContent}
+Remember to use ONLY my messages to create a summary of what *I*, the user, talked about. Avoid writing down that I said something when it was actually johnny. Here are MY MESSAGES: ${userMessagesContent}
 
 Write a reflective journal entry from my perspective about what I discussed in my messages, matching my writing style from the previous entries.`
           }
         ],
         temperature: 0.7,
-        max_tokens: 1000
+        max_tokens: 3000
       });
       performanceLogger.endOperation('aiGeneration');
 

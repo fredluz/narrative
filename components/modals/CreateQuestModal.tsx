@@ -10,12 +10,14 @@ type QuestStatus = 'Active' | 'On-Hold' | 'Completed';
 interface QuestFormData {
   title: string;
   tagline: string;
-  description?: string;
+  description: string; // Changed from optional to required
   status: QuestStatus;
   start_date?: string;
   end_date?: string;
   is_main: boolean;
   user_id: string; // Add user_id field
+  created_at?: string;  // Add timestamp fields
+  updated_at?: string;
 }
 
 interface CreateQuestModalProps {
@@ -37,17 +39,22 @@ export function CreateQuestModal({
   const [formData, setFormData] = React.useState<QuestFormData>({
     title: '',
     tagline: '',
-    description: '',
+    description: '', // Initialize with empty string since it's required
     status: 'Active',
     start_date: format(new Date(), 'yyyy-MM-dd'),
     is_main: false,
-    user_id: userId
+    user_id: userId,
+    created_at: new Date().toISOString(),  // Initialize with current timestamp
+    updated_at: new Date().toISOString()
   });
 
   const handleSubmit = async () => {
+    const now = new Date().toISOString();
     await onSubmit({
       ...formData,
-      user_id: userId
+      user_id: userId,
+      created_at: now,  // Always use fresh timestamp when submitting
+      updated_at: now
     });
     setFormData({
       title: '',
@@ -56,7 +63,9 @@ export function CreateQuestModal({
       status: 'Active',
       start_date: format(new Date(), 'yyyy-MM-dd'),
       is_main: false,
-      user_id: userId
+      user_id: userId,
+      created_at: now,
+      updated_at: now
     });
   };
 

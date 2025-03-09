@@ -2,14 +2,6 @@ import { GoogleGenerativeAI, type GenerativeModel } from "@google/generative-ai"
 import { supabase } from '../../lib/supabase';
 import type { Quest, Task } from '@/app/types';
 
-// Helper function to validate userId
-function validateUserId(userId: string | undefined): string {
-  if (!userId) {
-    throw new Error('User ID is required but was not provided');
-  }
-  return userId;
-}
-
 interface TaskRelevanceItem {
     taskId: number;
     name: string;
@@ -44,8 +36,14 @@ export class QuestAgent {
         end_date?: string;
         parent_quest_id?: number;
         tags?: string[];
+        user_id?: string;
     }): Promise<Quest> {
-        const validUserId = validateUserId(userId);
+        // Replace validateUserId with direct check and guard clause
+        if (!userId) {
+            console.error('User ID is required for createQuest');
+            throw new Error('User ID is required');
+        }
+        
         try {
             console.log('🚀 Creating new quest:', questData.title);
 
@@ -53,7 +51,7 @@ export class QuestAgent {
                 .from('quests')
                 .insert({
                     ...questData,
-                    user_id: validUserId,
+                    user_id: userId,
                     status: questData.status || 'Active',
                     is_main: questData.is_main || false,
                     created_at: new Date().toISOString(),
@@ -82,8 +80,14 @@ export class QuestAgent {
         end_date?: string;
         parent_quest_id?: number;
         tags?: string[];
+        user_id?: string;
     }): Promise<Quest> {
-        const validUserId = validateUserId(userId);
+        // Replace validateUserId with direct check and guard clause
+        if (!userId) {
+            console.error('User ID is required for updateQuest');
+            throw new Error('User ID is required');
+        }
+        
         try {
             console.log('🔄 Updating quest:', questId);
 
@@ -94,7 +98,7 @@ export class QuestAgent {
                     updated_at: new Date().toISOString()
                 })
                 .eq('id', questId)
-                .eq('user_id', validUserId)  // Ensure user owns the quest
+                .eq('user_id', userId)  // Ensure user owns the quest
                 .select('*')
                 .single();
 
@@ -109,7 +113,12 @@ export class QuestAgent {
     }
 
     async deleteQuest(questId: number, userId: string): Promise<void> {
-        const validUserId = validateUserId(userId);
+        // Replace validateUserId with direct check and guard clause
+        if (!userId) {
+            console.error('User ID is required for deleteQuest');
+            throw new Error('User ID is required');
+        }
+        
         try {
             console.log('🗑️ Deleting quest:', questId);
 
@@ -118,7 +127,7 @@ export class QuestAgent {
                 .from('tasks')
                 .update({ quest_id: this.MISC_QUEST_ID })
                 .eq('quest_id', questId)
-                .eq('user_id', validUserId);
+                .eq('user_id', userId);
 
             if (taskError) throw taskError;
 
@@ -127,7 +136,7 @@ export class QuestAgent {
                 .from('quests')
                 .delete()
                 .eq('id', questId)
-                .eq('user_id', validUserId);
+                .eq('user_id', userId);
 
             if (error) throw error;
             console.log('✅ Quest deleted successfully');
@@ -353,7 +362,12 @@ OR if relevant:
     }
 
     async findRelevantQuests(journalContent: string, userId: string): Promise<Quest[]> {
-        const validUserId = validateUserId(userId);
+        // Replace validateUserId with direct check and guard clause
+        if (!userId) {
+            console.error('User ID is required for findRelevantQuests');
+            return [];  // Return empty array for read operation
+        }
+        
         try {
             console.log('🔍 QuestAgent: Finding relevant quests for journal entry');
             
@@ -390,7 +404,7 @@ OR if relevant:
                         updated_at
                     )
                 `)
-                .eq('user_id', validUserId)
+                .eq('user_id', userId)
                 .order('created_at', { ascending: false });
 
             if (questError) throw questError;
@@ -414,8 +428,8 @@ OR if relevant:
             if (miscQuest) {
                 console.log('📋 Analyzing Misc quest tasks first');
                 // Filter tasks by user_id before analysis
-                miscQuest.tasks = miscQuest.tasks?.filter(task => task.user_id === validUserId) || [];
-                const miscAnalysis = await this.analyzeMiscQuestTasks(journalContent, miscQuest, validUserId);
+                miscQuest.tasks = miscQuest.tasks?.filter(task => task.user_id === userId) || [];
+                const miscAnalysis = await this.analyzeMiscQuestTasks(journalContent, miscQuest, userId);
                 if (miscAnalysis?.isRelevant) {
                     miscTaskIds = miscAnalysis.relevantTasks.map(task => task.taskId);
                     relevantQuestData.push(miscAnalysis);
@@ -426,8 +440,8 @@ OR if relevant:
             console.log(`📋 Analyzing ${regularQuests.length} regular quests`);
             for (const quest of regularQuests) {
                 // Filter tasks by user_id before analysis
-                quest.tasks = quest.tasks?.filter(task => task.user_id === validUserId) || [];
-                const questAnalysis = await this.analyzeRegularQuest(journalContent, quest, validUserId);
+                quest.tasks = quest.tasks?.filter(task => task.user_id === userId) || [];
+                const questAnalysis = await this.analyzeRegularQuest(journalContent, quest, userId);
                 if (questAnalysis?.isRelevant) {
                     // If any tasks from misc are now associated with a specific quest,
                     // remove them from misc
@@ -458,7 +472,7 @@ OR if relevant:
                 .map(quest => ({
                     ...quest,
                     // Ensure tasks are filtered by user_id in the final result
-                    tasks: quest.tasks?.filter(task => task.user_id === validUserId) || [],
+                    tasks: quest.tasks?.filter(task => task.user_id === userId) || [],
                     relevance: finalQuestData.find(data => data.questId === quest.id)?.relevance || undefined,  // Changed from null to undefined
                     relevantTasks: finalQuestData.find(data => data.questId === quest.id)?.relevantTasks || []
                 }));

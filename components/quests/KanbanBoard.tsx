@@ -111,11 +111,14 @@ export function KanbanBoard({ mainQuest, onViewAllQuests }: KanbanProps) {
 
   // Add function to handle task status toggle
   const toggleTaskCompletion = async (task: Task) => {
-    if (!session?.user?.id) return;
+    if (!session?.user?.id) {
+      console.warn("User not logged in. Cannot update task.");
+      return;
+    }
 
     try {
       setUpdatingTaskId(task.id);
-      const userId = validateUserId(session.user.id);
+      const userId = session.user.id;
       const newStatus = getNextStatus(task.status);
       await updateTaskStatus(task.id, newStatus, userId);
       
