@@ -4,6 +4,9 @@ import type { Quest } from '@/app/types';
 import { RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 import { useSupabase } from '@/contexts/SupabaseContext';
 
+// Add this constant that's needed by QuestAgent
+export const MISC_QUEST_ID = -1;
+
 interface QuestUpdate {
   id: number;
   title: string;
@@ -23,6 +26,9 @@ interface QuestInput extends Omit<Quest, 'id' | 'created_at' | 'updated_at' | 't
   description?: string;
   user_id: string;
 }
+
+// Update type definition for update operations to allow partial data
+type QuestUpdateInput = Partial<Omit<QuestInput, 'user_id'>>;
 
 type QuestRealtimePayload = RealtimePostgresChangesPayload<QuestUpdate>;
 
@@ -58,9 +64,20 @@ export async function fetchQuests(userId: string): Promise<Quest[]> {
   return data || [];
 }
 
-async function createQuest(questData: QuestInput): Promise<Quest> {
+// Renamed function to be more descriptive of what it returns
+async function getQuestsWithTasks(userId: string): Promise<Quest[]> {
+  return fetchQuests(userId);
+}
+
+// Remove the export keyword here since we'll export at the bottom
+async function createQuest(userId: string, questData: Omit<QuestInput, 'user_id'>): Promise<Quest> {
+  const fullQuestData: QuestInput = {
+    ...questData,
+    user_id: userId
+  };
+
   const cleanedFields = Object.fromEntries(
-    Object.entries(questData).map(([key, value]) => {
+    Object.entries(fullQuestData).map(([key, value]) => {
       if ((key === 'start_date' || key === 'end_date') && value === '') {
         return [key, null];
       }
@@ -82,7 +99,9 @@ async function createQuest(questData: QuestInput): Promise<Quest> {
   return quest;
 }
 
-async function updateQuest(questId: number, questData: QuestInput): Promise<void> {
+// Remove the export keyword here since we'll export at the bottom
+// Update to accept partial data for updates
+async function updateQuest(questId: number, userId: string, questData: QuestUpdateInput): Promise<Quest> {
   // First verify ownership
   const { data: quest, error: fetchError } = await supabase
     .from('quests')
@@ -95,13 +114,18 @@ async function updateQuest(questId: number, questData: QuestInput): Promise<void
     throw new Error(`Failed to verify quest ownership: ${fetchError.message}`);
   }
 
-  if (!quest || quest.user_id !== questData.user_id) {
+  if (!quest || quest.user_id !== userId) {
     console.error('Cannot update quest: User does not own this quest');
     throw new Error('You do not have permission to update this quest');
   }
 
+  const fullQuestData = {
+    ...questData,
+    user_id: userId
+  };
+
   const cleanedFields = Object.fromEntries(
-    Object.entries(questData).map(([key, value]) => {
+    Object.entries(fullQuestData).map(([key, value]) => {
       if ((key === 'start_date' || key === 'end_date') && value === '') {
         return [key, null];
       }
@@ -109,16 +133,60 @@ async function updateQuest(questId: number, questData: QuestInput): Promise<void
     })
   );
 
-  const { error: questError } = await supabase
+  const { data, error: updateError } = await supabase
     .from('quests')
     .update({
       ...cleanedFields,
       updated_at: new Date().toISOString()
     })
     .eq('id', questId)
-    .eq('user_id', questData.user_id);
+    .eq('user_id', userId)
+    .select('*')
+    .single();
 
-  if (questError) throw questError;
+  if (updateError) throw updateError;
+  return data;
+}
+
+// New function to delete a quest
+async function deleteQuest(questId: number, userId: string): Promise<void> {
+  // First verify ownership
+  const { data: quest, error: fetchError } = await supabase
+    .from('quests')
+    .select('user_id')
+    .eq('id', questId)
+    .single();
+
+  if (fetchError) {
+    console.error('Error verifying quest ownership:', fetchError);
+    throw new Error(`Failed to verify quest ownership: ${fetchError.message}`);
+  }
+
+  if (!quest || quest.user_id !== userId) {
+    console.error('Cannot delete quest: User does not own this quest');
+    throw new Error('You do not have permission to delete this quest');
+  }
+
+  // Delete the quest
+  const { error } = await supabase
+    .from('quests')
+    .delete()
+    .eq('id', questId)
+    .eq('user_id', userId);
+
+  if (error) throw error;
+}
+
+// New function to move tasks between quests
+async function moveTasksToQuest(fromQuestId: number, toQuestId: number, userId: string): Promise<void> {
+  // Update all tasks from one quest to another
+  const { error } = await supabase
+    .from('tasks')
+    .update({ quest_id: toQuestId })
+    .eq('quest_id', fromQuestId)
+    .eq('user_id', userId);
+
+  if (error) throw error;
 }
 
 async function updateMainQuest(questId: number, userId: string): Promise<void> {
@@ -150,7 +218,8 @@ async function updateMainQuest(questId: number, userId: string): Promise<void> {
   }
 }
 
-export { createQuest, updateQuest };
+// Export all database operation functions together
+export { createQuest, updateQuest, deleteQuest, moveTasksToQuest, updateMainQuest, getQuestsWithTasks };
 
 // React Hook
 export function useQuests() {

@@ -2,8 +2,6 @@ import React from 'react';
 import { View, ScrollView, ActivityIndicator } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { ThemedText } from '@/components/ui/ThemedText';
-import { TaskRecommendation } from './TaskRecommendation';
-import { TaskRecommendationParser } from '@/services/TaskRecommendationParser';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useSupabase } from '@/contexts/SupabaseContext';
 
@@ -73,11 +71,6 @@ export function AIAnalysis({
     );
   }
 
-  const recommendations = React.useMemo(() => {
-    if (!analysis) return [];
-    return TaskRecommendationParser.parseAnalysis(analysis);
-  }, [analysis]);
-
   return (
     <View style={{ 
       backgroundColor: 'rgba(15, 15, 15, 0.8)',
@@ -130,16 +123,6 @@ export function AIAnalysis({
             }}>
               {analysis}
             </ThemedText>
-
-            {expanded && recommendations.length > 0 && session?.user?.id && (
-              <TaskRecommendation
-                recommendations={recommendations}
-                themeColor={themeColor}
-                secondaryColor={secondaryColor}
-                quests={quests}
-                onCreateTask={handleCreateTask}
-              />
-            )}
           </>
         ) : (
           <ThemedText style={{ color: '#666', fontStyle: 'italic' }}>

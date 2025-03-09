@@ -1,5 +1,12 @@
 import { GoogleGenerativeAI, type GenerativeModel } from "@google/generative-ai";
-import { supabase } from '../../lib/supabase';
+import { 
+  createQuest,
+  updateQuest,
+  deleteQuest,
+  moveTasksToQuest,
+  getQuestsWithTasks,
+  MISC_QUEST_ID
+} from '@/services/questsService';
 import type { Quest, Task } from '@/app/types';
 
 interface TaskRelevanceItem {
@@ -19,7 +26,6 @@ interface QuestRelevanceItem {
 export class QuestAgent {
     private genAI: GoogleGenerativeAI;
     private model: GenerativeModel;
-    private readonly MISC_QUEST_ID = -1;
     
     constructor() {
         this.genAI = new GoogleGenerativeAI(process.env.EXPO_PUBLIC_GEMINI_API_KEY || '');
@@ -38,7 +44,7 @@ export class QuestAgent {
         tags?: string[];
         user_id?: string;
     }): Promise<Quest> {
-        // Replace validateUserId with direct check and guard clause
+        // Check if userId exists
         if (!userId) {
             console.error('User ID is required for createQuest');
             throw new Error('User ID is required');
@@ -47,22 +53,14 @@ export class QuestAgent {
         try {
             console.log('🚀 Creating new quest:', questData.title);
 
-            const { data: quest, error } = await supabase
-                .from('quests')
-                .insert({
-                    ...questData,
-                    user_id: userId,
-                    status: questData.status || 'Active',
-                    is_main: questData.is_main || false,
-                    created_at: new Date().toISOString(),
-                    updated_at: new Date().toISOString()
-                })
-                .select('*')
-                .single();
+            // Use questsService instead of direct database call
+            const quest = await createQuest(userId, {
+                ...questData,
+                status: questData.status || 'Active',
+                is_main: questData.is_main || false,
+            });
 
-            if (error) throw error;
             console.log('✅ Quest created successfully:', quest.id);
-
             return quest;
         } catch (error) {
             console.error('❌ Error creating quest:', error);
@@ -82,7 +80,7 @@ export class QuestAgent {
         tags?: string[];
         user_id?: string;
     }): Promise<Quest> {
-        // Replace validateUserId with direct check and guard clause
+        // Check if userId exists
         if (!userId) {
             console.error('User ID is required for updateQuest');
             throw new Error('User ID is required');
@@ -91,20 +89,10 @@ export class QuestAgent {
         try {
             console.log('🔄 Updating quest:', questId);
 
-            const { data: quest, error } = await supabase
-                .from('quests')
-                .update({
-                    ...questData,
-                    updated_at: new Date().toISOString()
-                })
-                .eq('id', questId)
-                .eq('user_id', userId)  // Ensure user owns the quest
-                .select('*')
-                .single();
+            // Use questsService instead of direct database call
+            const quest = await updateQuest(questId, userId, questData);
 
-            if (error) throw error;
             console.log('✅ Quest updated successfully:', quest.id);
-
             return quest;
         } catch (error) {
             console.error('❌ Error updating quest:', error);
@@ -113,7 +101,7 @@ export class QuestAgent {
     }
 
     async deleteQuest(questId: number, userId: string): Promise<void> {
-        // Replace validateUserId with direct check and guard clause
+        // Check if userId exists
         if (!userId) {
             console.error('User ID is required for deleteQuest');
             throw new Error('User ID is required');
@@ -123,24 +111,12 @@ export class QuestAgent {
             console.log('🗑️ Deleting quest:', questId);
 
             // First, move any tasks to the misc quest
-            const { error: taskError } = await supabase
-                .from('tasks')
-                .update({ quest_id: this.MISC_QUEST_ID })
-                .eq('quest_id', questId)
-                .eq('user_id', userId);
-
-            if (taskError) throw taskError;
-
+            await moveTasksToQuest(questId, MISC_QUEST_ID, userId);
+            
             // Then delete the quest
-            const { error } = await supabase
-                .from('quests')
-                .delete()
-                .eq('id', questId)
-                .eq('user_id', userId);
-
-            if (error) throw error;
+            await deleteQuest(questId, userId);
+            
             console.log('✅ Quest deleted successfully');
-
         } catch (error) {
             console.error('❌ Error deleting quest:', error);
             throw error;
@@ -251,7 +227,7 @@ DO NOT add any backticks, quotes, or other markers around the JSON.`;
         }
 
         // Filter tasks by user_id
-        const userTasks = miscQuest.tasks.filter(task => task.user_id === userId);
+        const userTasks = miscQuest.tasks
 
         const prompt = `You are analyzing ONLY the tasks from a miscellaneous quest collection to see if they're relevant to a journal entry.
 DO NOT consider the quest's description or context - ONLY look at each task individually.
@@ -307,7 +283,7 @@ Be VERY selective - only include tasks with clear, direct relevance to the journ
         console.log(`\n🔎 Analyzing regular quest: "${quest.title}"`);
         
         // Filter tasks by user_id
-        const userTasks = quest.tasks?.filter(task => task.user_id === userId) || [];
+        const userTasks = quest.tasks || [];
 
         const prompt = `You are analyzing if this quest is relevant to a journal entry. Reply ONLY with a JSON object.
 
@@ -362,7 +338,7 @@ OR if relevant:
     }
 
     async findRelevantQuests(journalContent: string, userId: string): Promise<Quest[]> {
-        // Replace validateUserId with direct check and guard clause
+        // Check if userId exists
         if (!userId) {
             console.error('User ID is required for findRelevantQuests');
             return [];  // Return empty array for read operation
@@ -371,43 +347,8 @@ OR if relevant:
         try {
             console.log('🔍 QuestAgent: Finding relevant quests for journal entry');
             
-            // Get all quests for this user
-            const { data: quests, error: questError } = await supabase
-                .from('quests')
-                .select(`
-                    id,
-                    title,
-                    analysis,
-                    status,
-                    tagline,
-                    description,
-                    is_main,
-                    created_at,
-                    updated_at,
-                    tags,
-                    start_date,
-                    end_date,
-                    parent_quest_id,
-                    user_id,
-                    tasks (
-                        id,
-                        title,
-                        description,
-                        status,
-                        scheduled_for,
-                        deadline,
-                        location,
-                        user_id,
-                        quest_id,
-                        priority,
-                        created_at,
-                        updated_at
-                    )
-                `)
-                .eq('user_id', userId)
-                .order('created_at', { ascending: false });
-
-            if (questError) throw questError;
+            // Use questsService instead of direct database call
+            const quests = await getQuestsWithTasks(userId);
 
             if (!quests || quests.length === 0) {
                 console.log('❌ No quests found in database');
@@ -416,9 +357,9 @@ OR if relevant:
 
             console.log(`📋 Found ${quests.length} total quests to analyze`);
 
-            // Separate misc quest from regular quests using ID instead of title
-            const miscQuest = quests.find(q => q.id === this.MISC_QUEST_ID);
-            const regularQuests = quests.filter(q => q.id !== this.MISC_QUEST_ID);
+            // Separate misc quest from regular quests
+            const miscQuest = quests.find(q => q.id === MISC_QUEST_ID);
+            const regularQuests = quests.filter(q => q.id !== MISC_QUEST_ID);
 
             // Store all relevant quest data
             const relevantQuestData: QuestRelevanceItem[] = [];
@@ -455,7 +396,7 @@ OR if relevant:
                             // Update misc quest relevance status if no tasks remain
                             if (miscQuestData.relevantTasks.length === 0) {
                                 miscQuestData.isRelevant = false;
-                                miscQuestData.relevance = undefined;  // Changed from null to undefined
+                                miscQuestData.relevance = undefined;
                             }
                         }
                     }
@@ -473,7 +414,7 @@ OR if relevant:
                     ...quest,
                     // Ensure tasks are filtered by user_id in the final result
                     tasks: quest.tasks?.filter(task => task.user_id === userId) || [],
-                    relevance: finalQuestData.find(data => data.questId === quest.id)?.relevance || undefined,  // Changed from null to undefined
+                    relevance: finalQuestData.find(data => data.questId === quest.id)?.relevance || undefined,
                     relevantTasks: finalQuestData.find(data => data.questId === quest.id)?.relevantTasks || []
                 }));
 
