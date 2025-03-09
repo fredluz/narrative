@@ -413,5 +413,36 @@ export const journalService = {
       console.error('Error fetching checkups for daily entry:', err);
       throw new Error('Failed to fetch checkups for daily entry');
     }
-  }
+  },
+
+  // Get recent journal entries with all fields by default
+  async getRecentEntries(limit: number, userId: string): Promise<JournalEntry[]> {
+    if (!userId) {
+      console.error('User ID is missing for getRecentEntries.');
+      return [];
+    }
+    console.log('📁 journalService.getRecentEntries called with limit:', limit);
+    
+    
+    try {
+      const { data, error } = await supabase
+        .from('journal_entries')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(limit);
+      
+      if (error) {
+        console.error('Error fetching recent journal entries:', error);
+        throw new Error('Failed to fetch recent journal entries');
+      }
+      
+      console.log('✅ Retrieved', data?.length || 0, 'recent journal entries');
+      // Explicitly cast the returned data as JournalEntry[]
+      return (data || []) as JournalEntry[];
+    } catch (err) {
+      console.error('Error in getRecentEntries:', err);
+      return []; // Return empty array on error
+    }
+  },
 };

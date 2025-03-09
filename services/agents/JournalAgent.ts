@@ -1,6 +1,6 @@
 import OpenAI from 'openai';
-import { supabase } from '../../lib/supabase';
 import { QuestAgent } from './QuestAgent';
+import { journalService } from '../journalService';
 
 export class JournalAgent {
     private openai: OpenAI;
@@ -20,15 +20,8 @@ export class JournalAgent {
       console.log('🔄 Previous context available:', !!previousCheckupsContext);
       
       try {
-        // Fetch last 3 daily entries - user_id filtering handled by RLS
-        const { data: recentEntries, error } = await supabase
-          .from('journal_entries')
-          .select('user_entry, ai_response, updated_at')
-          .eq('user_id', userId)
-          .order('created_at', { ascending: false })
-          .limit(3);
-
-        if (error) throw error;
+        // Replace direct SQL call with journalService function
+        const recentEntries = await journalService.getRecentEntries(3, userId,);
 
         // Format context for OpenAI, now including timestamp information
         const context = recentEntries?.map(entry => ({
@@ -74,15 +67,8 @@ export class JournalAgent {
       console.log('🔄 Previous context available:', !!previousCheckupsContext);
       
       try {
-        // Fetch last 3 entries - user_id filtering handled by RLS
-        const { data: recentEntries, error } = await supabase
-          .from('journal_entries')
-          .select('user_entry, ai_analysis, updated_at')
-          .eq('user_id', userId)
-          .order('created_at', { ascending: false })
-          .limit(3);
-
-        if (error) throw error;
+        // Replace direct SQL call with journalService function
+        const recentEntries = await journalService.getRecentEntries(3, userId,);
 
         // Format context for OpenAI with timestamp info
         const context = recentEntries?.map(entry => ({
@@ -412,16 +398,9 @@ export class JournalAgent {
       const relevantQuests = await this.questAgent.findRelevantQuests(allCheckupEntriesWithResponses, userId);
       console.log('✨ Found relevant quests:', relevantQuests.map(q => q.title));
 
-      // Get recent journal entries for context
+      // Replace direct SQL call with journalService function
       console.log('🔄 Fetching recent journal entries for context');
-      const { data: recentEntries, error } = await supabase
-        .from('journal_entries')
-        .select('user_entry, ai_analysis, updated_at')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false })
-        .limit(3);
-
-      if (error) throw error;
+      const recentEntries = await journalService.getRecentEntries(3, userId, );
 
       let prompt = '';
 
@@ -433,7 +412,7 @@ export class JournalAgent {
             month: 'short',
             day: 'numeric'
           });
-          prompt += `[${date}]\nEntry: ${entry.user_entry}\nYour Analysis: ${entry.ai_analysis || 'No analysis recorded'}\n\n`;
+          prompt += `[${date}]\nEntry: ${entry.user_entry}\n Your Response: ${entry.ai_response} \nYour Analysis: ${entry.ai_analysis || 'No analysis recorded'}\n\n`;
         });
       }
 
