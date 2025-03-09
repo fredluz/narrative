@@ -591,6 +591,7 @@ export function JournalPanel({
                 aiGenerating={aiGenerating} // Pass the new AI generation state
                 fullColumnMode={fullColumnMode}
                 secondaryColor={secondaryColor}
+                entryUserId={session?.user?.id}
               />
             </View>
           </View>

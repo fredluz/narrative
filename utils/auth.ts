@@ -26,12 +26,28 @@ export function requireAuth(session: Session | null, inAuthGroup: boolean): { re
   const currentUserId = session?.user?.id;
   
   if (!currentUserId && !inAuthGroup) {
-    return { redirect: '/auth/index' };
+    // Redirect to auth index when not authenticated and not already in auth group
+    return { redirect: '/auth/' };
   }
   
   if (currentUserId && inAuthGroup) {
-    return { redirect: '/' };
+    // Redirect to landing page when authenticated but in auth group
+    return { redirect: '/landing' };
   }
 
   return null;
+}
+
+export function requireOwnership(session: Session | null, ownerId?: string) {
+  if (!session?.user?.id || !ownerId) {
+    return {
+      allowed: false,
+      message: "You don't have permission to view this content."
+    };
+  }
+  
+  return {
+    allowed: session.user.id === ownerId,
+    message: session.user.id !== ownerId ? "You don't have permission to view this content." : null
+  };
 }

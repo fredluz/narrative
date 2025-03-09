@@ -9,6 +9,7 @@ import { useRouter } from 'expo-router';
 import { formatDateTime } from '@/utils/dateFormatters';
 import { updateTaskStatus, getNextStatus } from '@/services/tasksService';
 import { useSupabase } from '@/contexts/SupabaseContext';
+import { Session } from '@supabase/supabase-js';
 
 interface KanbanProps {
   mainQuest: Quest | null;
@@ -21,7 +22,7 @@ type TaskStatus = 'ToDo' | 'InProgress' | 'Done';
 export function KanbanBoard({ mainQuest, onViewAllQuests, userId }: KanbanProps) {
   const router = useRouter();
   const { themeColor, secondaryColor } = useTheme();
-  const { session } = useSupabase();
+  const { session } = useSupabase() as { session: Session }; // Assert session exists
   const [activeColumn, setActiveColumn] = useState<TaskStatus | 'all' | 'active'>('active');
   const [updatingTaskId, setUpdatingTaskId] = useState<number | null>(null);
 

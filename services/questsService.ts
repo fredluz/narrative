@@ -4,9 +4,6 @@ import type { Quest } from '@/app/types';
 import { RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 import { useSupabase } from '@/contexts/SupabaseContext';
 
-// Add this constant that's needed by QuestAgent
-export const MISC_QUEST_ID = -1;
-
 interface QuestUpdate {
   id: number;
   title: string;
@@ -177,15 +174,80 @@ async function deleteQuest(questId: number, userId: string): Promise<void> {
   if (error) throw error;
 }
 
-// New function to move tasks between quests
-async function moveTasksToQuest(fromQuestId: number, toQuestId: number, userId: string): Promise<void> {
-  // Update all tasks from one quest to another
-  const { error } = await supabase
+// Add functions to handle misc quests
+async function getMiscQuest(userId: string): Promise<Quest | null> {
+  const { data, error } = await supabase
+    .from('quests')
+    .select(`
+      id,
+      created_at,
+      updated_at,
+      tags,
+      title,
+      tagline,
+      description,
+      is_main,
+      status,
+      start_date,
+      end_date,
+      analysis,
+      parent_quest_id,
+      user_id,
+      tasks (*)
+    `)
+    .eq('user_id', userId)
+    .eq('title', 'Misc')
+    .single();
+
+  if (error) {
+    if (error.code === 'PGSQL_ERROR_NO_DATA_FOUND') {
+      return null;
+    }
+    throw error;
+  }
+
+  return data;
+}
+
+async function createMiscQuest(userId: string): Promise<Quest> {
+  const miscQuest = await createQuest(userId, {
+    title: 'Misc',
+    tagline: 'Miscellaneous tasks',
+    description: 'A collection of tasks that don\'t belong to any specific quest',
+    status: 'Active',
+    is_main: false
+  });
+
+  return miscQuest;
+}
+
+async function getOrCreateMiscQuest(userId: string): Promise<Quest> {
+  let miscQuest = await getMiscQuest(userId);
+  
+  if (!miscQuest) {
+    miscQuest = await createMiscQuest(userId);
+  }
+
+  return miscQuest;
+}
+
+// Update the moveTasksToQuest function to handle moving to misc quest
+async function moveTasksToQuest(fromQuestId: number, toQuestId: number | null, userId: string, taskIds?: number[]): Promise<void> {
+  // If toQuestId is null, we need to move to the misc quest
+  const actualToQuestId = toQuestId ?? (await getOrCreateMiscQuest(userId)).id;
+
+  let query = supabase
     .from('tasks')
-    .update({ quest_id: toQuestId })
+    .update({ quest_id: actualToQuestId })
     .eq('quest_id', fromQuestId)
     .eq('user_id', userId);
 
+  // If specific taskIds are provided, only move those tasks
+  if (taskIds && taskIds.length > 0) {
+    query = query.in('id', taskIds);
+  }
+
+  const { error } = await query;
   if (error) throw error;
 }
 
@@ -219,7 +281,15 @@ async function updateMainQuest(questId: number, userId: string): Promise<void> {
 }
 
 // Export all database operation functions together
-export { createQuest, updateQuest, deleteQuest, moveTasksToQuest, updateMainQuest, getQuestsWithTasks };
+export { 
+  createQuest, 
+  updateQuest, 
+  deleteQuest, 
+  moveTasksToQuest, 
+  updateMainQuest, 
+  getQuestsWithTasks,
+  getOrCreateMiscQuest
+};
 
 // React Hook
 export function useQuests() {

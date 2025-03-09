@@ -97,14 +97,13 @@ export function DesktopLayout() {
   }
 
   return (
-    
-            
-      <View style={styles.column}>
-        {loading ? (
-          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-            <LoadingSpinner/>
-          </View>
-        ) : error ? (
+    <View style={[styles.container, { backgroundColor: colors.background }]}> 
+    <View style={styles.column}>
+      {loading ? (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <LoadingSpinner/>
+        </View>
+      ) : error ? (
           <View style={{ 
             padding: 15,
             backgroundColor: 'rgba(200, 0, 0, 0.1)',
@@ -130,7 +129,7 @@ export function DesktopLayout() {
             <TaskList compactMode={true} />
           </>
         )}
-   
+      </View>
 
       <View style={styles.column}>
         <ChatInterface 

@@ -4,6 +4,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { ThemedText } from '@/components/ui/ThemedText';
 import TriangularSpinner from '@/components/loading/TriangularSpinner';
 import { useSupabase } from '@/contexts/SupabaseContext';
+import { requireOwnership } from '@/utils/auth';
 
 interface AIResponseProps {
   response: string | null;
@@ -11,7 +12,7 @@ interface AIResponseProps {
   aiGenerating: boolean;
   fullColumnMode?: boolean;
   secondaryColor: string;
-  entryUserId?: string; // Add this to verify ownership
+  entryUserId?: string;
 }
 
 export const AIResponse: React.FC<AIResponseProps> = ({
@@ -23,14 +24,13 @@ export const AIResponse: React.FC<AIResponseProps> = ({
   entryUserId
 }) => {
   const { session } = useSupabase();
+  
+  const { allowed, message } = React.useMemo(() => 
+    requireOwnership(session, entryUserId),
+    [session, entryUserId]
+  );
 
-  // Add ownership verification
-  const canAccessResponse = React.useMemo(() => {
-    if (!session?.user?.id || !entryUserId) return false;
-    return session.user.id === entryUserId;
-  }, [session?.user?.id, entryUserId]);
-
-  if (!canAccessResponse) {
+  if (!allowed) {
     return (
       <View style={{
         flex: 1,
@@ -41,7 +41,7 @@ export const AIResponse: React.FC<AIResponseProps> = ({
         padding: 10,
       }}>
         <ThemedText style={{ color: '#666', fontStyle: 'italic' }}>
-          You don't have permission to view this response.
+          {message}
         </ThemedText>
       </View>
     );

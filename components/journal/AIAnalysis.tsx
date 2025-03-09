@@ -4,6 +4,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { ThemedText } from '@/components/ui/ThemedText';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useSupabase } from '@/contexts/SupabaseContext';
+import { requireOwnership } from '@/utils/auth';
 
 interface AIAnalysisProps {
   analysis: string | null;
@@ -29,11 +30,10 @@ export function AIAnalysis({
   const { session } = useSupabase();
   const { secondaryColor } = useTheme();
 
-  // Add ownership verification
-  const canAccessAnalysis = React.useMemo(() => {
-    if (!session?.user?.id || !entryUserId) return false;
-    return session.user.id === entryUserId;
-  }, [session?.user?.id, entryUserId]);
+  const { allowed, message } = React.useMemo(() => 
+    requireOwnership(session, entryUserId),
+    [session, entryUserId]
+  );
   
   const handleCreateTask = React.useCallback(async (taskData: any) => {
     if (!session?.user?.id) {
@@ -41,7 +41,7 @@ export function AIAnalysis({
       return;
     }
 
-    if (!canAccessAnalysis) {
+    if (!allowed) {
       console.error("Cannot create task: User does not own this entry");
       return;
     }
@@ -52,10 +52,9 @@ export function AIAnalysis({
         user_id: session.user.id
       });
     }
-  }, [onCreateTask, session?.user?.id, canAccessAnalysis]);
+  }, [onCreateTask, session?.user?.id, allowed]);
 
-  // Show unauthorized message if no access
-  if (!canAccessAnalysis) {
+  if (!allowed) {
     return (
       <View style={{ 
         backgroundColor: 'rgba(15, 15, 15, 0.8)',
@@ -65,7 +64,7 @@ export function AIAnalysis({
         padding: 10
       }}>
         <ThemedText style={{ color: '#666', fontStyle: 'italic' }}>
-          You don't have permission to view this analysis.
+          {message}
         </ThemedText>
       </View>
     );

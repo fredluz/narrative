@@ -5,7 +5,7 @@ import {
   deleteQuest,
   moveTasksToQuest,
   getQuestsWithTasks,
-  MISC_QUEST_ID
+  getOrCreateMiscQuest
 } from '@/services/questsService';
 import type { Quest, Task } from '@/app/types';
 
@@ -23,6 +23,11 @@ interface QuestRelevanceItem {
     relevantTasks: TaskRelevanceItem[];
 }
 
+interface TaskMoveInfo {
+    taskId: number;
+    reason: string;
+}
+
 export class QuestAgent {
     private genAI: GoogleGenerativeAI;
     private model: GenerativeModel;
@@ -38,13 +43,13 @@ export class QuestAgent {
         description?: string;
         status?: 'Active' | 'On-Hold' | 'Completed';
         is_main?: boolean;
+        analysis?: string;
         start_date?: string;
         end_date?: string;
         parent_quest_id?: number;
         tags?: string[];
         user_id?: string;
     }): Promise<Quest> {
-        // Check if userId exists
         if (!userId) {
             console.error('User ID is required for createQuest');
             throw new Error('User ID is required');
@@ -53,15 +58,87 @@ export class QuestAgent {
         try {
             console.log('🚀 Creating new quest:', questData.title);
 
-            // Use questsService instead of direct database call
-            const quest = await createQuest(userId, {
+            // Create the quest first
+            const newQuest = await createQuest(userId, {
                 ...questData,
                 status: questData.status || 'Active',
                 is_main: questData.is_main || false,
             });
 
-            console.log('✅ Quest created successfully:', quest.id);
-            return quest;
+            // Check misc quest for relevant tasks
+            const miscQuest = await getOrCreateMiscQuest(userId);
+            if (miscQuest.tasks && miscQuest.tasks.length > 0) {
+                console.log('📋 Checking misc quest tasks for relevance to new quest');
+
+                // Filter tasks by user_id
+                const userTasks = miscQuest.tasks.filter(task => task.user_id === userId);
+
+                if (userTasks.length > 0) {
+                    const prompt = `You are analyzing tasks from a miscellaneous quest collection to see if they would be better suited for a newly created quest.
+
+New Quest Details:
+Title: ${questData.title}
+Tagline: ${questData.tagline}
+Description: ${questData.description || 'No description'}
+Analysis: ${questData.analysis || 'No Analysis'}
+Tags: ${questData.tags?.join(', ') || 'No tags'}
+
+Misc Tasks to Analyze:
+${userTasks.map(task => `ID: ${task.id}
+Title: ${task.title}
+Description: ${task.description || 'No description'}`).join('\n\n')}
+
+For each task, determine if it would be better suited in the new quest based on:
+1. Direct relevance to the new quest's title or description
+2. Thematic alignment with the quest's purpose
+3. Similar tags or keywords
+4. Logical grouping with the quest's scope
+
+RESPOND ONLY WITH A JSON OBJECT IN THIS EXACT FORMAT:
+{
+  "tasksToMove": [
+    {
+      "taskId": number,
+      "reason": "Clear explanation of why this task fits better in the new quest"
+    }
+  ]
+}
+
+Be SELECTIVE - only include tasks that have a CLEAR and STRONG connection to the new quest.`;
+
+                    try {
+                        console.log('📤 Sending task analysis to AI');
+                        const result = await this.model.generateContent(prompt);
+                        const aiResponse = this.cleanResponseText(result.response.text().trim());
+                        
+                        try {
+                            const parsed = JSON.parse(aiResponse);
+                            if (parsed.tasksToMove && Array.isArray(parsed.tasksToMove) && parsed.tasksToMove.length > 0) {
+                                console.log(`🔄 Moving ${parsed.tasksToMove.length} tasks from misc to new quest`);
+                                
+                                // Move tasks one by one
+                                const tasksToMove = parsed.tasksToMove
+                                    .map((moveInfo: TaskMoveInfo) => moveInfo.taskId)
+                                    .filter((taskId: number) => userTasks.some(t => t.id === taskId));
+
+                                if (tasksToMove.length > 0) {
+                                    await moveTasksToQuest(miscQuest.id, newQuest.id, userId, tasksToMove);
+                                    console.log(`✅ Moved ${tasksToMove.length} tasks to new quest`);
+                                }
+                            }
+                        } catch (parseError) {
+                            console.error('❌ Error parsing AI response:', parseError);
+                            // Don't throw - we still created the quest successfully
+                        }
+                    } catch (aiError) {
+                        console.error('❌ Error analyzing tasks with AI:', aiError);
+                        // Don't throw - we still created the quest successfully
+                    }
+                }
+            }
+
+            console.log('✅ Quest created successfully:', newQuest.id);
+            return newQuest;
         } catch (error) {
             console.error('❌ Error creating quest:', error);
             throw error;
@@ -110,8 +187,11 @@ export class QuestAgent {
         try {
             console.log('🗑️ Deleting quest:', questId);
 
+            // Get the misc quest first to ensure it exists
+            const miscQuest = await getOrCreateMiscQuest(userId);
+            
             // First, move any tasks to the misc quest
-            await moveTasksToQuest(questId, MISC_QUEST_ID, userId);
+            await moveTasksToQuest(questId, miscQuest.id, userId);
             
             // Then delete the quest
             await deleteQuest(questId, userId);
@@ -338,16 +418,14 @@ OR if relevant:
     }
 
     async findRelevantQuests(journalContent: string, userId: string): Promise<Quest[]> {
-        // Check if userId exists
         if (!userId) {
             console.error('User ID is required for findRelevantQuests');
-            return [];  // Return empty array for read operation
+            return [];
         }
         
         try {
             console.log('🔍 QuestAgent: Finding relevant quests for journal entry');
             
-            // Use questsService instead of direct database call
             const quests = await getQuestsWithTasks(userId);
 
             if (!quests || quests.length === 0) {
@@ -357,19 +435,29 @@ OR if relevant:
 
             console.log(`📋 Found ${quests.length} total quests to analyze`);
 
-            // Separate misc quest from regular quests
-            const miscQuest = quests.find(q => q.id === MISC_QUEST_ID);
-            const regularQuests = quests.filter(q => q.id !== MISC_QUEST_ID);
+            // Get the misc quest and main quest
+            const miscQuest = await getOrCreateMiscQuest(userId);
+            const mainQuest = quests.find(q => q.is_main);
+            const regularQuests = quests.filter(q => !q.is_main && q.id !== miscQuest.id);
 
             // Store all relevant quest data
             const relevantQuestData: QuestRelevanceItem[] = [];
 
-            // First analyze misc quest tasks if it exists
+            // First analyze main quest if it exists
+            if (mainQuest) {
+                console.log('📋 Analyzing main quest first:', mainQuest.title);
+                mainQuest.tasks = mainQuest.tasks?.filter(task => task.user_id === userId) || [];
+                const mainQuestAnalysis = await this.analyzeRegularQuest(journalContent, mainQuest, userId);
+                if (mainQuestAnalysis?.isRelevant) {
+                    relevantQuestData.push(mainQuestAnalysis);
+                }
+            }
+
+            // Then analyze misc quest tasks if it exists and has tasks
             let miscTaskIds: number[] = [];
-            if (miscQuest) {
-                console.log('📋 Analyzing Misc quest tasks first');
-                // Filter tasks by user_id before analysis
-                miscQuest.tasks = miscQuest.tasks?.filter(task => task.user_id === userId) || [];
+            if (miscQuest.tasks && miscQuest.tasks.length > 0) {
+                console.log('📋 Analyzing Misc quest tasks');
+                miscQuest.tasks = miscQuest.tasks.filter(task => task.user_id === userId);
                 const miscAnalysis = await this.analyzeMiscQuestTasks(journalContent, miscQuest, userId);
                 if (miscAnalysis?.isRelevant) {
                     miscTaskIds = miscAnalysis.relevantTasks.map(task => task.taskId);
@@ -377,15 +465,12 @@ OR if relevant:
                 }
             }
 
-            // Then analyze regular quests
+            // Finally analyze remaining regular quests
             console.log(`📋 Analyzing ${regularQuests.length} regular quests`);
             for (const quest of regularQuests) {
-                // Filter tasks by user_id before analysis
                 quest.tasks = quest.tasks?.filter(task => task.user_id === userId) || [];
                 const questAnalysis = await this.analyzeRegularQuest(journalContent, quest, userId);
                 if (questAnalysis?.isRelevant) {
-                    // If any tasks from misc are now associated with a specific quest,
-                    // remove them from misc
                     if (miscTaskIds.length > 0) {
                         const miscQuestData = relevantQuestData.find(q => q.questId === miscQuest?.id);
                         if (miscQuestData) {
@@ -393,7 +478,6 @@ OR if relevant:
                             miscQuestData.relevantTasks = miscQuestData.relevantTasks.filter(
                                 task => !questAnalysis.relevantTasks.some(rt => rt.taskId === task.taskId)
                             );
-                            // Update misc quest relevance status if no tasks remain
                             if (miscQuestData.relevantTasks.length === 0) {
                                 miscQuestData.isRelevant = false;
                                 miscQuestData.relevance = undefined;
@@ -404,22 +488,26 @@ OR if relevant:
                 }
             }
 
-            // Clean up - remove any misc quest if it has no remaining relevant tasks
-            const finalQuestData = relevantQuestData.filter(q => q.isRelevant && q.relevantTasks.length > 0);
+            // Clean up and return results
+            const finalQuestData = relevantQuestData.filter(q => q.isRelevant || q.relevantTasks.length > 0);
 
-            // Map back to Quest type with relevance data
+            // Map back to Quest type with relevance data, maintaining main quest first if relevant
             const relevantQuests = quests
                 .filter(quest => finalQuestData.some(data => data.questId === quest.id))
+                .sort((a, b) => {
+                    if (a.is_main) return -1;
+                    if (b.is_main) return 1;
+                    return 0;
+                })
                 .map(quest => ({
                     ...quest,
-                    // Ensure tasks are filtered by user_id in the final result
                     tasks: quest.tasks?.filter(task => task.user_id === userId) || [],
                     relevance: finalQuestData.find(data => data.questId === quest.id)?.relevance || undefined,
                     relevantTasks: finalQuestData.find(data => data.questId === quest.id)?.relevantTasks || []
                 }));
 
             console.log(`\n✨ Found ${relevantQuests.length} relevant quests:`, 
-                relevantQuests.map(q => ({ title: q.title, taskCount: q.relevantTasks?.length })));
+                relevantQuests.map(q => ({ title: q.title, isMain: q.is_main, taskCount: q.relevantTasks?.length })));
             return relevantQuests;
 
         } catch (error) {

@@ -13,7 +13,7 @@ const asciiArt = `
   ██╔██╗ ██║███████║██████╔╝██████╔╝███████║   ██║   ██║██║   ██║█████╗  
  ██║╚██╗██║██╔══██║██╔══██╗██╔══██╗██╔══██║   ██║   ██║╚██╗ ██╝ ██╔══╝  
 ██║ ╚████║██║  ██║██║  ██║██║  ██║██║  ██║   ██║   ██║ ╚████╔╝ ███████╗
-╚═╝  ╚═══╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝   ╚═╝   ╚═╝  ╚═══╝  ╚══════╝
+╚═╝  ╚═══╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝   ╚═╝   ╚═╝  ╚═══╝  ╚══════╝
 `;
 
 // Extended char set (incl. Chinese)
@@ -106,9 +106,32 @@ export default function AuthScreen() {
     setError(null);
     try {
       const { data, error: signInError } = await authService.signInWithOAuth('google');
-      if (signInError || !data?.session) {
+      
+      if (signInError) {
         throw signInError;
       }
+      
+      // Add null check for data
+      if (!data) {
+        throw new Error('No data received from authentication service');
+      }
+      
+      // Handle URL-based OAuth flow (redirect case)
+      if ('url' in data) {
+        // For web platforms, redirect to the OAuth URL
+        window.location.href = data.url;
+        return;
+      }
+      
+      // Handle direct session return case
+      if ('session' in data) {
+        // If we have a session already, we can navigate directly
+        router.replace('/landing');
+        return;
+      }
+      
+      // Fallback if neither case matches
+      router.replace('/auth/loading');
     } catch (err: any) {
       setError(err.message || 'Google sign-in failed.');
     } finally {
