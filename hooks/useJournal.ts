@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { journalService, JournalEntry } from '@/services/journalService';
 import { useQuestUpdate } from '@/contexts/QuestUpdateContext';
+import { useSupabase } from '@/contexts/SupabaseContext';
 
 export function useJournal() {
+  const { session } = useSupabase();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [entries, setEntries] = useState<Record<string, JournalEntry[]>>({});
   const [localEntries, setLocalEntries] = useState<Record<string, string>>({});
@@ -18,6 +20,12 @@ export function useJournal() {
   
   // Fetch entries for the last 7 days
   const fetchRecentEntries = useCallback(async () => {
+    if (!session?.user?.id) {
+      console.warn("Cannot fetch entries: User not logged in");
+      setError("Please log in to view journal entries");
+      return;
+    }
+
     setLoading(true);
     setError(null);
     
@@ -29,8 +37,8 @@ export function useJournal() {
       const startDate = formatDate(sevenDaysAgo);
       const endDate = formatDate(today);
       
-      console.log('Fetching entries from', startDate, 'to', endDate);
-      const journalEntries = await journalService.getEntries(startDate, endDate);
+      console.log('Fetching entries for user', session.user.id, 'from', startDate, 'to', endDate);
+      const journalEntries = await journalService.getEntries(startDate, endDate, session.user.id);
       console.log('Fetched entries:', journalEntries);
       
       // Convert to our local format, organized by date
@@ -50,11 +58,11 @@ export function useJournal() {
     } catch (err: any) {
       const errorMessage = err?.message || "Failed to load journal entries";
       setError(errorMessage);
-      console.error("Error in fetchRecentEntries:", err);
+      console.error("Error in fetchRecentEntries:", { error: err, userId: session.user.id });
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [session?.user?.id]);
 
   // Load entries whenever currentDate changes
   useEffect(() => {
@@ -89,11 +97,21 @@ export function useJournal() {
 
   // Save entry to the database
   const saveEntry = useCallback(async (date: Date, content: string, tags: string[] = []) => {
+    if (!session?.user?.id) {
+      console.warn("Cannot save entry: User not logged in");
+      throw new Error("Please log in to save journal entries");
+    }
+
     const dateStr = formatDate(date);
     setLoading(true);
     try {
-      // Save the checkup entry
-      const savedEntry = await journalService.saveCheckupEntry(dateStr, content, tags);
+      // Save the checkup entry with user ID
+      const savedEntry = await journalService.saveCheckupEntry(
+        dateStr, 
+        content, 
+        session.user.id,
+        tags
+      );
       
       // Refresh entries to get the latest data
       await fetchRecentEntries();
@@ -111,12 +129,12 @@ export function useJournal() {
     } catch (err: any) {
       const errorMessage = err?.message || "Failed to update journal entry";
       setError(errorMessage);
-      console.error("Error in saveEntry:", err);
+      console.error("Error in saveEntry:", { error: err, userId: session.user.id });
       throw err;
     } finally {
       setLoading(false);
     }
-  }, [fetchRecentEntries, triggerUpdate]);
+  }, [fetchRecentEntries, triggerUpdate, session?.user?.id]);
 
   const goToPreviousDay = () => {
     const prevDay = new Date(currentDate);

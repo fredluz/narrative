@@ -5,6 +5,7 @@ import { ThemedText } from '@/components/ui/ThemedText';
 import { TaskRecommendation } from './TaskRecommendation';
 import { TaskRecommendationParser } from '@/services/TaskRecommendationParser';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useSupabase } from '@/contexts/SupabaseContext';
 
 interface AIAnalysisProps {
   analysis: string | null;
@@ -12,20 +13,66 @@ interface AIAnalysisProps {
   fullColumnMode?: boolean;
   themeColor: string;
   expanded?: boolean;
-  quests?: Array<{ id: string; title: string; }>;
+  quests?: Array<{ id: string; title: string; user_id: string; }>;
   onCreateTask?: (taskData: any) => Promise<void>;
+  entryUserId?: string; // Add this to verify ownership
 }
 
 export function AIAnalysis({ 
   analysis, 
-  loading, 
+  loading,
+  entryUserId,
   fullColumnMode,
   themeColor,
   expanded = false,
   quests = [],
   onCreateTask
 }: AIAnalysisProps) {
+  const { session } = useSupabase();
   const { secondaryColor } = useTheme();
+
+  // Add ownership verification
+  const canAccessAnalysis = React.useMemo(() => {
+    if (!session?.user?.id || !entryUserId) return false;
+    return session.user.id === entryUserId;
+  }, [session?.user?.id, entryUserId]);
+  
+  const handleCreateTask = React.useCallback(async (taskData: any) => {
+    if (!session?.user?.id) {
+      console.warn("Cannot create task: User not logged in");
+      return;
+    }
+
+    if (!canAccessAnalysis) {
+      console.error("Cannot create task: User does not own this entry");
+      return;
+    }
+    
+    if (onCreateTask) {
+      await onCreateTask({
+        ...taskData,
+        user_id: session.user.id
+      });
+    }
+  }, [onCreateTask, session?.user?.id, canAccessAnalysis]);
+
+  // Show unauthorized message if no access
+  if (!canAccessAnalysis) {
+    return (
+      <View style={{ 
+        backgroundColor: 'rgba(15, 15, 15, 0.8)',
+        borderRadius: 5,
+        borderLeftWidth: 3,
+        borderColor: themeColor,
+        padding: 10
+      }}>
+        <ThemedText style={{ color: '#666', fontStyle: 'italic' }}>
+          You don't have permission to view this analysis.
+        </ThemedText>
+      </View>
+    );
+  }
+
   const recommendations = React.useMemo(() => {
     if (!analysis) return [];
     return TaskRecommendationParser.parseAnalysis(analysis);
@@ -84,13 +131,13 @@ export function AIAnalysis({
               {analysis}
             </ThemedText>
 
-            {expanded && recommendations.length > 0 && onCreateTask && (
+            {expanded && recommendations.length > 0 && session?.user?.id && (
               <TaskRecommendation
                 recommendations={recommendations}
                 themeColor={themeColor}
                 secondaryColor={secondaryColor}
                 quests={quests}
-                onCreateTask={onCreateTask}
+                onCreateTask={handleCreateTask}
               />
             )}
           </>

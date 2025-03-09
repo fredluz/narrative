@@ -102,6 +102,43 @@ Key improvements:
   };
   ```
 
+### UI Component Ownership Verification
+
+When displaying sensitive data in UI components, implement ownership verification:
+
+1. Add `entryUserId` or similar props to components that display user data
+2. Use memoized ownership checks to control access
+3. Show appropriate unauthorized messages
+
+```typescript
+interface DataComponentProps {
+  data: any;
+  entryUserId?: string; // Add ownership ID prop
+}
+
+export function DataComponent({ data, entryUserId }: DataComponentProps) {
+  const { session } = useSupabase();
+  
+  const canAccess = React.useMemo(() => {
+    if (!session?.user?.id || !entryUserId) return false;
+    return session.user.id === entryUserId;
+  }, [session?.user?.id, entryUserId]);
+
+  if (!canAccess) {
+    return <UnauthorizedView />;
+  }
+
+  return <DataView data={data} />;
+}
+```
+
+Key points:
+- Pass ownership IDs through component props
+- Implement ownership checks before rendering sensitive data
+- Show appropriate unauthorized messages
+- Use memoization for performance
+- Apply consistent unauthorized view styling
+
 ### 4. Benefits of Including `user_id` in Interfaces
 
 Including `user_id` in the data model interfaces ensures that all functions handling these data models are aware of and enforce the requirement for a user ID. This approach improves type safety, clarity, and consistency across the application, making it more robust and maintainable.
@@ -197,7 +234,8 @@ chatInterface.tsx
 usechatdata.ts
 chatagent.ts
 questagent.ts
-
+usechatagent.ts
+usejournal.ts
  
 ### Next Steps 🔄
 #### Components  

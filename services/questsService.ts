@@ -83,6 +83,23 @@ async function createQuest(questData: QuestInput): Promise<Quest> {
 }
 
 async function updateQuest(questId: number, questData: QuestInput): Promise<void> {
+  // First verify ownership
+  const { data: quest, error: fetchError } = await supabase
+    .from('quests')
+    .select('user_id')
+    .eq('id', questId)
+    .single();
+
+  if (fetchError) {
+    console.error('Error verifying quest ownership:', fetchError);
+    throw new Error(`Failed to verify quest ownership: ${fetchError.message}`);
+  }
+
+  if (!quest || quest.user_id !== questData.user_id) {
+    console.error('Cannot update quest: User does not own this quest');
+    throw new Error('You do not have permission to update this quest');
+  }
+
   const cleanedFields = Object.fromEntries(
     Object.entries(questData).map(([key, value]) => {
       if ((key === 'start_date' || key === 'end_date') && value === '') {
@@ -105,10 +122,28 @@ async function updateQuest(questId: number, questData: QuestInput): Promise<void
 }
 
 async function updateMainQuest(questId: number, userId: string): Promise<void> {
+  // First verify ownership
+  const { data: quest, error: fetchError } = await supabase
+    .from('quests')
+    .select('user_id')
+    .eq('id', questId)
+    .single();
+
+  if (fetchError) {
+    console.error('Error verifying quest ownership:', fetchError);
+    throw new Error(`Failed to verify quest ownership: ${fetchError.message}`);
+  }
+
+  if (!quest || quest.user_id !== userId) {
+    console.error('Cannot update main quest: User does not own this quest');
+    throw new Error('You do not have permission to update this quest');
+  }
+
   const { error } = await supabase.rpc('update_main_quest', { 
     p_quest_id: questId,
     p_user_id: userId
   });
+  
   if (error) {
     console.error('Error updating main quest via RPC:', error);
     throw error;

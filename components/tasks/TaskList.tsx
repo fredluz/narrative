@@ -78,17 +78,23 @@ export function TaskList({ compactMode = false }: TaskListProps) {
     }
   }, [shouldUpdate]);
 
-  const toggleTaskCompletion = async (taskId: number, currentStatus: string) => {
+  const toggleTaskCompletion = async (taskId: number, currentStatus: string, taskUserId: string) => {
     if (!session?.user?.id) {
       console.warn("User not logged in. Cannot update task.");
-      setError("User not logged in. Cannot update task.");
+      setError("Please log in to update tasks.");
+      return;
+    }
+
+    // Verify task ownership
+    if (taskUserId !== session.user.id) {
+      console.error("Cannot update task: User does not own this task");
+      setError("You don't have permission to update this task.");
       return;
     }
     
     try {
-      const userId = session.user.id;
       const newStatus = getNextStatus(currentStatus);
-      await updateTaskStatus(taskId, newStatus, userId);
+      await updateTaskStatus(taskId, newStatus, session.user.id);
       
       // Update the local state
       const updatedTasks = tasks.map(task => 
@@ -97,7 +103,7 @@ export function TaskList({ compactMode = false }: TaskListProps) {
       
       setTasks(updatedTasks);
     } catch (err) {
-      console.error("Failed to update task status:", err);
+      console.error("Failed to update task status:", { error: err, userId: session.user.id });
       setError("Failed to update task status");
     }
   };
@@ -243,8 +249,9 @@ export function TaskList({ compactMode = false }: TaskListProps) {
             >
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                 <TouchableOpacity
-                  onPress={() => toggleTaskCompletion(task.id, task.status)}
+                  onPress={() => toggleTaskCompletion(task.id, task.status, task.user_id)}
                   style={{ padding: compactMode ? 4 : 8 }}
+                  disabled={!session?.user?.id || task.user_id !== session.user.id}
                 >
                   <MaterialIcons 
                     name={
@@ -254,6 +261,7 @@ export function TaskList({ compactMode = false }: TaskListProps) {
                     }
                     size={compactMode ? 18 : 24}
                     color={
+                      !session?.user?.id || task.user_id !== session.user.id ? '#444' :
                       task.status === 'Done' ? secondaryColor :
                       task.status === 'InProgress' ? themeColor :
                       '#666'

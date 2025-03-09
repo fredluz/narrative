@@ -81,7 +81,22 @@ export async function getTasksByDate(date: string, userId: string): Promise<Task
 
 // New function to update task status in Supabase
 export async function updateTaskStatus(taskId: number, newStatus: TaskStatus, userId: string): Promise<void> {
-  console.log(`Updating task ${taskId} to ${newStatus} in Supabase`);
+  // First verify ownership
+  const { data: task, error: fetchError } = await supabase
+    .from('tasks')
+    .select('user_id')
+    .eq('id', taskId)
+    .single();
+
+  if (fetchError) {
+    console.error('Error verifying task ownership:', fetchError);
+    throw new Error(`Failed to verify task ownership: ${fetchError.message}`);
+  }
+
+  if (!task || task.user_id !== userId) {
+    console.error('Cannot update task: User does not own this task');
+    throw new Error('You do not have permission to update this task');
+  }
   
   const { error } = await supabase
     .from('tasks')
@@ -152,24 +167,32 @@ export function getNextStatus(currentStatus: string): TaskStatus {
 
 // New function to fetch quest tasks in Supabase
 export async function fetchQuestTasks(questId: number, userId: string) {
-  try {
-    const { data: tasks, error } = await supabase
-      .from('tasks')
-      .select('*')
-      .eq('quest_id', questId)
-      .eq('user_id', userId)
-      .order('scheduled_for', { ascending: true });
+  // First verify quest ownership
+  const { data: quest, error: questError } = await supabase
+    .from('quests')
+    .select('user_id')
+    .eq('id', questId)
+    .single();
 
-    if (error) {
-      console.error('Error fetching quest tasks:', error);
-      throw error;
-    }
-
-    return tasks || [];
-  } catch (err) {
-    console.error('Error in fetchQuestTasks:', err);
-    throw err;
+  if (questError) {
+    console.error('Error verifying quest ownership:', questError);
+    throw new Error(`Failed to verify quest ownership: ${questError.message}`);
   }
+
+  if (!quest || quest.user_id !== userId) {
+    console.error('Cannot fetch tasks: User does not own this quest');
+    throw new Error('You do not have permission to view these tasks');
+  }
+
+  const { data: tasks, error } = await supabase
+    .from('tasks')
+    .select('*')
+    .eq('quest_id', questId)
+    .eq('user_id', userId)
+    .order('scheduled_for', { ascending: true });
+
+  if (error) throw error;
+  return tasks || [];
 }
 
 // React Hook

@@ -13,11 +13,12 @@ import { useSupabase } from '@/contexts/SupabaseContext';
 interface KanbanProps {
   mainQuest: Quest | null;
   onViewAllQuests?: () => void;
+  userId: string;
 }
 
 type TaskStatus = 'ToDo' | 'InProgress' | 'Done';
 
-export function KanbanBoard({ mainQuest, onViewAllQuests }: KanbanProps) {
+export function KanbanBoard({ mainQuest, onViewAllQuests, userId }: KanbanProps) {
   const router = useRouter();
   const { themeColor, secondaryColor } = useTheme();
   const { session } = useSupabase();
@@ -55,6 +56,26 @@ export function KanbanBoard({ mainQuest, onViewAllQuests }: KanbanProps) {
   };
 
   const textColor = isDarkColor(themeColor) ? '#fff' : '#000';
+
+  // Add ownership verification
+  const verifyCurrentUser = React.useMemo(() => {
+    if (!session?.user?.id || !userId) return false;
+    return session.user.id === userId;
+  }, [session?.user?.id, userId]);
+
+  // Add guard for unauthorized access
+  if (!verifyCurrentUser) {
+    return (
+      <View style={{
+        padding: 20,
+        alignItems: 'center',
+        backgroundColor: 'rgba(25, 25, 25, 0.9)',
+        borderRadius: 8,
+      }}>
+        <Text style={{ color: '#AAA' }}>Unauthorized access</Text>
+      </View>
+    );
+  }
 
   if (!mainQuest) {
     return (
@@ -111,8 +132,8 @@ export function KanbanBoard({ mainQuest, onViewAllQuests }: KanbanProps) {
 
   // Add function to handle task status toggle
   const toggleTaskCompletion = async (task: Task) => {
-    if (!session?.user?.id) {
-      console.warn("User not logged in. Cannot update task.");
+    if (!verifyCurrentUser || task.user_id !== userId) {
+      console.warn("Unauthorized task update attempt");
       return;
     }
 

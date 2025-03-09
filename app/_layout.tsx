@@ -12,6 +12,7 @@ import { Session } from '@supabase/supabase-js';
 import { TriangularSpinner } from '@/components/loading/TriangularSpinner';
 import { useTheme } from '@/contexts/ThemeContext';
 import styles from './styles/global';
+import { AuthGuard } from '@/components/auth/AuthGuard';
 
 // Keep the splash screen visible while we fetch resources
 SplashScreen.preventAutoHideAsync();
@@ -110,6 +111,7 @@ export default function RootLayout() {
     <SupabaseProvider>
       <AppThemeProvider>
         <QuestUpdateProvider>
+          <AuthGuard />
           <InitialLayout />
         </QuestUpdateProvider>
       </AppThemeProvider>

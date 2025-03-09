@@ -11,6 +11,7 @@ import { questStyles } from '@/app/styles/questStyles';
 import { journalService, JournalEntry, CheckupEntry } from '@/services/journalService';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useSupabase } from '@/contexts/SupabaseContext';
+import { assertSession } from '@/utils/authGuards';
 
 import { JournalEntryInput } from './JournalEntryInput';
 import { CheckupItem } from './CheckupItem';
@@ -20,12 +21,14 @@ export function JournalPanel({
   themeColor, 
   textColor, 
   fullColumnMode = false,
-  showAnalysis = false 
+  showAnalysis = false,
+  userId 
 }: { 
   themeColor: string; 
   textColor: string; 
   fullColumnMode?: boolean;
   showAnalysis?: boolean;
+  userId: string;
 }) {
   const { secondaryColor } = useTheme();
   const router = useRouter();
@@ -53,6 +56,23 @@ export function JournalPanel({
   const [hasDailyEntry, setHasDailyEntry] = useState(false);
   const [expandedCheckupId, setExpandedCheckupId] = useState<string | null>(null);
 
+  // Add ownership verification
+  const verifyCurrentUser = React.useMemo(() => {
+    if (!session?.user?.id || !userId) return false;
+    return session.user.id === userId;
+  }, [session?.user?.id, userId]);
+
+  // Add guard for unauthorized access
+  if (!verifyCurrentUser) {
+    return (
+      <Card style={[styles.taskCard, { padding: 15 }]}>
+        <ThemedText style={{ color: '#666', textAlign: 'center' }}>
+          Unauthorized access
+        </ThemedText>
+      </Card>
+    );
+  }
+
   // Format date display
   const formattedDate = currentDate.toLocaleDateString('en-US', { 
     weekday: 'long', 
@@ -63,7 +83,9 @@ export function JournalPanel({
   // Load current entries whenever date changes or after refresh
   useEffect(() => {
     const loadEntries = async () => {
-      if (!session?.user?.id) return;
+      if (!verifyCurrentUser) return;
+      assertSession(session); // This will throw if session is null
+      
       const dateStr = currentDate.toISOString().split('T')[0];
       
       // Get daily entry first with user_id
@@ -103,7 +125,7 @@ export function JournalPanel({
     };
 
     loadEntries();
-  }, [currentDate, getAiResponses, session?.user?.id]);
+  }, [currentDate, getAiResponses, session?.user?.id, verifyCurrentUser]);
 
   // Refresh entries initially to make sure we have the latest data
   useEffect(() => {
@@ -170,7 +192,8 @@ export function JournalPanel({
 
   // Modified save handler to update local entries before saving and generate AI response
   const handleSaveEntry = useCallback(async () => {
-    if (!localEntry || !session?.user?.id) return;
+    if (!localEntry) return;
+    assertSession(session); // This will throw if session is null
     
     try {
       setLocalLoading(true);
@@ -208,11 +231,12 @@ export function JournalPanel({
       setLocalLoading(false);
       setAiGenerating(false);
     }
-  }, [currentDate, localEntry, localTags, updateLocalEntry, refreshEntries, getAiResponses, session?.user?.id]);
+  }, [currentDate, localEntry, localTags, updateLocalEntry, refreshEntries, getAiResponses, session]);
 
   // Save a checkup entry (without linking to a daily entry yet)
   const handleSaveCheckup = useCallback(async () => {
-    if (!localEntry || !session?.user?.id) return;
+    if (!localEntry) return;
+    assertSession(session); // This will throw if session is null
     
     try {
       setLocalLoading(true);
@@ -262,11 +286,11 @@ export function JournalPanel({
       setLocalLoading(false);
       setAiGenerating(false);
     }
-  }, [currentDate, localEntry, localTags, refreshEntries, getAiResponses, aiAnalysis, session?.user?.id]);
+  }, [currentDate, localEntry, localTags, refreshEntries, getAiResponses, aiAnalysis, session]);
 
   // Create a daily entry and link all unlinked checkups via foreign key
   const handleDailyEntry = useCallback(async () => {
-    if (!session?.user?.id) return;
+    assertSession(session); // This will throw if session is null
     
     try {
       setLocalLoading(true);
@@ -310,7 +334,7 @@ export function JournalPanel({
       setLocalLoading(false);
       setAiGenerating(false);
     }
-  }, [currentDate, refreshEntries, router, getAiResponses, session?.user?.id]);
+  }, [currentDate, refreshEntries, router, getAiResponses, session]);
 
   const loading = localLoading;
   const error = localError;
@@ -490,7 +514,7 @@ export function JournalPanel({
           </View>
         </View>
       </View>
-
+      
       <View style={{ 
         flex: 1, 
         padding: 15, 

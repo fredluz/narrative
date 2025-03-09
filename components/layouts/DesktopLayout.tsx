@@ -13,8 +13,10 @@ import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { useChatData } from '@/hooks/useChatData';
 import { useQuestUpdate } from '@/contexts/QuestUpdateContext';
 import { JournalPanel } from '@/components/journal/JournalPanel';
+import { useSupabase } from '@/contexts/SupabaseContext';
 
 export function DesktopLayout() {
+  const { session } = useSupabase();
   const router = useRouter();
   const { themeColor, secondaryColor } = useTheme();
   const { 
@@ -62,58 +64,40 @@ export function DesktopLayout() {
   const textColor = isDarkColor(themeColor) ? '#fff' : '#000';
   const brightAccent = getBrightAccent(themeColor);
 
-  // Simple mount-time load
+  // Simple mount-time load with auth check
   useEffect(() => {
+    if (!session?.user?.id) {
+      console.warn("Please log in to view content");
+      return;
+    }
     reload();
-  }, []);
+  }, [session?.user?.id]);
 
-  // Add effect to check for updates
+  // Add effect to check for updates with auth check
   useEffect(() => {
+    if (!session?.user?.id) return;
+    
     if (shouldUpdate) {
       console.log('Update triggered, reloading quests');
       reload();
       resetUpdate();
     }
-  }, [shouldUpdate]);
+  }, [shouldUpdate, session?.user?.id]);
+
+  if (!session?.user?.id) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={styles.column}>
+          <Text style={{ color: '#AAA', textAlign: 'center' }}>
+            Please log in to view your dashboard.
+          </Text>
+        </View>
+      </View>
+    );
+  }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}> 
-      {/* Cyberpunk-style glitch line */}
-      <View style={{
-        position: 'absolute',
-        top: '35%',
-        left: -10,
-        width: '120%',
-        height: 1,
-        backgroundColor: secondaryColor,
-        opacity: 0.1,
-        transform: [{ rotate: '-0.3deg' }],
-        zIndex: 1,
-      }} />
-      
-      {/* Vertical accent line */}
-      <View style={{
-        position: 'absolute',
-        top: '10%',
-        bottom: '10%',
-        width: 1,
-        left: '33.3%',
-        backgroundColor: themeColor,
-        opacity: 0.1,
-        zIndex: 1,
-      }} />
-      
-      {/* Vertical accent line */}
-      <View style={{
-        position: 'absolute',
-        top: '10%',
-        bottom: '10%',
-        width: 1,
-        right: '33.3%',
-        backgroundColor: themeColor,
-        opacity: 0.1,
-        zIndex: 1,
-      }} />
+    
             
       <View style={styles.column}>
         {loading ? (
@@ -139,13 +123,14 @@ export function DesktopLayout() {
             <KanbanBoard 
               mainQuest={mainQuest} 
               onViewAllQuests={() => router.push('/quests')}
+              userId={session.user.id}
             />
 
             {/* TaskList now appears in the first column after KanbanBoard */}
             <TaskList compactMode={true} />
           </>
         )}
-      </View>
+   
 
       <View style={styles.column}>
         <ChatInterface 
@@ -156,12 +141,18 @@ export function DesktopLayout() {
           isTyping={isTyping}
           sessionEnded={sessionEnded}
           checkupCreated={checkupCreated} // Pass the new prop
+          userId={session.user.id}
         />
       </View>
       
       {/* JournalPanel moved to its own column for more vertical space */}
       <View style={styles.column}>
-        <JournalPanel themeColor={themeColor} textColor={textColor} fullColumnMode={true} />
+        <JournalPanel 
+          themeColor={themeColor} 
+          textColor={textColor} 
+          fullColumnMode={true} 
+          userId={session.user.id}
+        />
       </View>
       
       <SettingsButton />
