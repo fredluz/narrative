@@ -11,6 +11,85 @@ const JOHNNY_RESPONSE_DELAY = 2000;
 const MESSAGE_STAGGER_DELAY = 1000;
 const LOCAL_STORAGE_KEY = 'chat_messages_local'; // key for local storage
 
+// New database access functions for ChatAgent
+export async function getCurrentMessagesFromDB(userId: string) {
+  if (!userId) {
+    throw new Error('User ID is required to fetch current messages');
+  }
+  
+  const { data, error } = await supabase
+    .from('chat_messages')
+    .select('*')
+    .is('chat_session_id', null)
+    .eq('user_id', userId)
+    .order('created_at', { ascending: true });
+  
+  if (error) {
+    throw error;
+  }
+  
+  return data || [];
+}
+
+export async function getRecentJournalEntries(userId: string, limit: number = 2) {
+  if (!userId) {
+    throw new Error('User ID is required to fetch journal entries');
+  }
+  
+  const { data, error } = await supabase
+    .from('journal_entries')
+    .select('user_entry, ai_response, user_id')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  
+  if (error) {
+    throw error;
+  }
+  
+  return data || [];
+}
+
+export async function createChatSession(summary: string, tags: string[], userId: string) {
+  if (!userId) {
+    throw new Error('User ID is required to create a chat session');
+  }
+  
+  const { data, error } = await supabase
+    .from('chat_sessions')
+    .insert([{ 
+      summary,
+      tags,
+      user_id: userId
+    }])
+    .select('id')
+    .single();
+  
+  if (error) {
+    throw error;
+  }
+  
+  return data;
+}
+
+export async function updateMessagesWithSessionId(messageIds: any[], sessionId: string, userId: string) {
+  if (!userId || !sessionId || !messageIds || messageIds.length === 0) {
+    throw new Error('User ID, session ID, and message IDs are required to update messages');
+  }
+  
+  const { error } = await supabase
+    .from('chat_messages')
+    .update({ chat_session_id: sessionId })
+    .in('id', messageIds)
+    .eq('user_id', userId);
+  
+  if (error) {
+    throw error;
+  }
+  
+  return true;
+}
+
 export function useChatData() {
   const { themeColor } = useTheme();
   const { session } = useSupabase();

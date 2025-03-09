@@ -1,10 +1,16 @@
 import OpenAI from 'openai';
-import { supabase } from '../../lib/supabase';
 import { ChatMessage, JournalEntry, ChatSession } from '@/app/types';
 import { ChatCompletionMessageParam } from 'openai/resources/chat';
 import { journalService } from '../journalService';
 import { QuestAgent } from './QuestAgent';
 import { performanceLogger } from '@/utils/performanceLogger';
+// Remove supabase import and add new imports from useChatData
+import { 
+  getCurrentMessagesFromDB, 
+  getRecentJournalEntries, 
+  createChatSession,
+  updateMessagesWithSessionId
+} from '@/hooks/useChatData';
 
 export class ChatAgent {
   private openai: OpenAI;
@@ -54,21 +60,17 @@ export class ChatAgent {
       console.log('\n=== ChatAgent.generateChatResponse ===');
       console.log('Current message:', message);
       
-      // Get current messages with user_id filter
+      // Replace direct SQL call with function from useChatData
       performanceLogger.startOperation('fetchCurrentMessages');
-      const { data: currentMessages, error: currentError } = await supabase
-        .from('chat_messages')
-        .select('*')
-        .is('chat_session_id', null)
-        .eq('user_id', userId)
-        .order('created_at', { ascending: true });
-      performanceLogger.endOperation('fetchCurrentMessages');
-        
-      if (currentError) {
+      let currentMessages;
+      try {
+        currentMessages = await getCurrentMessagesFromDB(userId);
+      } catch (currentError) {
         console.error('Error fetching chat messages:', currentError);
         throw currentError;
       }
-      
+      performanceLogger.endOperation('fetchCurrentMessages');
+        
       // First check for relevant quests based on the message
       console.log('Checking for relevant quests');
       performanceLogger.startOperation('findRelevantQuests');
@@ -122,15 +124,11 @@ export class ChatAgent {
         }).join('\n\n');
       }
 
-      // Fetch recent journal entries for additional context
-      const { data: recentEntries, error: journalError } = await supabase
-        .from('journal_entries')
-        .select('user_entry, ai_response, user_id')
-        .eq('user_id', userId) // Added user_id filtering
-        .order('created_at', { ascending: false })
-        .limit(2);
-
-      if (journalError) {
+      // Replace direct SQL call with function from useChatData
+      let recentEntries;
+      try {
+        recentEntries = await getRecentJournalEntries(userId, 2);
+      } catch (journalError) {
         console.error('Error fetching journal entries:', journalError);
         throw journalError;
       }
@@ -310,27 +308,20 @@ CONVERSATION CONTEXT:
       performanceLogger.endOperation('parseSummaryResponse');
 
       performanceLogger.startOperation('dbOperations');
-      // Create new session with summary, tags, and user_id
-      const { data: sessionData, error: sessionError } = await supabase
-        .from('chat_sessions')
-        .insert([{ 
-          summary,
-          tags,
-          user_id: userId  // Add user_id to the session
-        }])
-        .select('id')
-        .single();
+      // Replace direct SQL calls with functions from useChatData
+      let sessionData;
+      try {
+        sessionData = await createChatSession(summary, tags, userId);
+      } catch (sessionError) {
+        throw sessionError;
+      }
 
-      if (sessionError) throw sessionError;
-
-      // Update all messages with the session ID, ensuring we only update user's own messages
-      const { error: updateError } = await supabase
-        .from('chat_messages')
-        .update({ chat_session_id: sessionData.id })
-        .in('id', messages.map(m => m.id))
-        .eq('user_id', userId); // Added user_id filtering here
-
-      if (updateError) throw updateError;
+      // Update all messages with the session ID
+      try {
+        await updateMessagesWithSessionId(messages.map(m => m.id), sessionData.id, userId);
+      } catch (updateError) {
+        throw updateError;
+      }
       performanceLogger.endOperation('dbOperations');
 
       // Create a checkup entry based on this chat session
