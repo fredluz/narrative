@@ -1,16 +1,10 @@
 // filepath: c:\Users\ThinkPad\Code\QuestLogMockupsWL\QuestLog\services\agents\SuggestionAgent.ts
 import OpenAI from 'openai';
+import { GoogleGenerativeAI, type GenerativeModel } from "@google/generative-ai";
 import { performanceLogger } from '@/utils/performanceLogger';
 import { Quest, Task } from '@/app/types';
 import { createTask } from '@/services/tasksService';
 import { createQuest, getOrCreateMiscQuest } from '@/services/questsService';
-// Add these imports for context data
-import { QuestAgent } from './QuestAgent';
-import { journalService } from '../journalService';
-import { 
-  getCurrentMessagesFromDB, 
-  getRecentJournalEntries, 
-} from '@/hooks/useChatData';
 
 /**
  * Represents a task suggestion generated from user content
@@ -64,32 +58,26 @@ interface SuggestionUpdateHandlers {
  * task and quest suggestions.
  */
 export class SuggestionAgent {
+  private genAI: GoogleGenerativeAI;
+  private model: GenerativeModel;
   private openai: OpenAI;
   private taskSuggestions: TaskSuggestion[] = [];
   private questSuggestions: QuestSuggestion[] = [];
   private updateHandlers: SuggestionUpdateHandlers = {};
-  // Add a QuestAgent instance for finding relevant quests
-  private questAgent: QuestAgent;
   
   // Add a static instance to implement proper singleton pattern
   private static instance: SuggestionAgent;
 
   constructor() {
-    // Initialize OpenAI API with both endpoints
-    this.openai = new OpenAI({
-      apiKey: process.env.EXPO_PUBLIC_OPENAI_API_KEY,
-      dangerouslyAllowBrowser: true
-    });
+    // Initialize both APIs
+    this.genAI = new GoogleGenerativeAI(process.env.EXPO_PUBLIC_GEMINI_API_KEY || '');
+    this.model = this.genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
     
-    // Also keep Deepseek endpoint for generation tasks
     this.openai = new OpenAI({
       apiKey: process.env.EXPO_PUBLIC_DEEPSEEK_API_KEY,
       baseURL: 'https://api.deepseek.com/v1',
       dangerouslyAllowBrowser: true
     });
-    
-    // Initialize quest agent
-    this.questAgent = new QuestAgent();
   }
 
   // Static method to get the singleton instance
@@ -124,74 +112,12 @@ export class SuggestionAgent {
       
       console.log('🔍 SuggestionAgent: Analyzing chat message for potential tasks/quests');
       
-      // Gather relevant context similar to ChatAgent
-      performanceLogger.startOperation('gatherContext');
-      
-      // Get relevant quests
-      console.log('Finding relevant quests');
-      const relevantQuests = await this.questAgent.findRelevantQuests(message, userId);
-      
-      // Get today's checkups
-      const today = new Date().toISOString().split('T')[0];
-      console.log('Fetching today\'s checkups');
-      const todaysCheckups = await journalService.getCheckupEntries(today, userId);
-      
-      // Get recent journal entries
-      console.log('Fetching recent journal entries');
-      const recentEntries = await getRecentJournalEntries(userId, 2);
-      
-      // Format contexts
-      let questContext = '';
-      if (relevantQuests.length > 0) {
-        questContext = '\nRELEVANT QUEST AND TASK DETAILS:\n' + relevantQuests.map(quest => {
-          let questInfo = `\nQuest: ${quest.title}\n`;
-          questInfo += `Description: ${quest.description || 'No description available'}\n`;
-          questInfo += `Current Status: ${quest.status || 'Unknown'}\n`;
-          
-          if (quest.relevantTasks && quest.relevantTasks.length > 0) {
-            questInfo += '\nRelevant Tasks:\n';
-            quest.relevantTasks.forEach(task => {
-              questInfo += `- ${task.name}\n`;
-              questInfo += `  Description: ${task.description}\n`;
-            });
-          }
-          return questInfo;
-        }).join('\n---\n');
-      }
-
-      // Format checkup context
-      let checkupContext = '';
-      if (todaysCheckups && todaysCheckups.length > 0) {
-        checkupContext = todaysCheckups.map(checkup => {
-          const time = new Date(checkup.created_at).toLocaleTimeString([], { 
-            hour: '2-digit', minute: '2-digit', hour12: false 
-          });
-          return `[${time}] Checkup: "${checkup.content}"`;
-        }).join('\n\n');
-      }
-
-      // Format journal context
-      let journalContext = '';
-      if (recentEntries && recentEntries.length > 0) {
-        journalContext = recentEntries
-          .filter(entry => entry.user_id === userId)
-          .map(entry => `Journal Entry: "${entry.user_entry}"`)
-          .join('\n\n');
-      }
-      
-      performanceLogger.endOperation('gatherContext');
-      
-      // Use OpenAI's gpt-4o-mini model instead of Gemini
+      // Use Gemini for quick detection
       const hasTaskPotential = await this.detectTaskPotential(message);
       
       if (hasTaskPotential) {
         console.log('✨ Task potential detected in message');
-        // Pass the context to the task suggestion generator
-        const taskSuggestion = await this.generateTaskSuggestion(
-          message, 
-          userId, 
-          { questContext, checkupContext, journalContext }
-        );
+        const taskSuggestion = await this.generateTaskSuggestion(message, userId);
         if (taskSuggestion) {
           this.addSuggestionToQueue(taskSuggestion);
         }
@@ -201,12 +127,7 @@ export class SuggestionAgent {
       
       if (hasQuestPotential) {
         console.log('🏆 Quest potential detected in message');
-        // Pass the context to the quest suggestion generator
-        const questSuggestion = await this.generateQuestSuggestion(
-          message, 
-          userId,
-          { questContext, checkupContext, journalContext }
-        );
+        const questSuggestion = await this.generateQuestSuggestion(message, userId);
         if (questSuggestion) {
           this.addSuggestionToQueue(questSuggestion);
         }
@@ -234,62 +155,16 @@ export class SuggestionAgent {
       
       console.log('🔍 SuggestionAgent: Analyzing journal entry for potential tasks/quests');
       
-      // Gather context similar to analyzeMessage
-      performanceLogger.startOperation('gatherContext');
+      // Journal entries are more likely to contain task/quest material, so we analyze both
       
-      // Get relevant quests
-      console.log('Finding relevant quests');
-      const relevantQuests = await this.questAgent.findRelevantQuests(entry, userId);
-      
-      // Get today's checkups
-      const today = new Date().toISOString().split('T')[0];
-      console.log('Fetching today\'s checkups');
-      const todaysCheckups = await journalService.getCheckupEntries(today, userId);
-      
-      // Format contexts
-      let questContext = '';
-      if (relevantQuests.length > 0) {
-        questContext = relevantQuests.map(quest => {
-          let questInfo = `Quest: ${quest.title}\n`;
-          questInfo += `Description: ${quest.description || 'No description available'}\n`;
-          
-          if (quest.relevantTasks && quest.relevantTasks.length > 0) {
-            questInfo += 'Related Tasks:\n';
-            quest.relevantTasks.forEach(task => {
-              questInfo += `- ${task.name}: ${task.description}\n`;
-            });
-          }
-          return questInfo;
-        }).join('\n---\n');
-      }
-
-      // Format checkup context
-      let checkupContext = '';
-      if (todaysCheckups && todaysCheckups.length > 0) {
-        checkupContext = todaysCheckups.map(checkup => {
-          return `Checkup: "${checkup.content}"`;
-        }).join('\n\n');
-      }
-      
-      // No need to get journal entries, as we're already analyzing one
-      performanceLogger.endOperation('gatherContext');
-      
-      // Generate a task suggestion from the journal content with context
-      const taskSuggestion = await this.generateTaskSuggestion(
-        entry, 
-        userId, 
-        { questContext, checkupContext, journalContext: '' }
-      );
+      // Generate a task suggestion from the journal content
+      const taskSuggestion = await this.generateTaskSuggestion(entry, userId);
       if (taskSuggestion) {
         this.addSuggestionToQueue(taskSuggestion);
       }
       
-      // Generate a quest suggestion from the journal content with context
-      const questSuggestion = await this.generateQuestSuggestion(
-        entry, 
-        userId,
-        { questContext, checkupContext, journalContext: '' }
-      );
+      // Generate a quest suggestion from the journal content
+      const questSuggestion = await this.generateQuestSuggestion(entry, userId);
       if (questSuggestion) {
         this.addSuggestionToQueue(questSuggestion);
       }
@@ -319,18 +194,9 @@ Message: "${content}"
 
 Respond ONLY with "true" if there is task potential or "false" if not.`;
 
-      // Use OpenAI's gpt-4o-mini model instead of Gemini
-      const response = await this.openai.chat.completions.create({
-        model: "deepseek-chat",
-        messages: [
-          { role: "system", content: prompt }
-        ],
-        temperature: 0.1,
-        max_tokens: 10
-      });
-
-      const responseText = response.choices[0].message?.content?.trim().toLowerCase();
-      return responseText === 'true';
+      const result = await this.model.generateContent(prompt);
+      const response = result.response.text().trim().toLowerCase();
+      return response === 'true';
     } catch (error) {
       console.error('Error detecting task potential:', error);
       return false;
@@ -356,18 +222,9 @@ Message: "${content}"
 
 Respond ONLY with "true" if there is quest potential or "false" if not.`;
 
-      // Use OpenAI's gpt-4o-mini model instead of Gemini
-      const response = await this.openai.chat.completions.create({
-        model: "deepseek-chat",
-        messages: [
-          { role: "system", content: prompt }
-        ],
-        temperature: 0.1,
-        max_tokens: 10
-      });
-      
-      const responseText = response.choices[0].message?.content?.trim().toLowerCase();
-      return responseText === 'true';
+      const result = await this.model.generateContent(prompt);
+      const response = result.response.text().trim().toLowerCase();
+      return response === 'true';
     } catch (error) {
       console.error('Error detecting quest potential:', error);
       return false;
@@ -378,35 +235,14 @@ Respond ONLY with "true" if there is quest potential or "false" if not.`;
    * Generates a task suggestion from content
    * @param content The source content
    * @param userId The user's ID
-   * @param context Optional context information
    * @returns A task suggestion or null
    */
-  private async generateTaskSuggestion(
-    content: string, 
-    userId: string,
-    context?: { questContext: string; checkupContext: string; journalContext: string; }
-  ): Promise<TaskSuggestion | null> {
+  private async generateTaskSuggestion(content: string, userId: string): Promise<TaskSuggestion | null> {
     performanceLogger.startOperation('generateTaskSuggestion');
     try {
       console.log('🚀 Generating task suggestion from content');
       
-      // Build enhanced prompt with context information
-      let contextInfo = '';
-      if (context) {
-        if (context.questContext) {
-          contextInfo += `\nEXISTING QUESTS:\n${context.questContext}\n`;
-        }
-        if (context.checkupContext) {
-          contextInfo += `\nRECENT CHECKUPS:\n${context.checkupContext}\n`;
-        }
-        if (context.journalContext) {
-          contextInfo += `\nRECENT JOURNAL ENTRIES:\n${context.journalContext}\n`;
-        }
-      }
-      
       const prompt = `Create a task based on this content: "${content}"
-
-${contextInfo ? `BACKGROUND CONTEXT (use this to make better, more relevant suggestions):\n${contextInfo}\n` : ''}
 
 Generate a JSON object with these EXACT fields:
 {
@@ -425,9 +261,7 @@ IMPORTANT:
 - Use the user's actual wording when possible
 - Set reasonable dates based on the content
 - Infer priority from urgency/importance clues
-- Consider existing quests and suggest tasks that align with them when relevant
-- Refer to the background context to make the suggestion more coherent with the user's existing plans
-- Only include what's in the original content or makes sense given the context
+- Only include what's in the original content
 - Use empty string or null for missing information`;
 
       const response = await this.openai.chat.completions.create({
@@ -486,35 +320,14 @@ IMPORTANT:
    * Generates a quest suggestion from content
    * @param content The source content
    * @param userId The user's ID
-   * @param context Optional context information
    * @returns A quest suggestion or null
    */
-  private async generateQuestSuggestion(
-    content: string, 
-    userId: string,
-    context?: { questContext: string; checkupContext: string; journalContext: string; }
-  ): Promise<QuestSuggestion | null> {
+  private async generateQuestSuggestion(content: string, userId: string): Promise<QuestSuggestion | null> {
     performanceLogger.startOperation('generateQuestSuggestion');
     try {
       console.log('🚀 Generating quest suggestion from content');
       
-      // Build enhanced prompt with context information
-      let contextInfo = '';
-      if (context) {
-        if (context.questContext) {
-          contextInfo += `\nEXISTING QUESTS:\n${context.questContext}\n`;
-        }
-        if (context.checkupContext) {
-          contextInfo += `\nRECENT CHECKUPS:\n${context.checkupContext}\n`;
-        }
-        if (context.journalContext) {
-          contextInfo += `\nRECENT JOURNAL ENTRIES:\n${context.journalContext}\n`;
-        }
-      }
-      
       const prompt = `Create a quest (a larger goal that might require multiple tasks) based on this content: "${content}"
-
-${contextInfo ? `BACKGROUND CONTEXT (use this to make better, more relevant suggestions):\n${contextInfo}\n` : ''}
 
 Generate a JSON object with these EXACT fields:
 {
@@ -536,11 +349,9 @@ Generate a JSON object with these EXACT fields:
 IMPORTANT:
 - Make the quest represent a meaningful goal
 - Create 2-4 related tasks that would help achieve this quest
-- Consider existing quests and avoid creating duplicates
-- Make this quest complement existing quests when appropriate
 - Use the user's actual wording when possible
 - Set reasonable dates based on the content
-- Only include what's in the original content or can be directly inferred from context
+- Only include what's in the original content or can be directly inferred
 - Use empty string or null for missing information`;
 
       const response = await this.openai.chat.completions.create({
@@ -617,29 +428,6 @@ IMPORTANT:
     try {
       console.log('⬆️ Upgrading task to quest:', task.title);
       
-      // Gather relevant context similar to analyzeMessage if a userId is available
-      // First, try to extract userId from the task (it might have been added when task was created)
-      const extractedUserId = (task as any).user_id;
-      
-      let contextInfo = '';
-      
-      if (extractedUserId) {
-        try {
-          // Get relevant quests
-          console.log('Finding relevant quests for upgrade');
-          const relevantQuests = await this.questAgent.findRelevantQuests(task.description, extractedUserId);
-          
-          if (relevantQuests.length > 0) {
-            contextInfo += '\nRELEVANT QUESTS:\n' + relevantQuests.map(quest => {
-              return `- ${quest.title}: ${quest.description || 'No description'}\n`;
-            }).join('\n');
-          }
-        } catch (error) {
-          // Continue even if context gathering fails
-          console.error('Non-fatal error gathering context for quest upgrade:', error);
-        }
-      }
-      
       const prompt = `Upgrade this task to a quest (a larger goal that might require multiple tasks):
 
 Task Title: ${task.title}
@@ -650,7 +438,6 @@ ${task.location ? `Location: ${task.location}` : ''}
 Priority: ${task.priority}
 ${task.tags && task.tags.length > 0 ? `Tags: ${task.tags.join(', ')}` : ''}
 ${task.subtasks ? `Subtasks: ${task.subtasks}` : ''}
-${contextInfo ? `\n${contextInfo}` : ''}
 
 Generate a JSON object with these EXACT fields:
 {
@@ -677,8 +464,7 @@ IMPORTANT:
 - Make the original task the first related task
 - Add 2-3 more related tasks that would help achieve this quest
 - Make the quest a meaningful expansion of the original task
-- Set reasonable dates based on the original task
-- If relevant quests are listed above, design this quest to complement them, not duplicate them`;
+- Set reasonable dates based on the original task`;
 
       const response = await this.openai.chat.completions.create({
         model: "deepseek-chat",

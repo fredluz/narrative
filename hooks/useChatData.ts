@@ -452,6 +452,35 @@ export function useChatData() {
 
   }, [currentSessionId, resetInactivityTimer, session?.user?.id, getCurrentSessionMessages]);
 
+  // Add a new function to delete current session messages
+  const deleteCurrentMessages = useCallback(async () => {
+    // Strong guard clause for authentication
+    if (!session?.user?.id) {
+      console.error('Cannot delete messages: No user ID');
+      setError('Authentication required to delete messages');
+      return;
+    }
+
+    const userId = session.user.id;
+    
+    try {
+      // Clear local storage for current session
+      const key = `${LOCAL_STORAGE_KEY}_${userId}`;
+      await AsyncStorage.removeItem(key); // Use removeItem to clear the local storage
+      await AsyncStorage.setItem(key, ''); // Use setItem to reset the local storage
+      // Update state to remove current session messages
+      setMessages(prev => prev.filter(msg => msg.chat_session_id !== null));
+      
+      console.log('Successfully deleted current chat messages');
+      
+      // End the session without creating a record
+      setSessionEnded(true);
+    } catch (error) {
+      console.error('Error deleting current messages:', error);
+      setError('Failed to delete messages: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    }
+  }, [session?.user?.id]);
+
   // Cleanup timers on unmount
   useEffect(() => {
     return () => {
@@ -474,6 +503,7 @@ export function useChatData() {
     checkupCreated,
     error, // Expose error state for UI feedback
     authenticated: !!session?.user?.id, // Add authentication status
-    syncMessages // Expose sync function so you can trigger it externally if needed
+    syncMessages, // Expose sync function so you can trigger it externally if needed
+    deleteCurrentMessages // Expose the new function
   };
 }

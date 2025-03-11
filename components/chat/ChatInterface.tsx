@@ -32,6 +32,7 @@ interface Props {
   sessionEnded?: boolean;
   checkupCreated?: boolean; // Add new prop
   onEndSession?: () => void;
+  onDeleteMessages?: () => void; // Add the onDeleteMessages prop
   userId: string; // Add required userId prop for RLS
 }
 
@@ -43,6 +44,7 @@ export function ChatInterface({
   sessionEnded,
   checkupCreated,
   onEndSession,
+  onDeleteMessages, // Destructure the prop
   userId
 }: Props) {
   const [message, setMessage] = useState('');
@@ -312,6 +314,38 @@ export function ChatInterface({
                 End Session
               </Text>
             </TouchableOpacity>
+              {/* Delete messages button */}
+              <TouchableOpacity 
+              style={{
+                marginLeft: 15,
+                backgroundColor: 'rgba(30, 30, 30, 0.9)',
+                borderWidth: 1,
+                borderColor: '#ff4c4c', // Red color for delete action
+                borderRadius: 4,
+                paddingVertical: 4,
+                paddingHorizontal: 8,
+                flexDirection: 'row',
+                alignItems: 'center',
+              }}
+              onPress={onDeleteMessages}
+              disabled={!userId} // Disable if not authenticated
+            >
+              <MaterialIcons 
+                name="delete" 
+                size={16} 
+                color="#ff4c4c"
+                style={{ marginRight: 4 }} 
+              />
+              <Text style={{
+                color: '#ff4c4c',
+                fontSize: 12,
+                fontWeight: 'bold',
+                textTransform: 'uppercase',
+              }}>
+                Delete Chat
+              </Text>
+            </TouchableOpacity>
+            
           </View>
         </View>
 

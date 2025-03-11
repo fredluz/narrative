@@ -6,14 +6,13 @@ import { authService } from '@/services/authService';
 import { useTheme } from '@/contexts/ThemeContext';
 import { colors } from '@/app/styles/global';
 import { useSupabase } from '@/contexts/SupabaseContext';
-
 const asciiArt = `
-    ███╗   ██╗ █████╗ ██████╗ ██████╗  █████╗ ████████╗██╗██╗   ██╗███████╗
-   ████╗  ██║██╔══██╗██╔══██╗██╔══██╗██╔══██╗╚══██╔══╝██║██║   ██║██╔════╝
-  ██╔██╗ ██║███████║██████╔╝██████╔╝███████║   ██║   ██║██║   ██║█████╗  
- ██║╚██╗██║██╔══██║██╔══██╗██╔══██╗██╔══██║   ██║   ██║╚██╗ ██╝ ██╔══╝  
-██║ ╚████║██║  ██║██║  ██║██║  ██║██║  ██║   ██║   ██║ ╚████╔╝ ███████╗
-╚═╝  ╚═══╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝   ╚═╝   ╚═╝  ╚═══╝  ╚══════╝
+  ███╗   ██╗ █████╗  ██████╗ ██████╗  █████╗████████╗██╗██╗   ██╗███████╗
+   ████╗  ██║██╔══██╗ ██╔══██╗██╔══██╗██╔══██╗══██╔═╝ ██║██║   ██║██╔════╝
+    ██╔██╗ ██║███████║██████╔╝██████╔╝███████║   ██║   ██║██║   ██║█████╗  
+     ██║╚██╗██║██╔══██║██╔══██╗██╔══██╗██╔══██║   ██║   ██║╚██╗ ██╝ ██╔══╝  
+      ██║ ╚████║██║  ██║██║  ██║██║  ██║██║  ██║   ██║   ██║ ╚████╔╝ ███████╗
+       ╚═╝  ╚═══╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝   ╚═╝   ╚═╝  ╚══╝   ╚══════╝
 `;
 
 // Extended char set (incl. Chinese)
@@ -172,7 +171,7 @@ export default function AuthScreen() {
       {/* Auth UI */}
       <View style={styles.content}>
         <Text style={[styles.asciiArt, { color: themeColor }]}>{asciiArt}</Text>
-        <Text style={styles.subtitle}>Your Digital Quest Journal</Text>
+        <Text style={styles.subtitle}>Your Digital Journey</Text>
         {error && <Text style={styles.errorText}>{error}</Text>}
         <TouchableOpacity
           style={[styles.googleButton, { borderColor: themeColor }]}
@@ -223,7 +222,7 @@ const styles = StyleSheet.create({
     fontFamily: 'monospace',
     fontSize: 18,
     color: '#FFFFFF',
-    opacity: 0.15,
+    opacity: 0.8,
     lineHeight: 15,
   },
   content: {
@@ -236,11 +235,12 @@ const styles = StyleSheet.create({
   asciiArt: {
     fontFamily: 'monospace',
     fontSize: 8,
-    textAlign: 'center',
+    textAlign: 'left',
     marginBottom: 10,
   },
   subtitle: {
     fontSize: 18,
+    fontFamily: 'monospace',
     color: '#999',
     marginBottom: 20,
   },

@@ -5,8 +5,6 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { KanbanBoard } from '@/components/quests/KanbanBoard';
 import { TaskList } from '@/components/tasks/TaskList';
 import { ChatInterface } from '@/components/chat/ChatInterface';
-import TaskSuggestionPopup from '@/components/suggestions/TaskSuggestionPopup';
-import QuestSuggestionPopup from '@/components/suggestions/QuestSuggestionPopup';
 import SuggestionContainer  from '@/components/suggestions/SuggestionContainer';
 import { useQuests } from '@/services/questsService';
 import { useSuggestions } from '@/contexts/SuggestionContext';
@@ -29,6 +27,7 @@ export function DesktopLayout() {
     handleTyping, 
     endSession, 
     isTyping, 
+    deleteCurrentMessages,
     sessionEnded,
     checkupCreated // Get the new checkupCreated state
   } = useChatData();
@@ -154,6 +153,7 @@ export function DesktopLayout() {
           onEndSession={endSession}
           isTyping={isTyping}
           sessionEnded={sessionEnded}
+          onDeleteMessages={deleteCurrentMessages}
           checkupCreated={checkupCreated} // Pass the new prop
           userId={session.user.id}
         />
