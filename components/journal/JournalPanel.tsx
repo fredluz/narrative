@@ -12,6 +12,7 @@ import { journalService, JournalEntry, CheckupEntry } from '@/services/journalSe
 import { useTheme } from '@/contexts/ThemeContext';
 import { useSupabase } from '@/contexts/SupabaseContext';
 import { assertSession } from '@/utils/authGuards';
+import { useSuggestions } from '@/contexts/SuggestionContext';
 
 import { JournalEntryInput } from './JournalEntryInput';
 import { CheckupItem } from './CheckupItem';
@@ -42,6 +43,7 @@ export function JournalPanel({
     goToPreviousDay, 
     goToNextDay
   } = useJournal();
+  const { analyzeMessage } = useSuggestions();
   
   const [localLoading, setLocalLoading] = useState(false);
   const [aiGenerating, setAiGenerating] = useState(false);
@@ -233,7 +235,7 @@ export function JournalPanel({
     }
   }, [currentDate, localEntry, localTags, updateLocalEntry, refreshEntries, getAiResponses, session]);
 
-  // Save a checkup entry (without linking to a daily entry yet)
+  // Save a checkup entry and analyze for suggestions
   const handleSaveCheckup = useCallback(async () => {
     if (!localEntry) return;
     assertSession(session); // This will throw if session is null
@@ -256,6 +258,9 @@ export function JournalPanel({
         session.user.id,
         processedTags
       );
+      
+      // After successful save, analyze the checkup content for suggestions
+      await analyzeMessage(localEntry);
       
       // Refresh entries
       await refreshEntries();
@@ -286,7 +291,7 @@ export function JournalPanel({
       setLocalLoading(false);
       setAiGenerating(false);
     }
-  }, [currentDate, localEntry, localTags, refreshEntries, getAiResponses, aiAnalysis, session]);
+  }, [currentDate, localEntry, localTags, refreshEntries, getAiResponses, aiAnalysis, session, analyzeMessage]);
 
   // Create a daily entry and link all unlinked checkups via foreign key
   const handleDailyEntry = useCallback(async () => {

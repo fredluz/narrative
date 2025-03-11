@@ -3,8 +3,8 @@ import { ChatMessage, JournalEntry, ChatSession } from '@/app/types';
 import { ChatCompletionMessageParam } from 'openai/resources/chat';
 import { journalService } from '../journalService';
 import { QuestAgent } from './QuestAgent';
+import { SuggestionAgent } from './SuggestionAgent';
 import { performanceLogger } from '@/utils/performanceLogger';
-// Remove supabase import and add new imports from useChatData
 import { 
   getCurrentMessagesFromDB, 
   getRecentJournalEntries, 
@@ -15,6 +15,7 @@ import {
 export class ChatAgent {
   private openai: OpenAI;
   private questAgent: QuestAgent;
+  private suggestionAgent: SuggestionAgent;
   
   constructor() {
     this.openai = new OpenAI({
@@ -23,6 +24,7 @@ export class ChatAgent {
       dangerouslyAllowBrowser: true
     });
     this.questAgent = new QuestAgent();
+    this.suggestionAgent = new SuggestionAgent();
   }
 
   // Add this method to generate responses using the JournalAgent's method
@@ -162,7 +164,6 @@ Remember:
 - Each line will be sent as a separate text message, so keep them brief
 - Don't use more than 2-3 separate messages in total
 - Wait for the user's responses instead of addressing every topic at once
-- Push back against corporate thinking
 - Use late-millenial/early-zoomer slang and abbreviations
 - NO emojis (extremely rare exceptions)
 - Each line should be a complete thought on its own
@@ -188,6 +189,7 @@ CONVERSATION CONTEXT:
 - Keep each line under 160 characters ideally
 - Wait for the user's response instead of addressing every topic at once
 - Reference and build upon what's already been discussed in this chat session
+- avoid doing roleplay emotes like *throws cig* unless there's a very good reason, you're texting, not acting
 - Acknowledge relevant quests and tasks when appropriate`
         }
       ];
@@ -323,6 +325,23 @@ CONVERSATION CONTEXT:
         throw updateError;
       }
       performanceLogger.endOperation('dbOperations');
+
+      // Analyze the complete chat session for task and quest suggestions
+      performanceLogger.startOperation('analyzeChatSuggestions');
+      try {
+        // Get all user messages from the session
+        const userMessages = messages
+          .filter(msg => msg.is_user)
+          .map(msg => msg.message)
+          .join('\n');
+
+        // Analyze the combined messages for suggestions
+        await this.suggestionAgent.analyzeMessage(userMessages, userId);
+      } catch (analyzeError) {
+        console.error('Error analyzing chat for suggestions:', analyzeError);
+        // Don't throw - this is an enhancement and shouldn't break the main flow
+      }
+      performanceLogger.endOperation('analyzeChatSuggestions');
 
       // Create a checkup entry based on this chat session
       performanceLogger.startOperation('createCheckup');

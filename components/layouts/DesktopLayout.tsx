@@ -5,7 +5,11 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { KanbanBoard } from '@/components/quests/KanbanBoard';
 import { TaskList } from '@/components/tasks/TaskList';
 import { ChatInterface } from '@/components/chat/ChatInterface';
+import TaskSuggestionPopup from '@/components/suggestions/TaskSuggestionPopup';
+import QuestSuggestionPopup from '@/components/suggestions/QuestSuggestionPopup';
+import SuggestionContainer  from '@/components/suggestions/SuggestionContainer';
 import { useQuests } from '@/services/questsService';
+import { useSuggestions } from '@/contexts/SuggestionContext';
 import styles from '@/app/styles/global';
 import { colors } from '@/app/styles/global';
 import { SettingsButton } from '@/components/ui/SettingsButton';
@@ -30,6 +34,10 @@ export function DesktopLayout() {
   } = useChatData();
   const { mainQuest, loading, error, reload } = useQuests();
   const { shouldUpdate, resetUpdate } = useQuestUpdate();
+  const { 
+    taskSuggestions, 
+    questSuggestions
+  } = useSuggestions();
 
   // Remove getSecondaryColor function and use secondaryColor directly from ThemeContext
   
@@ -84,6 +92,11 @@ export function DesktopLayout() {
     }
   }, [shouldUpdate, session?.user?.id]);
 
+  console.log("DesktopLayout: rendering with suggestions:", {
+    taskCount: taskSuggestions.length,
+    questCount: questSuggestions.length
+  });
+
   if (!session?.user?.id) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -98,39 +111,41 @@ export function DesktopLayout() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}> 
-    <View style={styles.column}>
-      {loading ? (
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-          <LoadingSpinner/>
-        </View>
-      ) : error ? (
-          <View style={{ 
-            padding: 15,
-            backgroundColor: 'rgba(200, 0, 0, 0.1)',
-            borderRadius: 5,
-            borderLeftWidth: 3,
-            borderLeftColor: colors.error,
-          }}>
-            <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
-            <TouchableOpacity onPress={reload}>
-              <Text style={{ color: colors.error, textDecorationLine: 'underline', marginTop: 8 }}>Try again</Text>
-            </TouchableOpacity>
+      {/* First column */}
+      <View style={styles.column}>
+        {loading ? (
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+            <LoadingSpinner/>
           </View>
-        ) : (
-          <>
-            {/* Pass the entire mainQuest object to KanbanBoard */}
-            <KanbanBoard 
-              mainQuest={mainQuest} 
-              onViewAllQuests={() => router.push('/quests')}
-              userId={session.user.id}
-            />
+        ) : error ? (
+            <View style={{ 
+              padding: 15,
+              backgroundColor: 'rgba(200, 0, 0, 0.1)',
+              borderRadius: 5,
+              borderLeftWidth: 3,
+              borderLeftColor: colors.error,
+            }}>
+              <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
+              <TouchableOpacity onPress={reload}>
+                <Text style={{ color: colors.error, textDecorationLine: 'underline', marginTop: 8 }}>Try again</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <>
+              {/* Pass the entire mainQuest object to KanbanBoard */}
+              <KanbanBoard 
+                mainQuest={mainQuest} 
+                onViewAllQuests={() => router.push('/quests')}
+                userId={session.user.id}
+              />
 
-            {/* TaskList now appears in the first column after KanbanBoard */}
-            <TaskList compactMode={true} />
-          </>
-        )}
+              {/* TaskList now appears in the first column after KanbanBoard */}
+              <TaskList compactMode={true} />
+            </>
+          )}
       </View>
 
+      {/* Second column */}
       <View style={styles.column}>
         <ChatInterface 
           recentMessages={messages} 
@@ -144,16 +159,22 @@ export function DesktopLayout() {
         />
       </View>
       
-      {/* JournalPanel moved to its own column for more vertical space */}
-      <View style={styles.column}>
+      {/* Third column with Journal Panel - Position it as relative to contain the overlay */}
+      <View style={[styles.column, { position: 'relative' }]}>
         <JournalPanel 
           themeColor={themeColor} 
           textColor={textColor} 
           fullColumnMode={true} 
           userId={session.user.id}
         />
+        
+        {/* The compact suggestion will appear inside ChatInterface component
+            and will be positioned absolutely within it, so we don't need 
+            to add anything here for the overlay */}
       </View>
       
+      {/* Add SuggestionContainer at the root level */}
+      <SuggestionContainer />
       <SettingsButton />
     </View>
   );

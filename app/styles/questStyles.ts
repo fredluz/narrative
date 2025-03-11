@@ -1,5 +1,8 @@
-import { StyleSheet, Platform } from 'react-native';
+import { StyleSheet, Platform, Dimensions } from 'react-native';
 import { colors, colorMappings } from './global';
+
+// Get the screen height
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 // Define fallback fonts based on platform
 const fontFamilies = {
@@ -223,5 +226,196 @@ export const questStyles = StyleSheet.create({
     fontWeight: 'bold',
     color: colors.text,
     fontFamily: fontFamilies.bold,
+  },
+
+  // Suggestion Popup Styles - Combined and deduplicated
+  suggestionPopupContainer: {
+    position: 'absolute',
+    backgroundColor: colors.cardDark,
+    borderRadius: 8,
+    borderWidth: 1,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 5,
+    width: 400,
+    maxHeight: SCREEN_HEIGHT * 0.8, // Convert 80vh to 80% of screen height
+    marginBottom: 16,
+  },
+  
+  suggestionPopupTopRight: {
+    top: 20,
+    right: 20,
+    zIndex: 1000,
+  },
+  
+  suggestionPopupBottomRight: {
+    bottom: 100,
+    right: 20,
+  },
+  
+  suggestionPopupHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#333',
+  },
+  
+  suggestionPopupHeaderContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  
+  suggestionPopupHeaderIcon: {
+    marginRight: 8,
+  },
+  
+  suggestionPopupHeaderTitle: {
+    color: '#FFF',
+    fontWeight: 'bold',
+    fontSize: 18,
+    fontFamily: fontFamilies.bold,
+  },
+  
+  suggestionPopupContent: {
+    padding: 16,
+    flexGrow: 1,
+  },
+
+  // Form Fields
+  label: {
+    fontSize: 14,
+    marginBottom: 4,
+    fontFamily: fontFamilies.regular,
+  },
+  
+  input: {
+    borderWidth: 1,
+    borderRadius: 4,
+    padding: 8,
+    marginBottom: 12,
+    backgroundColor: 'rgba(0,0,0,0.2)',
+    fontFamily: fontFamilies.regular,
+    color: colors.text,
+  },
+  
+  multilineInput: {
+    height: 100,
+    textAlignVertical: 'top',
+  },
+  
+  dateContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginBottom: 16,
+  },
+  
+  dateField: {
+    flex: 1,
+  },
+
+  // Related Tasks Section
+  relatedTasksContainer: {
+    marginBottom: 16,
+  },
+  
+  relatedTaskItem: {
+    marginBottom: 8,
+    paddingLeft: 8,
+    borderLeftWidth: 2,
+    borderLeftColor: '#444',
+  },
+  
+  relatedTaskTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    marginBottom: 2,
+    fontFamily: fontFamilies.bold,
+  },
+  
+  relatedTaskDescription: {
+    fontSize: 12,
+    color: '#888',
+    fontFamily: fontFamilies.regular,
+  },
+
+  // Source Info Section
+  suggestionSourceInfo: {
+    marginTop: 16,
+    padding: 12,
+    backgroundColor: 'rgba(0,0,0,0.2)',
+    borderRadius: 4,
+  },
+  
+  suggestionSourceText: {
+    fontSize: 12,
+    color: '#888',
+    marginBottom: 4,
+    fontFamily: fontFamilies.regular,
+  },
+  
+  suggestionSourceBold: {
+    fontWeight: 'bold',
+    color: '#AAA',
+    fontFamily: fontFamilies.bold,
+  },
+
+  // Action Buttons
+  suggestionActionButtons: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: 20,
+    gap: 12,
+  },
+  
+  suggestionActionButton: {
+    flex: 1,
+    padding: 12,
+    borderRadius: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  
+  suggestionActionButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontFamily: fontFamilies.bold,
+  },
+  
+  disabledButton: {
+    opacity: 0.5,
+  },
+
+  // Error States
+  errorText: {
+    color: colors.error,
+    fontSize: 12,
+    marginTop: -8,
+    marginBottom: 8,
+    fontFamily: fontFamilies.regular,
+  },
+
+  // Loading State
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1001,
+  },
+  
+  loadingText: {
+    color: '#fff',
+    marginTop: 8,
+    fontFamily: fontFamilies.regular,
   },
 });

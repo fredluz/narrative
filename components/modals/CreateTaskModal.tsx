@@ -4,8 +4,6 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { format } from 'date-fns';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Task } from '@/app/types';
-import { TaskRecommendation } from '@/services/TaskRecommendationParser';
-import { ThemedText } from '@/components/ui/ThemedText';
 import { fetchQuests } from '@/services/questsService';
 import { useSupabase } from '@/contexts/SupabaseContext';
 
@@ -19,10 +17,10 @@ interface TaskFormData {
   location?: string;
   status: TaskStatus;
   tags?: string[];
-  quest_id?: number;  // Changed from string to number
+  quest_id?: number;
   priority: 'high' | 'medium' | 'low';
   subtasks?: string;
-  user_id: string; // Add user_id field
+  user_id: string;
 }
 
 interface CreateTaskModalProps {
@@ -31,8 +29,8 @@ interface CreateTaskModalProps {
   onSubmit: (data: TaskFormData) => Promise<void>;
   isSubmitting: boolean;
   quests?: Array<{ id: string; title: string; }>;
-  recommendation?: TaskRecommendation;
-  userId: string; // Add userId prop
+  userId: string;
+  initialData?: Partial<TaskFormData>; // Optional prop for task suggestions
 }
 
 export function CreateTaskModal({ 
@@ -41,23 +39,45 @@ export function CreateTaskModal({
   onSubmit,
   isSubmitting,
   quests: propsQuests = [],
-  recommendation,
-  userId
+  userId,
+  initialData // Can be undefined
 }: CreateTaskModalProps) {
   const { themeColor, secondaryColor } = useTheme();
   const { session } = useSupabase();
   const [localQuests, setLocalQuests] = useState<Array<{ id: number; title: string }>>([]);
-  const [formData, setFormData] = React.useState<TaskFormData>({
-    title: recommendation?.title || '',
-    description: recommendation?.description || '',
+  
+  // Create default form data that doesn't depend on initialData
+  const getDefaultFormData = () => ({
+    title: '',
+    description: '',
     scheduled_for: format(new Date(), 'yyyy-MM-dd'),
-    status: 'ToDo',
+    status: 'ToDo' as TaskStatus,
     location: '',
     tags: [],
-    priority: recommendation?.priority || 'medium',
+    priority: 'medium' as 'high' | 'medium' | 'low',
     subtasks: '',
-    user_id: userId // Initialize with userId
+    user_id: userId
   });
+
+  // Initialize with default form data
+  const [formData, setFormData] = useState<TaskFormData>(getDefaultFormData());
+  
+  // Apply initialData when it exists and component becomes visible
+  useEffect(() => {
+    if (visible) {
+      if (initialData) {
+        // Apply initialData over default values
+        setFormData({
+          ...getDefaultFormData(),
+          ...initialData,
+          user_id: userId // Always ensure user_id is set
+        });
+      } else {
+        // Reset to default values if no initialData
+        setFormData(getDefaultFormData());
+      }
+    }
+  }, [visible, initialData, userId]);
 
   // Load quests directly if none provided via props
   useEffect(() => {
@@ -76,38 +96,16 @@ export function CreateTaskModal({
     }
   }, [visible, session?.user?.id]);
 
-  // Reset form when recommendation changes
-  React.useEffect(() => {
-    if (recommendation) {
-      setFormData(prev => ({
-        ...prev,
-        title: recommendation.title,
-        description: recommendation.description,
-        priority: recommendation.priority,
-        // Don't try to guess quest_id from tags
-      }));
-    }
-  }, [recommendation, propsQuests]);
-
   const handleSubmit = async () => {
     await onSubmit({
       ...formData,
       user_id: userId
     });
-    setFormData({
-      title: '',
-      description: '',
-      scheduled_for: format(new Date(), 'yyyy-MM-dd'),
-      status: 'ToDo',
-      location: '',
-      tags: [],
-      priority: 'medium',
-      subtasks: '',
-      user_id: userId // Reset with userId
-    });
+    // Reset form after submission
+    setFormData(getDefaultFormData());
   };
 
-  // Combine quests from props and local state
+  // Use loaded quests
   const displayQuests = localQuests;
 
   return (
@@ -141,16 +139,30 @@ export function CreateTaskModal({
             borderBottomColor: 'rgba(255, 255, 255, 0.1)',
             paddingBottom: 10
           }}>
-            <Text style={{ 
-              color: '#FFF', 
-              fontSize: 18, 
-              fontWeight: 'bold',
-              textShadowColor: themeColor,
-              textShadowOffset: { width: 0.5, height: 0.5 },
-              textShadowRadius: 2
-            }}>
-              Create New Task
-            </Text>
+            <View>
+              <Text style={{ 
+                color: '#FFF', 
+                fontSize: 18, 
+                fontWeight: 'bold',
+                textShadowColor: themeColor,
+                textShadowOffset: { width: 0.5, height: 0.5 },
+                textShadowRadius: 2
+              }}>
+                {initialData?.title ? "Task Suggestion" : "Create New Task"}
+              </Text>
+              
+              {/* Only show this text when it's a suggestion */}
+              {initialData?.title && (
+                <Text style={{ 
+                  color: '#AAA', 
+                  fontSize: 12, 
+                  fontStyle: 'italic'
+                }}>
+                  Based on your conversation
+                </Text>
+              )}
+            </View>
+            
             <TouchableOpacity onPress={onClose}>
               <MaterialIcons name="close" size={24} color="#AAA" />
             </TouchableOpacity>
@@ -399,25 +411,6 @@ export function CreateTaskModal({
               ))}
             </View>
 
-            {/* Source Recommendation */}
-            {recommendation && (
-              <View style={{
-                marginTop: 15,
-                padding: 10,
-                backgroundColor: 'rgba(0, 0, 0, 0.3)',
-                borderRadius: 4,
-                borderLeftWidth: 2,
-                borderLeftColor: secondaryColor
-              }}>
-                <Text style={{ color: secondaryColor, fontSize: 12, marginBottom: 5 }}>
-                  SILVERHAND'S RECOMMENDATION
-                </Text>
-                <Text style={{ color: '#AAA', fontSize: 12, fontStyle: 'italic' }}>
-                  {recommendation.originalText}
-                </Text>
-              </View>
-            )}
-
             <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 20 }}>
               <TouchableOpacity
                 onPress={onClose}
@@ -446,7 +439,7 @@ export function CreateTaskModal({
                 {isSubmitting ? (
                   <ActivityIndicator size="small" color="#FFF" />
                 ) : (
-                  <Text style={{ color: '#FFF' }}>Create</Text>
+                  <Text style={{ color: '#FFF' }}>{initialData ? "Accept" : "Create"}</Text>
                 )}
               </TouchableOpacity>
             </View>
