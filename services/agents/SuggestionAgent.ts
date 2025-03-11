@@ -569,21 +569,6 @@ IMPORTANT:
       } catch (error) {
         console.error('❌ Error in direct update handler:', error);
       }
-    } else {
-      console.warn('⚠️ No update handlers registered, falling back to events');
-      // Dispatch event for backward compatibility
-      if (typeof window !== 'undefined') {
-        // REMOVE THIS EVENT SYSTEM ONCE DIRECT UPDATES WORK
-        console.log('🔔 Attempting to dispatch suggestion_update event');
-        try {
-          window.dispatchEvent(new Event('suggestion_update'));
-          console.log('✅ Successfully dispatched suggestion_update event');
-        } catch (error) {
-          console.error('❌ Error dispatching suggestion_update event:', error);
-        }
-      } else {
-        console.warn('⚠️ Window object not available, could not dispatch event');
-      }
     }
   }
 
@@ -597,11 +582,6 @@ IMPORTANT:
     // Call direct update handler if registered
     if (this.updateHandlers.onSuggestionUpdate) {
       this.updateHandlers.onSuggestionUpdate([], []);
-    }
-    
-    // Dispatch event for backward compatibility
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new Event('suggestion_update'));
     }
   }
   
@@ -633,10 +613,6 @@ IMPORTANT:
       this.updateHandlers.onSuggestionUpdate([...this.taskSuggestions], [...this.questSuggestions]);
     }
     
-    // Dispatch event for backward compatibility
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new Event('suggestion_update'));
-    }
   }
   
   /**
@@ -651,10 +627,6 @@ IMPORTANT:
       this.updateHandlers.onSuggestionUpdate([...this.taskSuggestions], [...this.questSuggestions]);
     }
     
-    // Dispatch event for backward compatibility
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new Event('suggestion_update'));
-    }
   }
   
   /**

@@ -5,7 +5,6 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { KanbanBoard } from '@/components/quests/KanbanBoard';
 import { TaskList } from '@/components/tasks/TaskList';
 import { ChatInterface } from '@/components/chat/ChatInterface';
-import SuggestionContainer  from '@/components/suggestions/SuggestionContainer';
 import { useQuests } from '@/services/questsService';
 import { useSuggestions } from '@/contexts/SuggestionContext';
 import styles from '@/app/styles/global';
@@ -173,8 +172,6 @@ export function DesktopLayout() {
             to add anything here for the overlay */}
       </View>
       
-      {/* Add SuggestionContainer at the root level */}
-      <SuggestionContainer />
       <SettingsButton />
     </View>
   );
