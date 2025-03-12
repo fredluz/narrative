@@ -10,6 +10,7 @@ export default {
     extra: {
       supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL,
       supabaseAnonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
+      deepseekApiKey: process.env.EXPO_PUBLIC_DEEPSEEK_API_KEY,
     },
   },
 };

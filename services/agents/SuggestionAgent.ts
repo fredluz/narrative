@@ -123,7 +123,7 @@ export class SuggestionAgent {
     
     this.openai = new OpenAI({
       apiKey: process.env.EXPO_PUBLIC_DEEPSEEK_API_KEY,
-      baseURL: 'https://api.deepseek.com/v1',
+      baseURL: 'https://api.deepseek.com',
       dangerouslyAllowBrowser: true
     });
     

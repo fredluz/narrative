@@ -20,7 +20,7 @@ export class ChatAgent {
   constructor() {
     this.openai = new OpenAI({
       apiKey: process.env.EXPO_PUBLIC_DEEPSEEK_API_KEY,
-      baseURL: 'https://api.deepseek.com/v1',
+      baseURL: 'https://api.deepseek.com', // updated per docs
       dangerouslyAllowBrowser: true
     });
     this.questAgent = new QuestAgent();
@@ -189,7 +189,7 @@ CONVERSATION CONTEXT:
 - Keep each line under 160 characters ideally
 - Wait for the user's response instead of addressing every topic at once
 - Reference and build upon what's already been discussed in this chat session
-- avoid doing roleplay emotes like *throws cig* unless there's a very good reason, you're texting, not acting
+- avoid doing roleplay emotes like *throws cig* or *smirks* unless there's a very good reason, you're texting, not acting
 - Acknowledge relevant quests and tasks when appropriate`
         }
       ];

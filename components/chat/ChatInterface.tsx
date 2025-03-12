@@ -242,16 +242,6 @@ export function ChatInterface({
     });
   }, [taskSuggestions, questSuggestions]);
 
-  // Debug information for suggestions
-  useEffect(() => {
-    console.log('👁️ [ChatInterface] Rendering component with:', {
-      hasSuggestions: taskSuggestions.length > 0 || questSuggestions.length > 0,
-      taskCount: taskSuggestions.length,
-      questCount: questSuggestions.length,
-      sessionEnded,
-      userId
-    });
-  });
 
   // Debug information for suggestions
   useEffect(() => {
