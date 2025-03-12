@@ -7,6 +7,7 @@ import { Poppins_400Regular, Poppins_600SemiBold, Poppins_700Bold } from '@expo-
 import { ThemeProvider as AppThemeProvider } from '@/contexts/ThemeContext';
 import { SupabaseProvider, useSupabase } from '@/contexts/SupabaseContext';
 import { QuestUpdateProvider } from '@/contexts/QuestUpdateContext';
+import { SuggestionProvider } from '@/contexts/SuggestionContext';
 import { TriangularSpinner } from '@/components/loading/TriangularSpinner';
 import { useTheme } from '@/contexts/ThemeContext';
 import styles from './styles/global';
@@ -69,8 +70,10 @@ export default function RootLayout() {
     <SupabaseProvider>
       <AppThemeProvider>
         <QuestUpdateProvider>
-          <AuthGuard />
-          <InitialLayout />
+          <SuggestionProvider>
+            <AuthGuard />
+            <InitialLayout />
+          </SuggestionProvider>
         </QuestUpdateProvider>
       </AppThemeProvider>
     </SupabaseProvider>

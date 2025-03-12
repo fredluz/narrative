@@ -89,11 +89,7 @@ export function DesktopLayout() {
       resetUpdate();
     }
   }, [shouldUpdate, session?.user?.id]);
-
-  console.log("DesktopLayout: rendering with suggestions:", {
-    taskCount: taskSuggestions.length,
-    questCount: questSuggestions.length
-  });
+  
 
   if (!session?.user?.id) {
     return (

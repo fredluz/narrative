@@ -24,7 +24,7 @@ export class ChatAgent {
       dangerouslyAllowBrowser: true
     });
     this.questAgent = new QuestAgent();
-    this.suggestionAgent = new SuggestionAgent();
+    this.suggestionAgent = SuggestionAgent.getInstance();
   }
 
   // Add this method to generate responses using the JournalAgent's method
@@ -329,14 +329,22 @@ CONVERSATION CONTEXT:
       // Analyze the complete chat session for task and quest suggestions
       performanceLogger.startOperation('analyzeChatSuggestions');
       try {
-        // Get all user messages from the session
-        const userMessages = messages
-          .filter(msg => msg.is_user)
-          .map(msg => msg.message)
-          .join('\n');
+        // Use existing context-building code that already formats messages with roles
+        const chatMessages = messages.map(msg => ({
+          role: msg.is_user ? ("user" as const) : ("assistant" as const),
+          content: msg.message,
+          timestamp: msg.created_at
+        }));
 
-        // Analyze the combined messages for suggestions
-        await this.suggestionAgent.analyzeMessage(userMessages, userId);
+        // Pass the complete conversation context to SuggestionAgent
+        await this.suggestionAgent.analyzeConversation({
+          messages: chatMessages,
+          metadata: {
+            startTime: messages[0]?.created_at,
+            endTime: messages[messages.length - 1]?.created_at,
+            totalMessages: messages.length
+          }
+        }, messages[0].user_id);
       } catch (analyzeError) {
         console.error('Error analyzing chat for suggestions:', analyzeError);
         // Don't throw - this is an enhancement and shouldn't break the main flow

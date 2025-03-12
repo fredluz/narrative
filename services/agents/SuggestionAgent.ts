@@ -5,6 +5,7 @@ import { performanceLogger } from '@/utils/performanceLogger';
 import { Quest, Task } from '@/app/types';
 import { createTask } from '@/services/tasksService';
 import { createQuest, getOrCreateMiscQuest } from '@/services/questsService';
+import { globalSuggestionStore } from '../globalSuggestionStore';
 
 /**
  * Represents a task suggestion generated from user content
@@ -46,6 +47,55 @@ export interface QuestSuggestion {
   relatedTasks?: TaskSuggestion[];
 }
 
+export interface ConversationMessage {
+  role: "user" | "assistant";
+  content: string;
+  timestamp: string;
+}
+
+export interface ConversationData {
+  messages: ConversationMessage[];
+  metadata: {
+    startTime: string;
+    endTime: string;
+    totalMessages: number;
+  };
+}
+
+interface TaskGroup {
+  content: string;
+  context: {
+    sourceMessage: string;
+    relatedMessages: string[];
+    confidence: number;
+    dependencies?: string[];
+    timing?: 'immediate' | 'short-term' | 'long-term';
+  };
+}
+
+interface QuestPattern {
+  content: string;
+  context: {
+    sourceMessage: string;
+    relatedMessages: string[];
+    confidence: number;
+  };
+}
+
+interface TaskContext {
+  sourceMessage: string;
+  relatedMessages: string[];
+  confidence: number;
+  dependencies?: string[];
+  timing?: string;
+}
+
+interface QuestContext {
+  sourceMessage: string;
+  relatedMessages: string[];
+  confidence: number;
+}
+
 type Suggestion = TaskSuggestion | QuestSuggestion;
 
 // Define handler interfaces for direct updates
@@ -61,8 +111,6 @@ export class SuggestionAgent {
   private genAI: GoogleGenerativeAI;
   private model: GenerativeModel;
   private openai: OpenAI;
-  private taskSuggestions: TaskSuggestion[] = [];
-  private questSuggestions: QuestSuggestion[] = [];
   private updateHandlers: SuggestionUpdateHandlers = {};
   
   // Add a static instance to implement proper singleton pattern
@@ -78,6 +126,8 @@ export class SuggestionAgent {
       baseURL: 'https://api.deepseek.com/v1',
       dangerouslyAllowBrowser: true
     });
+    
+    console.log("🔧 [SuggestionAgent] Created new agent instance");
   }
 
   // Static method to get the singleton instance
@@ -94,7 +144,19 @@ export class SuggestionAgent {
    * @param handlers Object containing update handler functions
    */
   registerUpdateHandlers(handlers: SuggestionUpdateHandlers): void {
+    console.log('📢 [SuggestionAgent] Registering update handlers:', {
+      hasOnSuggestionUpdate: !!handlers.onSuggestionUpdate
+    });
     this.updateHandlers = handlers;
+    
+    // Immediately call handlers with current state to ensure components are in sync
+    if (handlers.onSuggestionUpdate) {
+      console.log('🔄 [SuggestionAgent] Initial sync of suggestion queues:');
+      // Use the global store to get the current suggestions
+      const tasks = globalSuggestionStore.getTaskSuggestions();
+      const quests = globalSuggestionStore.getQuestSuggestions();
+      handlers.onSuggestionUpdate(tasks, quests);
+    }
   }
 
   /**
@@ -177,6 +239,222 @@ export class SuggestionAgent {
   }
 
   /**
+   * Analyzes a complete conversation for task and quest suggestions
+   */
+  async analyzeConversation(conversation: ConversationData, userId: string): Promise<void> {
+    performanceLogger.startOperation('analyzeConversation');
+    try {
+      if (!userId) {
+        console.error('User ID is required for analyzeConversation');
+        return;
+      }
+
+      console.log('🔍 SuggestionAgent: Analyzing complete conversation');
+
+      const prompt = `Analyze this conversation between USER and AI. Each message is clearly marked with its source.
+      Pay special attention to:
+      1. User commitments (when they say they will do something)
+      2. AI suggestions that the user agrees with
+      3. Goals mentioned by the user
+      4. Tasks discussed between both parties
+
+      Conversation:
+      ${conversation.messages.map(msg => 
+        `${msg.role.toUpperCase()}: ${msg.content}`
+      ).join('\n')}`;
+
+      // Generate suggestions using the complete conversation context
+      const [taskGroups, questPatterns] = await Promise.all([
+        this.identifyTaskGroups(conversation),
+        this.identifyQuestPatterns(conversation)
+      ]);
+
+      // Process each identified task group
+      for (const group of taskGroups) {
+        const suggestion = await this.generateTaskSuggestion(
+          group.content,
+          userId,
+          group.context
+        );
+        if (suggestion) {
+          this.addSuggestionToQueue(suggestion);
+        }
+      }
+
+      // Process each identified quest pattern
+      for (const pattern of questPatterns) {
+        const suggestion = await this.generateQuestSuggestion(
+          pattern.content,
+          userId,
+          pattern.context
+        );
+        if (suggestion) {
+          this.addSuggestionToQueue(suggestion);
+        }
+      }
+    } catch (error) {
+      console.error('Error in analyzeConversation:', error);
+    } finally {
+      performanceLogger.endOperation('analyzeConversation');
+    }
+  }
+
+  private async identifyTaskGroups(conversation: ConversationData): Promise<TaskGroup[]> {
+    const prompt = `From this conversation, identify potential tasks the user might need to complete.
+    Focus on:
+    1. Direct user commitments ("I will...", "I need to...")
+    2. User agreeing to AI suggestions
+    3. Explicit task discussions
+
+    For each potential task, extract:
+    1. The core action or task statement
+    2. The message that contains this task
+    3. Any related messages that provide context
+    4. A confidence score (0-1) indicating how likely this is a real task
+    5. Any dependencies or related tasks
+    6. The timing (immediate, short-term, or long-term)
+
+    Return your findings in this exact JSON format:
+    {
+      "tasks": [
+        {
+          "content": "Core task statement or action",
+          "sourceMessage": "The original full message containing the task",
+          "relatedMessages": ["First related message", "Second related message"],
+          "confidence": 0.8,
+          "dependencies": ["Optional related task"],
+          "timing": "immediate | short-term | long-term"
+        }
+      ]
+    }`;
+
+    console.log('Sending task identification prompt to AI');
+
+    const response = await this.openai.chat.completions.create({
+      model: "deepseek-chat",
+      messages: [
+        { role: "system", content: prompt },
+        { 
+          role: "user", 
+          content: conversation.messages.map(msg => 
+            `${msg.role.toUpperCase()}: ${msg.content}`
+          ).join('\n')
+        }
+      ],
+      temperature: 0.3,
+      response_format: { type: "json_object" }
+    });
+
+    try {
+      // Get the response content
+      const responseText = response.choices[0].message?.content || '{}';
+      console.log('Task identification response received, parsing...');
+      
+      // Parse the JSON response
+      const parsed = JSON.parse(responseText);
+      
+      // Check for tasks array in the response with a fallback to empty array
+      const tasks = parsed.tasks || [];
+      
+      console.log(`Found ${tasks.length} potential tasks in conversation`);
+      
+      // Map the tasks to our TaskGroup format
+      return tasks.map((task: any) => ({
+        content: task.content || '',
+        context: {
+          sourceMessage: task.sourceMessage || '',
+          relatedMessages: task.relatedMessages || [],
+          confidence: task.confidence || 0.5,
+          dependencies: task.dependencies,
+          timing: task.timing
+        }
+      }));
+    } catch (error) {
+      console.error('Error parsing task groups:', error);
+      console.error('Response content:', response.choices[0].message?.content);
+      // Return empty array on error
+      return [];
+    }
+  }
+
+  private async identifyQuestPatterns(conversation: ConversationData): Promise<QuestPattern[]> {
+    const prompt = `Analyze this conversation to identify potential quests (larger goals or projects that could span multiple tasks).
+
+Focus on identifying:
+1. Long-term goals or aspirations mentioned by the user
+2. Multi-step projects or initiatives
+3. Recurring themes about larger objectives
+4. Related groups of tasks that could form a meaningful quest
+5. User's expressed intentions about future achievements
+6. AI suggestions that the user shows interest in pursuing
+
+For each potential quest pattern, determine:
+1. The core goal or objective (what would define success?)
+2. All related messages that discuss this goal
+3. Any specific tasks or steps mentioned
+4. Timeline indicators (immediate, short-term, long-term)
+5. User's level of commitment (0-1 confidence score)
+
+Return as JSON object in format:
+{
+  "quests": [
+    {
+      "content": "Core message that best expresses the quest goal",
+      "sourceMessage": "Original message where the pattern started",
+      "relatedMessages": ["Array of related message texts"],
+      "confidence": 0.8
+    }
+  ]
+}`;
+
+    console.log('Sending quest identification prompt to AI');
+    
+    const response = await this.openai.chat.completions.create({
+      model: "deepseek-chat",
+      messages: [
+        { role: "system", content: prompt },
+        { 
+          role: "user", 
+          content: conversation.messages.map(msg => 
+            `${msg.role.toUpperCase()}: ${msg.content}`
+          ).join('\n')
+        }
+      ],
+      temperature: 0.3,
+      response_format: { type: "json_object" }
+    });
+
+    try {
+      // Get the response content
+      const responseText = response.choices[0].message?.content || '{}';
+      console.log('Quest identification response received, parsing...');
+      
+      // Parse the JSON response
+      const parsed = JSON.parse(responseText);
+      
+      // Check for quests array in the response with a fallback to empty array
+      const quests = parsed.quests || parsed.questPatterns || [];
+      
+      console.log(`Found ${quests.length} potential quests in conversation`);
+      
+      // Map the quests to our QuestPattern format
+      return quests.map((quest: any) => ({
+        content: quest.content || '',
+        context: {
+          sourceMessage: quest.sourceMessage || '',
+          relatedMessages: quest.relatedMessages || [],
+          confidence: quest.confidence || 0.5
+        }
+      }));
+    } catch (error) {
+      console.error('Error parsing quest patterns:', error);
+      console.error('Response content:', response.choices[0].message?.content);
+      // Return empty array on error
+      return [];
+    }
+  }
+
+  /**
    * Detects if content has potential for task generation
    * @param content Text content to analyze
    * @returns Boolean indicating if content has task potential
@@ -237,32 +515,35 @@ Respond ONLY with "true" if there is quest potential or "false" if not.`;
    * @param userId The user's ID
    * @returns A task suggestion or null
    */
-  private async generateTaskSuggestion(content: string, userId: string): Promise<TaskSuggestion | null> {
+  private async generateTaskSuggestion(
+    content: string,
+    userId: string,
+    context?: TaskContext
+  ): Promise<TaskSuggestion | null> {
     performanceLogger.startOperation('generateTaskSuggestion');
     try {
-      console.log('🚀 Generating task suggestion from content');
+      console.log('🚀 Generating task suggestion with context');
       
-      const prompt = `Create a task based on this content: "${content}"
+      const prompt = `Create a task based on this content and context:
+
+Content: "${content}"
+
+${context ? `Context:
+- Source Message: ${context.sourceMessage}
+- Related Messages: ${context.relatedMessages.join('\n')}
+- Confidence: ${context.confidence}` : ''}
 
 Generate a JSON object with these EXACT fields:
 {
   "title": "Brief task title",
-  "description": "Detailed description of what needs to be done",
-  "scheduled_for": "YYYY-MM-DD format date when task should start, choose appropriate date based on context or use today's date if unclear",
+  "description": "Detailed description incorporating context",
+  "scheduled_for": "YYYY-MM-DD format date when task should start",
   "deadline": "YYYY-MM-DD format deadline if mentioned, otherwise null",
   "location": "Location if mentioned, otherwise null",
   "priority": "high, medium, or low based on urgency/importance",
   "tags": ["relevant", "keyword", "tags"],
   "subtasks": "Comma-separated list of subtasks if appropriate, otherwise empty string"
-}
-
-IMPORTANT:
-- Make the task ACTIONABLE and SPECIFIC
-- Use the user's actual wording when possible
-- Set reasonable dates based on the content
-- Infer priority from urgency/importance clues
-- Only include what's in the original content
-- Use empty string or null for missing information`;
+}`;
 
       const response = await this.openai.chat.completions.create({
         model: "deepseek-chat",
@@ -322,7 +603,11 @@ IMPORTANT:
    * @param userId The user's ID
    * @returns A quest suggestion or null
    */
-  private async generateQuestSuggestion(content: string, userId: string): Promise<QuestSuggestion | null> {
+  private async generateQuestSuggestion(
+    content: string,
+    userId: string,
+    context?: QuestContext
+  ): Promise<QuestSuggestion | null> {
     performanceLogger.startOperation('generateQuestSuggestion');
     try {
       console.log('🚀 Generating quest suggestion from content');
@@ -544,31 +829,27 @@ IMPORTANT:
       timestamp: suggestion.timestamp
     });
     
-    if (suggestion.type === 'task') {
-      console.log('📋 Current task suggestions queue length:', this.taskSuggestions.length);
-      this.taskSuggestions.push(suggestion as TaskSuggestion);
-      console.log('📋 New task suggestions queue length:', this.taskSuggestions.length);
-      console.log('Task suggestions queue:', this.taskSuggestions.map(t => ({ id: t.id, title: t.title })));
-    } else {
-      console.log('🏆 Current quest suggestions queue length:', this.questSuggestions.length);
-      this.questSuggestions.push(suggestion as QuestSuggestion);
-      console.log('🏆 New quest suggestions queue length:', this.questSuggestions.length);
-      console.log('Quest suggestions queue:', this.questSuggestions.map(q => ({ id: q.id, title: q.title })));
-    }
+    // Add the suggestion to the global store instead of internal arrays
+    globalSuggestionStore.addSuggestion(suggestion);
     
     // CRITICAL FIX: Make sure we have handlers before trying to call them
-    // Also add more debug to see if this is getting called
     if (this.updateHandlers && this.updateHandlers.onSuggestionUpdate) {
-      console.log('🚨 Calling direct update handler with:', {
-        taskCount: this.taskSuggestions.length,
-        questCount: this.questSuggestions.length
-      });
+      console.log('🚨 Calling direct update handler with:');
+      
       try {
-        this.updateHandlers.onSuggestionUpdate([...this.taskSuggestions], [...this.questSuggestions]);
+        // Get the updated suggestions from the global store
+        const tasks = globalSuggestionStore.getTaskSuggestions();
+        const quests = globalSuggestionStore.getQuestSuggestions();
+        
+        // Pass them to the update handler
+        this.updateHandlers.onSuggestionUpdate(tasks, quests);
         console.log('✅ Direct update handler executed successfully');
       } catch (error) {
         console.error('❌ Error in direct update handler:', error);
+        console.error(error);
       }
+    } else {
+      console.warn('⚠️ No update handler registered or handler is undefined');
     }
   }
 
@@ -576,8 +857,8 @@ IMPORTANT:
    * Clears all suggestion queues
    */
   clearSuggestionQueue(): void {
-    this.taskSuggestions = [];
-    this.questSuggestions = [];
+    // Clear the global store
+    globalSuggestionStore.clearSuggestions();
     
     // Call direct update handler if registered
     if (this.updateHandlers.onSuggestionUpdate) {
@@ -590,7 +871,8 @@ IMPORTANT:
    * @returns Array of task suggestions
    */
   getTaskSuggestions(): TaskSuggestion[] {
-    return [...this.taskSuggestions];
+    // Return from the global store
+    return globalSuggestionStore.getTaskSuggestions();
   }
   
   /**
@@ -598,7 +880,8 @@ IMPORTANT:
    * @returns Array of quest suggestions
    */
   getQuestSuggestions(): QuestSuggestion[] {
-    return [...this.questSuggestions];
+    // Return from the global store
+    return globalSuggestionStore.getQuestSuggestions();
   }
   
   /**
@@ -606,13 +889,23 @@ IMPORTANT:
    * @param id ID of the task suggestion to remove
    */
   removeTaskSuggestion(id: string): void {
-    this.taskSuggestions = this.taskSuggestions.filter(task => task.id !== id);
+    console.log('🗑️ [SuggestionAgent] Removing task suggestion:', id);
+    
+    // Remove from the global store
+    globalSuggestionStore.removeTaskSuggestion(id);
     
     // Call direct update handler if registered
-    if (this.updateHandlers.onSuggestionUpdate) {
-      this.updateHandlers.onSuggestionUpdate([...this.taskSuggestions], [...this.questSuggestions]);
+    if (this.updateHandlers && this.updateHandlers.onSuggestionUpdate) {
+      console.log('🔄 [SuggestionAgent] Notifying handler of task removal');
+      
+      // Get the updated suggestions from the global store
+      const tasks = globalSuggestionStore.getTaskSuggestions();
+      const quests = globalSuggestionStore.getQuestSuggestions();
+      
+      this.updateHandlers.onSuggestionUpdate(tasks, quests);
+    } else {
+      console.warn('⚠️ No update handler registered for task removal');
     }
-    
   }
   
   /**
@@ -620,13 +913,23 @@ IMPORTANT:
    * @param id ID of the quest suggestion to remove
    */
   removeQuestSuggestion(id: string): void {
-    this.questSuggestions = this.questSuggestions.filter(quest => quest.id !== id);
+    console.log('🗑️ [SuggestionAgent] Removing quest suggestion:', id);
+    
+    // Remove from the global store
+    globalSuggestionStore.removeQuestSuggestion(id);
     
     // Call direct update handler if registered
-    if (this.updateHandlers.onSuggestionUpdate) {
-      this.updateHandlers.onSuggestionUpdate([...this.taskSuggestions], [...this.questSuggestions]);
+    if (this.updateHandlers && this.updateHandlers.onSuggestionUpdate) {
+      console.log('🔄 [SuggestionAgent] Notifying handler of quest removal');
+      
+      // Get the updated suggestions from the global store
+      const tasks = globalSuggestionStore.getTaskSuggestions();
+      const quests = globalSuggestionStore.getQuestSuggestions();
+      
+      this.updateHandlers.onSuggestionUpdate(tasks, quests);
+    } else {
+      console.warn('⚠️ No update handler registered for quest removal');
     }
-    
   }
   
   /**

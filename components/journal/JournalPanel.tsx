@@ -260,7 +260,7 @@ export function JournalPanel({
       );
       
       // After successful save, analyze the checkup content for suggestions
-      await analyzeMessage(localEntry);
+      await analyzeMessage(localEntry, session.user.id);
       
       // Refresh entries
       await refreshEntries();

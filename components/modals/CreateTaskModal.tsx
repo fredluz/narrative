@@ -28,7 +28,7 @@ interface CreateTaskModalProps {
   onClose: () => void;
   onSubmit: (data: TaskFormData) => Promise<void>;
   isSubmitting: boolean;
-  quests?: Array<{ id: string; title: string; }>;
+  quests?: Array<{ id: number; title: string; }>; // Changed from string to number
   userId: string;
   initialData?: Partial<TaskFormData>; // Optional prop for task suggestions
 }
