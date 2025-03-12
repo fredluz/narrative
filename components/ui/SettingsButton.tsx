@@ -2,11 +2,23 @@ import React, { useState } from 'react';
 import { View, Pressable, Text, StyleSheet, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useSupabase } from '@/contexts/SupabaseContext';
 import { ColorPicker } from './ColorPicker';
+import { authService } from '@/services/authService';
 
 export function SettingsButton() {
   const [isOpen, setIsOpen] = useState(false);
   const { themeColor, secondaryColor, setThemeColor, setSecondaryColor, textColor } = useTheme();
+
+  const handleLogout = async () => {
+    try {
+      const { error } = await authService.signOut();
+      if (error) throw error;
+      setIsOpen(false);
+    } catch (error) {
+      console.error('Error signing out:', error);
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -47,6 +59,15 @@ export function SettingsButton() {
               label="Secondary Theme Color"
               textColor={textColor}
             />
+            
+            {/* Add logout button */}
+            <Pressable 
+              style={[styles.logoutButton, { borderColor: themeColor }]}
+              onPress={handleLogout}
+            >
+              <Ionicons name="log-out-outline" size={20} color={themeColor} />
+              <Text style={[styles.logoutText, { color: themeColor }]}>Logout</Text>
+            </Pressable>
           </View>
         </Pressable>
       </Modal>
@@ -120,5 +141,20 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     borderWidth: 2,
     borderColor: '#444',
+  },
+  logoutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 20,
+    paddingVertical: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  logoutText: {
+    marginLeft: 8,
+    fontSize: 16,
+    fontWeight: '500',
   },
 });
