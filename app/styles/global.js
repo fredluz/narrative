@@ -15,7 +15,7 @@ export const colors = {
   info: '#8BE9FD',
   accent1: '#FF0055', // Neon pink/red
   accent2: '#0092FF', // Neon blue
-  accent3: '#50FA7B', // Neon green
+  accent3: '#2c8c0f', // Neon green
   accent4: '#BD93F9', // Neon purple
   accent5: '#FFB86C', // Neon orange
   overlay: 'rgba(12, 12, 15, 0.8)',

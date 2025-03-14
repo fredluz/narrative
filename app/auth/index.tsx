@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, Dimensions, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, Dimensions, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { authService } from '@/services/authService';
@@ -7,13 +7,17 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { colors } from '@/app/styles/global';
 import { useSupabase } from '@/contexts/SupabaseContext';
 const asciiArt = `
-  ███╗   ██╗ █████╗  ██████╗ ██████╗  █████╗████████╗██╗██╗   ██╗███████╗
-   ████╗  ██║██╔══██╗ ██╔══██╗██╔══██╗██╔══██╗══██╔═╝ ██║██║   ██║██╔════╝
-    ██╔██╗ ██║███████║██████╔╝██████╔╝███████║   ██║   ██║██║   ██║█████╗  
-     ██║╚██╗██║██╔══██║██╔══██╗██╔══██╗██╔══██║   ██║   ██║╚██╗ ██╝ ██╔══╝  
-      ██║ ╚████║██║  ██║██║  ██║██║  ██║██║  ██║   ██║   ██║ ╚████╔╝ ███████╗
-       ╚═╝  ╚═══╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝   ╚═╝   ╚═╝  ╚══╝   ╚══════╝
-`;
+███╗   ██╗                                          
+ ███╗   ██╗   █████╗   ███████╗  ███████╗   █████╗  ███████╗  ██╗  ██╗   ██╗  ███████╗
+  ████╗  ██║  ██╔══██╗  ██╔═══█╗  ██╔═══█╗  ██╔══██╗  ══██╔═╝  ██║  ██║   ██║  ██╔════╝
+   ████╗  ██║  ██╔══██╗  ███══██╗  ███══██╗  ██╔══██╗    ██╔╝   ██║  ██║   ██║  ██╔
+    ██╔██╗ ██║  ███████║  ██████╔╝  ██████╔╝  ███████║    ██║    ██║  ██║   ██║  ██══════   
+     ██╔██╗ ██║  ███  ██║  ███████╝  ███████╝  ██  ███║    ██║    ██║  ██║   ██║  ████████╗  
+      ██║╚██╗██║  ██╔  ██║  ██╔══███║ ██╔═███║  ██╔  ██║    ██║    ██║  ╚██╗  ██╝  ██╔════╝  
+       ██║╚██╗██║  ██║  ██║  ██║══██║  ██║══██║  ██║  ██║    ██║    ██║  ╚██╗  ██╝  ██╔  
+        ██║ ╚████║  ██║  ██║  ██║  ██║  ██║  ██║  ██║  ██║    ██║    ██║   ╚██╗ ██╝  ██══════ 
+         ██║ ╚████║  ██║  ██║  ██║  ███║ ██║  ███║ ██║  ██║    ██║    ██║    ╚████╔╝  ████████╗
+         ╚═╝  ╚═══╝  ╚═╝  ╚═╝  ╚═╝  ╚══╝ ╚═╝  ╚══╝ ╚═╝  ╚═╝    ╚═╝    ╚═╝     ╚══╝     ╚═══════╝`;
 
 // Extended char set (incl. Chinese)
 const CHAR_SET =
@@ -170,7 +174,11 @@ export default function AuthScreen() {
 
       {/* Auth UI */}
       <View style={styles.content}>
-        <Text style={[styles.asciiArt, { color: themeColor }]}>{asciiArt}</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          <Text style={[styles.asciiArt, { color: themeColor }]}>
+            {asciiArt}
+          </Text>
+        </ScrollView>
         <Text style={styles.subtitle}>Your Digital Journey</Text>
         {error && <Text style={styles.errorText}>{error}</Text>}
         <TouchableOpacity
@@ -227,7 +235,7 @@ const styles = StyleSheet.create({
   },
   content: {
     width: '100%',
-    maxWidth: 400,
+    maxWidth: 600,
     padding: 20,
     alignItems: 'center',
     zIndex: 1,

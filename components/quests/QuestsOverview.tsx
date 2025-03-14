@@ -303,12 +303,12 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
       setIsSubmitting(true);
       const questData = {
         ...data,
-        user_id: session.user.id,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
       
-      await createQuest(questData);
+      // Pass userId as first parameter
+      await createQuest(session.user.id, questData);
       setCreateQuestModalVisible(false);
       reload();
     } catch (error) {
@@ -329,11 +329,11 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
       setIsSubmitting(true);
       const questData = {
         ...data,
-        user_id: session.user.id,
         updated_at: new Date().toISOString()
       };
       
-      await updateQuest(questBeingEdited.id, questData);
+      // Pass all required parameters: questId, userId, and questData
+      await updateQuest(questBeingEdited.id, session.user.id, questData);
       setEditQuestModalVisible(false);
       reload();
     } catch (error) {
@@ -631,7 +631,10 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
                             
                             {/* Set as Main Quest Button */}
                             <TouchableOpacity 
-                              onPress={() => onSelectQuest(selectedQuest.id)}
+                              onPress={() => {
+                                onSelectQuest(selectedQuest.id);
+                                setSelectedQuest({ ...selectedQuest, is_main: true });
+                              }}
                               style={{
                                 backgroundColor: selectedQuest.id === currentMainQuest?.id ? 
                                   'rgba(30, 30, 30, 0.9)' : 'rgba(25, 25, 25, 0.9)',
