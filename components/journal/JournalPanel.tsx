@@ -58,13 +58,13 @@ export function JournalPanel({
   const [hasDailyEntry, setHasDailyEntry] = useState(false);
   const [expandedCheckupId, setExpandedCheckupId] = useState<string | null>(null);
 
-  // Add ownership verification
+  {/* Add ownership verification */}
   const verifyCurrentUser = React.useMemo(() => {
     if (!session?.user?.id || !userId) return false;
     return session.user.id === userId;
   }, [session?.user?.id, userId]);
 
-  // Add guard for unauthorized access
+  {/* Add guard for unauthorized access */}
   if (!verifyCurrentUser) {
     return (
       <Card style={[styles.taskCard, { padding: 15 }]}>
@@ -75,7 +75,7 @@ export function JournalPanel({
     );
   }
 
-  // Format date display
+  {/* Format date display */}
   const formattedDate = currentDate.toLocaleDateString('en-US', { 
     weekday: 'long', 
     month: 'long', 
@@ -129,13 +129,13 @@ export function JournalPanel({
     loadEntries();
   }, [currentDate, getAiResponses, session?.user?.id, verifyCurrentUser]);
 
-  // Refresh entries initially to make sure we have the latest data
+  {/* Refresh entries initially to make sure we have the latest data */}
   useEffect(() => {
     if (!session?.user?.id) return;
     
     console.log('JournalPanel: Initial load, fetching entries...');
     refreshEntries().then(() => {
-      // After refreshing, get the entry again to ensure we have the latest data
+      {/* After refreshing, get the entry again to ensure we have the latest data */}
       const entry = getEntry(currentDate);
       console.log('JournalPanel: After refresh, entry length:', entry?.user_entry?.length || 0);
       setLocalEntry(entry?.user_entry || '');
@@ -144,13 +144,13 @@ export function JournalPanel({
   }, [session?.user?.id]); // Add session.user.id as dependency
   
   useEffect(() => {
-    // Check if getAiAnalysis is a function
+    {/* Check if getAiAnalysis is a function */}
     if (typeof getAiResponses !== 'function') {
       console.error('JournalPanel: getAiResponses is not a function');
     }
   }, [getAiResponses]);
 
-  // Generate a bright accent color for cyberpunk text effect
+  {/* Generate a bright accent color for cyberpunk text effect */}
   const getBrightAccent = (baseColor: string) => {
     // For dark colors, create a bright neon variant
     const hex = baseColor.replace('#', '');
@@ -174,25 +174,25 @@ export function JournalPanel({
   };
   
   const brightAccent = getBrightAccent(themeColor);
-  const amberColor = '#FFB74D'; // Define amber color for the Save Checkup button
+  const amberColor = '#FFB74D'; {/* Define amber color for the Save Checkup button */}
 
-  // Handle entry text changes - remove immediate update
+  {/* Handle entry text changes - remove immediate update */}
   const handleEntryChange = useCallback((text: string) => {
     setLocalEntry(text);
-    // Removed the immediate updateLocalEntry call
+    {/* Removed the immediate updateLocalEntry call */}
   }, []);
 
-  // Handle tags changes
+  {/* Handle tags changes */}
   const handleTagsChange = useCallback((text: string) => {
     setLocalTags(text);
   }, []);
 
-  // Toggle checkup expansion
+  {/* Toggle checkup expansion */}
   const toggleCheckupExpansion = useCallback((id: string) => {
     setExpandedCheckupId(prevId => prevId === id ? null : id);
   }, []);
 
-  // Modified save handler to update local entries before saving and generate AI response
+  {/* Modified save handler to update local entries before saving and generate AI response */}
   const handleSaveEntry = useCallback(async () => {
     if (!localEntry) return;
     assertSession(session); // This will throw if session is null
@@ -235,7 +235,7 @@ export function JournalPanel({
     }
   }, [currentDate, localEntry, localTags, updateLocalEntry, refreshEntries, getAiResponses, session]);
 
-  // Save a checkup entry and analyze for suggestions
+  {/* Save a checkup entry and analyze for suggestions */}
   const handleSaveCheckup = useCallback(async () => {
     if (!localEntry) return;
     assertSession(session); // This will throw if session is null
@@ -293,7 +293,7 @@ export function JournalPanel({
     }
   }, [currentDate, localEntry, localTags, refreshEntries, getAiResponses, aiAnalysis, session, analyzeMessage]);
 
-  // Create a daily entry and link all unlinked checkups via foreign key
+  {/* Create a daily entry and link all unlinked checkups via foreign key */}
   const handleDailyEntry = useCallback(async () => {
     assertSession(session); // This will throw if session is null
     

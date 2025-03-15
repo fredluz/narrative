@@ -1,8 +1,9 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, ScrollView, TextInput, ActivityIndicator, Modal } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, TouchableOpacity, ScrollView, TextInput, ActivityIndicator, Modal, Alert } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Quest } from '@/app/types';
+import { deleteQuest } from '@/services/questsService';
 
 type QuestStatus = 'Active' | 'On-Hold' | 'Completed';
 
@@ -24,6 +25,7 @@ interface EditQuestModalProps {
   isSubmitting: boolean;
   quest?: Quest; // Make quest optional
   userId: string; // Add userId prop
+  onDelete?: () => void; // Add onDelete prop
 }
 
 export function EditQuestModal({ 
@@ -32,10 +34,11 @@ export function EditQuestModal({
   onSubmit,
   isSubmitting,
   quest,
-  userId
+  userId,
+  onDelete
 }: EditQuestModalProps) {
   const { themeColor, secondaryColor } = useTheme();
-  const [formData, setFormData] = React.useState<QuestFormData>({
+  const [formData, setFormData] = useState<QuestFormData>({
     title: '',
     tagline: '',
     description: '',
@@ -45,6 +48,7 @@ export function EditQuestModal({
     is_main: false,
     user_id: userId
   });
+  const [isDeleting, setIsDeleting] = useState(false);
 
   React.useEffect(() => {
     if (quest) {
@@ -66,6 +70,30 @@ export function EditQuestModal({
       ...formData,
       user_id: userId
     });
+  };
+
+  const handleDelete = async () => {
+    console.log('[EditQuestModal] Starting delete process for quest:', quest?.id);
+    if (!quest?.id) {
+      console.warn('[EditQuestModal] No quest ID available for deletion');
+      return;
+    }
+
+    try {
+      setIsDeleting(true);
+      console.log('[EditQuestModal] Calling deleteQuest with questId:', quest.id, 'userId:', userId);
+      await deleteQuest(quest.id, userId);
+      console.log('[EditQuestModal] Quest deleted successfully, calling onDelete callback');
+      onDelete?.();
+      console.log('[EditQuestModal] Closing modal');
+      onClose();
+    } catch (err) {
+      console.error('[EditQuestModal] Error in delete process:', err);
+      Alert.alert('Error', 'Failed to delete quest');
+    } finally {
+      console.log('[EditQuestModal] Resetting delete state');
+      setIsDeleting(false);
+    }
   };
 
   // Don't render the modal if there's no quest to edit
@@ -243,6 +271,32 @@ export function EditQuestModal({
                 />
               </TouchableOpacity>
               <Text style={{ color: '#AAA', marginLeft: 10 }}>Set as main quest</Text>
+            </View>
+
+            {/* Add Delete Button section before the Cancel/Update buttons */}
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20 }}>
+              <TouchableOpacity
+                onPress={handleDelete}
+                disabled={isDeleting}
+                style={{
+                  backgroundColor: '#D32F2F',
+                  borderRadius: 4,
+                  paddingHorizontal: 15,
+                  paddingVertical: 8,
+                  opacity: isDeleting ? 0.5 : 1,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                }}
+              >
+                {isDeleting ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+                ) : (
+                  <>
+                    <MaterialIcons name="delete" size={16} color="#FFF" style={{ marginRight: 5 }} />
+                    <Text style={{ color: '#FFF' }}>Delete</Text>
+                  </>
+                )}
+              </TouchableOpacity>
             </View>
 
             <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}>

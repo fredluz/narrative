@@ -247,6 +247,38 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
     }
   };
 
+  // Add handler for task deletion
+  const handleDeleteTask = () => {
+    console.log('[QuestsOverview] Starting handleDeleteTask');
+    if (selectedQuest && selectedQuest.tasks && taskBeingEdited) {
+      console.log('[QuestsOverview] Removing task from selectedQuest.tasks:', {
+        questId: selectedQuest.id,
+        taskId: taskBeingEdited.id,
+        currentTaskCount: selectedQuest.tasks.length
+      });
+      
+      // Update local state by removing the deleted task
+      selectedQuest.tasks = selectedQuest.tasks.filter(t => t.id !== taskBeingEdited.id);
+      console.log('[QuestsOverview] Tasks after removal:', selectedQuest.tasks.length);
+      
+      setSelectedQuest({...selectedQuest});
+      console.log('[QuestsOverview] Updated selectedQuest state');
+      
+      // Reset task being edited
+      setTaskBeingEdited(undefined);
+      console.log('[QuestsOverview] Reset taskBeingEdited');
+    } else {
+      console.warn('[QuestsOverview] Could not update local state:', {
+        hasSelectedQuest: !!selectedQuest,
+        hasTasksArray: !!(selectedQuest?.tasks),
+        hasTaskBeingEdited: !!taskBeingEdited
+      });
+    }
+    
+    console.log('[QuestsOverview] Calling reload() to refresh quests');
+    reload(); // Reload quests to reflect the change
+  };
+
   // Reset form data for new quest
   const openCreateQuestModal = () => {
     if (!session?.user?.id) {
@@ -341,6 +373,20 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  // Add handler for quest deletion
+  const handleDeleteQuest = () => {
+    console.log('[QuestsOverview] Starting handleDeleteQuest');
+    if (questBeingEdited) {
+      // Reset states
+      setQuestBeingEdited(undefined);
+      setSelectedQuest(undefined);
+      console.log('[QuestsOverview] Reset quest states');
+    }
+    
+    console.log('[QuestsOverview] Calling reload() to refresh quests');
+    reload(); // Reload quests to reflect the change
   };
 
   return (
@@ -919,6 +965,7 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
               setQuestBeingEdited(undefined);
             }}
             onSubmit={handleUpdateQuest}
+            onDelete={handleDeleteQuest}
             isSubmitting={isSubmitting}
             quest={questBeingEdited}
             userId={session.user.id}
@@ -939,6 +986,7 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
               setTaskBeingEdited(undefined);
             }}
             onSubmit={handleUpdateTask}
+            onDelete={handleDeleteTask}
             isSubmitting={isSubmitting}
             task={taskBeingEdited}
             userId={session.user.id}

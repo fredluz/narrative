@@ -23,15 +23,15 @@ export default function LogsScreen() {
   }>({ key: 'totalDuration', direction: 'desc' });
 
   useEffect(() => {
-    // Get metrics and update state
+    {/* Get metrics and update state */}
     const currentMetrics = performanceLogger.getMetrics() as MetricsDisplay[];
     setMetrics(currentMetrics);
 
-    // Set up interval to refresh metrics
+    {/* Set up interval to refresh metrics */}
     const interval = setInterval(() => {
       const updatedMetrics = performanceLogger.getMetrics() as MetricsDisplay[];
       setMetrics(updatedMetrics);
-    }, 1000); // Update every second
+    }, 1000); {/* Update every second */}
 
     return () => clearInterval(interval);
   }, []);

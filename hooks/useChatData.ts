@@ -189,9 +189,11 @@ export function useChatData() {
     const userId = session.user.id;
     const sessionMessages = currentSessionMessagesRef.current;
     
-    // If no messages, just end the session without creating a record
+    // Set session ended state immediately
+    setSessionEnded(true);
+    
+    // If no messages, just end without creating a record
     if (sessionMessages.length === 0) {
-      setSessionEnded(true);
       return;
     }
     
@@ -221,7 +223,6 @@ export function useChatData() {
           : msg
       ));
       setCurrentSessionId(null);
-      setSessionEnded(true);
       setCheckupCreated(true); // Mark that we've created a checkup
     } catch (error) {
       console.error('Error summarizing session:', error);

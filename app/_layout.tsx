@@ -13,7 +13,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import styles from './styles/global';
 import { AuthGuard } from '@/components/auth/AuthGuard';
 
-// Keep the splash screen visible while we fetch resources
+{/* Keep the splash screen visible while we fetch resources */}
 SplashScreen.preventAutoHideAsync();
 
 function InitialLayout() {

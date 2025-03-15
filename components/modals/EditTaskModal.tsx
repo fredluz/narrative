@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, TextInput, ActivityIndicator, Modal } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, TextInput, ActivityIndicator, Modal, Alert } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { format } from 'date-fns';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Task } from '@/app/types';
 import { fetchQuests } from '@/services/questsService';
 import { useSupabase } from '@/contexts/SupabaseContext';
+import { deleteTask } from '@/services/tasksService';
 
 type TaskStatus = 'ToDo' | 'InProgress' | 'Done';
 
@@ -30,6 +31,7 @@ interface EditTaskModalProps {
   isSubmitting: boolean;
   task?: Task; // Make task optional
   userId: string; // Add userId prop
+  onDelete?: () => void; // Add onDelete prop
 }
 
 export function EditTaskModal({ 
@@ -38,11 +40,13 @@ export function EditTaskModal({
   onSubmit,
   isSubmitting,
   task,
-  userId
+  userId,
+  onDelete
 }: EditTaskModalProps) {
   const { session } = useSupabase();
   const { themeColor } = useTheme();
   const [quests, setQuests] = useState<Array<{ id: number; title: string }>>([]);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [formData, setFormData] = React.useState<TaskFormData>({
     title: '',
     description: '',
@@ -98,6 +102,30 @@ export function EditTaskModal({
       tags: processedTags,
       user_id: userId // Add user_id to submission
     });
+  };
+
+  const handleDelete = async () => {
+    console.log('[EditTaskModal] Starting delete process for task:', task?.id);
+    if (!task?.id) {
+      console.warn('[EditTaskModal] No task ID available for deletion');
+      return;
+    }
+
+    try {
+      setIsDeleting(true);
+      console.log('[EditTaskModal] Calling deleteTask with taskId:', task.id, 'userId:', userId);
+      await deleteTask(task.id, userId);
+      console.log('[EditTaskModal] Task deleted successfully, calling onDelete callback');
+      onDelete?.();
+      console.log('[EditTaskModal] Closing modal');
+      onClose();
+    } catch (err) {
+      console.error('[EditTaskModal] Error in delete process:', err);
+      Alert.alert('Error', 'Failed to delete task');
+    } finally {
+      console.log('[EditTaskModal] Resetting delete state');
+      setIsDeleting(false);
+    }
   };
 
   // Don't render the modal if there's no task to edit
@@ -377,36 +405,61 @@ export function EditTaskModal({
               ))}
             </View>
 
-            <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
               <TouchableOpacity
-                onPress={onClose}
+                onPress={handleDelete}
+                disabled={isDeleting}
                 style={{
-                  backgroundColor: 'rgba(50, 50, 50, 0.8)',
+                  backgroundColor: '#D32F2F',
                   borderRadius: 4,
                   paddingHorizontal: 15,
                   paddingVertical: 8,
-                  marginRight: 10,
+                  opacity: isDeleting ? 0.5 : 1,
+                  flexDirection: 'row',
+                  alignItems: 'center',
                 }}
               >
-                <Text style={{ color: '#AAA' }}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={handleSubmit}
-                disabled={!formData.title || !formData.scheduled_for || isSubmitting}
-                style={{
-                  backgroundColor: !formData.title || !formData.scheduled_for ? 'rgba(40, 40, 40, 0.8)' : themeColor,
-                  borderRadius: 4,
-                  paddingHorizontal: 15,
-                  paddingVertical: 8,
-                  opacity: !formData.title || !formData.scheduled_for ? 0.5 : 1,
-                }}
-              >
-                {isSubmitting ? (
+                {isDeleting ? (
                   <ActivityIndicator size="small" color="#FFF" />
                 ) : (
-                  <Text style={{ color: '#FFF' }}>Update</Text>
+                  <>
+                    <MaterialIcons name="delete" size={16} color="#FFF" style={{ marginRight: 5 }} />
+                    <Text style={{ color: '#FFF' }}>Delete</Text>
+                  </>
                 )}
               </TouchableOpacity>
+
+              <View style={{ flexDirection: 'row' }}>
+                <TouchableOpacity
+                  onPress={onClose}
+                  style={{
+                    backgroundColor: 'rgba(50, 50, 50, 0.8)',
+                    borderRadius: 4,
+                    paddingHorizontal: 15,
+                    paddingVertical: 8,
+                    marginRight: 10,
+                  }}
+                >
+                  <Text style={{ color: '#AAA' }}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={handleSubmit}
+                  disabled={!formData.title || !formData.scheduled_for || isSubmitting}
+                  style={{
+                    backgroundColor: !formData.title || !formData.scheduled_for ? 'rgba(40, 40, 40, 0.8)' : themeColor,
+                    borderRadius: 4,
+                    paddingHorizontal: 15,
+                    paddingVertical: 8,
+                    opacity: !formData.title || !formData.scheduled_for ? 0.5 : 1,
+                  }}
+                >
+                  {isSubmitting ? (
+                    <ActivityIndicator size="small" color="#FFF" />
+                  ) : (
+                    <Text style={{ color: '#FFF' }}>Update</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
             </View>
           </ScrollView>
         </View>

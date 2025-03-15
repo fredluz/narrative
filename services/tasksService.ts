@@ -195,6 +195,53 @@ export async function fetchQuestTasks(questId: number, userId: string) {
   return tasks || [];
 }
 
+// Delete task function
+export async function deleteTask(taskId: number, userId: string): Promise<void> {
+  console.log('[tasksService] Starting task deletion process', { taskId, userId });
+  
+  // First verify ownership
+  console.log('[tasksService] Verifying task ownership');
+  const { data: task, error: fetchError } = await supabase
+    .from('tasks')
+    .select('user_id')
+    .eq('id', taskId)
+    .single();
+
+  if (fetchError) {
+    console.error('[tasksService] Error verifying task ownership:', fetchError);
+    throw new Error(`Failed to verify task ownership: ${fetchError.message}`);
+  }
+
+  if (!task) {
+    console.error('[tasksService] No task found with ID:', taskId);
+    throw new Error('Task not found');
+  }
+
+  if (task.user_id !== userId) {
+    console.error('[tasksService] Task ownership verification failed', { 
+      taskUserId: task.user_id, 
+      requestingUserId: userId 
+    });
+    throw new Error('You do not have permission to delete this task');
+  }
+
+  console.log('[tasksService] Task ownership verified, proceeding with deletion');
+  
+  const { error } = await supabase
+    .from('tasks')
+    .delete()
+    .eq('id', taskId)
+    .eq('user_id', userId);
+  
+  if (error) {
+    console.error('[tasksService] Error during task deletion:', error);
+    throw new Error(`Failed to delete task: ${error.message}`);
+  }
+  
+  console.log('[tasksService] Task deleted successfully');
+  return Promise.resolve();
+}
+
 // React Hook
 export function useTasks() {
   const [tasks, setTasks] = useState<Task[]>([]);

@@ -238,15 +238,22 @@ CONVERSATION CONTEXT:
 
   async summarizeAndStoreSession(messages: ChatMessage[]): Promise<string> {
     performanceLogger.startOperation('summarizeAndStoreSession');
+
+    // Get the user_id right away for the event
+    const userId = messages[0]?.user_id;
+    if (!userId) {
+      throw new Error('No user_id found in messages');
+    }
+
+    // Emit session ended event immediately
+    const sessionEndedEvent = new CustomEvent('sessionEnded', { 
+      detail: { userId }
+    });
+    window.dispatchEvent(sessionEndedEvent);
+
     try {
       if (!messages || messages.length === 0) {
         throw new Error('No messages to summarize');
-      }
-
-      // Get the user_id from the first message (all messages should have the same user_id)
-      const userId = messages[0].user_id;
-      if (!userId) {
-        throw new Error('No user_id found in messages');
       }
 
       // Verify all messages belong to the same user

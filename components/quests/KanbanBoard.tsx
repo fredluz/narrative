@@ -26,7 +26,7 @@ export function KanbanBoard({ mainQuest, onViewAllQuests, userId }: KanbanProps)
   const [activeColumn, setActiveColumn] = useState<TaskStatus | 'all' | 'active'>('active');
   const [updatingTaskId, setUpdatingTaskId] = useState<number | null>(null);
 
-  // Make text more visible against dark backgrounds
+  {/* Make text more visible against dark backgrounds */}
   const getBrightAccent = (baseColor: string) => {
     const hex = baseColor.replace('#', '');
     const r = parseInt(hex.substring(0, 2), 16);
@@ -58,13 +58,13 @@ export function KanbanBoard({ mainQuest, onViewAllQuests, userId }: KanbanProps)
 
   const textColor = isDarkColor(themeColor) ? '#fff' : '#000';
 
-  // Add ownership verification
+  {/* Add ownership verification */}
   const verifyCurrentUser = React.useMemo(() => {
     if (!session?.user?.id || !userId) return false;
     return session.user.id === userId;
   }, [session?.user?.id, userId]);
 
-  // Add guard for unauthorized access
+  {/* Add guard for unauthorized access */}
   if (!verifyCurrentUser) {
     return (
       <View style={{
@@ -131,7 +131,7 @@ export function KanbanBoard({ mainQuest, onViewAllQuests, userId }: KanbanProps)
     );
   }
 
-  // Add function to handle task status toggle
+  {/* Add function to handle task status toggle */}
   const toggleTaskCompletion = async (task: Task) => {
     if (!verifyCurrentUser || task.user_id !== userId) {
       console.warn("Unauthorized task update attempt");
@@ -144,14 +144,14 @@ export function KanbanBoard({ mainQuest, onViewAllQuests, userId }: KanbanProps)
       const newStatus = getNextStatus(task.status);
       await updateTaskStatus(task.id, newStatus, userId);
       
-      // Update local state
+      {/* Update local state */}
       if (mainQuest && mainQuest.tasks) {
         mainQuest.tasks = mainQuest.tasks.map(t => 
           t.id === task.id ? { ...t, status: newStatus } : t
         );
       }
       
-      // Force a re-render
+      {/* Force a re-render */}
       setActiveColumn(prev => prev);
     } catch (error) {
       console.error('Failed to update task status:', error);
@@ -160,16 +160,16 @@ export function KanbanBoard({ mainQuest, onViewAllQuests, userId }: KanbanProps)
     }
   };
 
-  // Extract tasks from mainQuest
+  {/* Extract tasks from mainQuest */}
   const tasks = mainQuest?.tasks || [];
 
-  // Filter tasks based on activeColumn
+  {/* Filter tasks based on activeColumn */}
   const filteredTasks = 
     activeColumn === 'all' ? tasks :
     activeColumn === 'active' ? tasks.filter((task) => task.status === 'ToDo' || task.status === 'InProgress') :
     tasks.filter((task) => task.status === activeColumn);
 
-  // No tasks UI
+  {/* No tasks UI */}
   if (tasks.length === 0) {
     return (
       <Card

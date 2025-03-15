@@ -47,6 +47,8 @@ export function ChatInterface({
 }: Props) {
   const [message, setMessage] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [isProcessingSession, setIsProcessingSession] = useState(false);
+  const [isEndingSession, setIsEndingSession] = useState(false);  // Add this line
   const scrollViewRef = useRef<ScrollView>(null);
   const { themeColor, secondaryColor } = useTheme();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -241,19 +243,25 @@ export function ChatInterface({
       questCount: questSuggestions.length, 
     });
   }, [taskSuggestions, questSuggestions]);
-
-
-  // Debug information for suggestions
-  useEffect(() => {
-    console.log('🔍 [ChatInterface] Current suggestions state:', {
-      taskCount: taskSuggestions.length,
-      questCount: questSuggestions.length, 
-      hasSuggestions: taskSuggestions.length > 0 || questSuggestions.length > 0
-    });
-  }, [taskSuggestions, questSuggestions]);
-
   // Check if we have any suggestions to show
   const hasSuggestions = taskSuggestions.length > 0 || questSuggestions.length > 0;
+
+  // Update session processing state when session ends
+  useEffect(() => {
+    if (sessionEnded && !checkupCreated) {
+      setIsProcessingSession(true);
+    } else if (checkupCreated) {
+      setIsProcessingSession(false);
+    }
+  }, [sessionEnded, checkupCreated]);
+
+  // Add a wrapper for the onEndSession callback
+  const handleEndSession = () => {
+    if (!isEndingSession && onEndSession) {
+      setIsEndingSession(true);
+      onEndSession();
+    }
+  };
 
   return (
     <>
@@ -326,9 +334,10 @@ export function ChatInterface({
                 paddingHorizontal: 8,
                 flexDirection: 'row',
                 alignItems: 'center',
+                opacity: isEndingSession ? 0.5 : 1,
               }}
-              onPress={onEndSession}
-              disabled={!userId}
+              onPress={handleEndSession}
+              disabled={!userId || isEndingSession}
             >
               <MaterialIcons 
                 name="timer-off" 
@@ -554,7 +563,19 @@ export function ChatInterface({
                     Session ended
                   </Text>
                   
-                  {checkupCreated && (
+                  {isProcessingSession ? (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 8 }}>
+                      <TriangularSpinner size={16} color={secondaryColor} />
+                      <Text style={{
+                        color: '#999',
+                        fontSize: 14,
+                        textAlign: 'center',
+                        marginLeft: 8,
+                      }}>
+                        Processing conversation...
+                      </Text>
+                    </View>
+                  ) : checkupCreated && (
                     <View style={{ marginTop: 8 }}>
                       <Text style={{
                         color: '#BBB',
