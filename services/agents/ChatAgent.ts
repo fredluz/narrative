@@ -343,8 +343,8 @@ CONVERSATION CONTEXT:
           timestamp: msg.created_at
         }));
 
-        // Pass the complete conversation context to SuggestionAgent
-        await this.suggestionAgent.analyzeConversation({
+        // Pass the complete conversation context to SuggestionAgent and add any found suggestions
+        const suggestions = await this.suggestionAgent.analyzeConversation({
           messages: chatMessages,
           metadata: {
             startTime: messages[0]?.created_at,
@@ -352,6 +352,12 @@ CONVERSATION CONTEXT:
             totalMessages: messages.length
           }
         }, messages[0].user_id);
+
+        // Add each suggestion to the global store via SuggestionContext
+        const suggestionEvent = new CustomEvent('newSuggestions', { 
+          detail: { suggestions } 
+        });
+        window.dispatchEvent(suggestionEvent);
       } catch (analyzeError) {
         console.error('Error analyzing chat for suggestions:', analyzeError);
         // Don't throw - this is an enhancement and shouldn't break the main flow

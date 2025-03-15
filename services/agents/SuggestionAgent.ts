@@ -5,7 +5,6 @@ import { performanceLogger } from '@/utils/performanceLogger';
 import { Quest, Task } from '@/app/types';
 import { createTask } from '@/services/tasksService';
 import { createQuest, getOrCreateMiscQuest } from '@/services/questsService';
-import { globalSuggestionStore } from '../globalSuggestionStore';
 
 /**
  * Represents a task suggestion generated from user content
@@ -83,20 +82,14 @@ interface TaskContext {
 
 type Suggestion = TaskSuggestion | QuestSuggestion;
 
-// Define handler interfaces for direct updates
-interface SuggestionUpdateHandlers {
-  onSuggestionUpdate?: (taskSuggestions: TaskSuggestion[], questSuggestions: QuestSuggestion[]) => void;
-}
-
 /**
- * SuggestionAgent analyzes user messages and journal entries to generate task suggestions.
- * Quests can be created by upgrading existing tasks when requested by the user.
+ * SuggestionAgent handles AI/LLM operations for generating task and quest suggestions.
+ * State management is handled by SuggestionContext.
  */
 export class SuggestionAgent {
   private genAI: GoogleGenerativeAI;
   private model: GenerativeModel;
   private openai: OpenAI;
-  private updateHandlers: SuggestionUpdateHandlers = {};
   
   // Add a static instance to implement proper singleton pattern
   private static instance: SuggestionAgent;
@@ -125,48 +118,27 @@ export class SuggestionAgent {
   }
 
   /**
-   * Registers handlers for direct updates instead of using events
-   * @param handlers Object containing update handler functions
-   */
-  registerUpdateHandlers(handlers: SuggestionUpdateHandlers): void {
-    console.log('📢 [SuggestionAgent] Registering update handlers:', {
-      hasOnSuggestionUpdate: !!handlers.onSuggestionUpdate
-    });
-    this.updateHandlers = handlers;
-    
-    // Immediately call handlers with current state to ensure components are in sync
-    if (handlers.onSuggestionUpdate) {
-      console.log('🔄 [SuggestionAgent] Initial sync of suggestion queues:');
-      // Use the global store to get the current suggestions
-      const tasks = globalSuggestionStore.getTaskSuggestions();
-      const quests = globalSuggestionStore.getQuestSuggestions();
-      handlers.onSuggestionUpdate(tasks, quests);
-    }
-  }
-
-  /**
    * Analyzes a chat message to identify potential task suggestions
    * @param message The chat message content to analyze
    * @param userId The user's ID
+   * @returns A task suggestion if one is found, null otherwise
    */
-  async analyzeMessage(message: string, userId: string): Promise<void> {
+  async analyzeMessage(message: string, userId: string): Promise<TaskSuggestion | null> {
     performanceLogger.startOperation('analyzeMessage');
     try {
       if (!userId) {
         console.error('User ID is required for analyzeMessage');
-        return;
+        return null;
       }
       
       console.log('🔍 SuggestionAgent: Analyzing chat message for potential tasks');
       
       // Generate task suggestion directly
-      const taskSuggestion = await this.generateTaskSuggestion(message, userId);
-      if (taskSuggestion) {
-        this.addSuggestionToQueue(taskSuggestion);
-      }
+      return await this.generateTaskSuggestion(message, userId);
       
     } catch (error) {
       console.error('Error in analyzeMessage:', error);
+      return null;
     } finally {
       performanceLogger.endOperation('analyzeMessage');
     }
@@ -176,71 +148,29 @@ export class SuggestionAgent {
    * Analyzes a journal entry to identify potential task suggestions
    * @param entry The journal entry content to analyze
    * @param userId The user's ID
+   * @returns A task suggestion if one is found, null otherwise
    */
-  async analyzeJournalEntry(entry: string, userId: string): Promise<void> {
+  async analyzeJournalEntry(entry: string, userId: string): Promise<TaskSuggestion | null> {
     performanceLogger.startOperation('analyzeJournalEntry');
     try {
       if (!userId) {
         console.error('User ID is required for analyzeJournalEntry');
-        return;
+        return null;
       }
       
       console.log('🔍 SuggestionAgent: Analyzing journal/checkup entry for potential tasks');
       
-      const prompt = `Analyze this journal/checkup entry for tasks and action items that should be tracked.
-
-Context: This is from a regular check-in where the user reflects on their current state, progress, and plans.
-
-Look specifically for:
-1. Direct statements of intention ("I need to", "I should", "I will")
-2. Mentioned obligations or responsibilities
-3. Goals or targets they want to achieve
-4. Problems they want to solve
-5. Follow-up items from previous activities
-6. Time-sensitive matters or deadlines
-
-For anything that could be a task, consider:
-- How concrete and actionable is it?
-- Is there a clear next step?
-- Does it have a timeframe (today, this week, etc)?
-- Is it a one-time task or part of a larger goal?
-
-Entry to analyze: "${entry}"
-
-Return your findings in this exact JSON format:
-{
-  "tasks": [
-    {
-      "content": "The specific action to be taken",
-      "sourceMessage": "The original message with the task",
-      "relatedMessages": ["Message with timing info", "Message with location"],
-      "confidence": 0.8,
-      "dependencies": ["Prerequisite task if any"],
-      "timing": "immediate | short-term"
-    }
-  ]
-}`;
-
-      const result = await this.model.generateContent(prompt);
-      const response = result.response.text().trim().toLowerCase();
-      const hasTaskPotential = response === 'true';
-
-      if (hasTaskPotential) {
-        console.log('✨ Task potential detected in journal entry');
-        const taskSuggestion = await this.generateTaskSuggestion(entry, userId, {
-          sourceMessage: entry,
-          relatedMessages: [], // Single entry context
-          confidence: 0.7, // Slightly lower confidence since journal entries are more reflective
-          timing: 'short-term' // Journal tasks tend to be more planned
-        });
-        
-        if (taskSuggestion) {
-          this.addSuggestionToQueue(taskSuggestion);
-        }
-      }
+      // Generate task suggestion directly
+      return await this.generateTaskSuggestion(entry, userId, {
+        sourceMessage: entry,
+        relatedMessages: [], // Single entry context
+        confidence: 0.7, // Slightly lower confidence since journal entries are more reflective
+        timing: 'short-term' // Journal tasks tend to be more planned
+      });
       
     } catch (error) {
       console.error('Error in analyzeJournalEntry:', error);
+      return null;
     } finally {
       performanceLogger.endOperation('analyzeJournalEntry');
     }
@@ -248,13 +178,14 @@ Return your findings in this exact JSON format:
 
   /**
    * Analyzes a complete conversation for task suggestions
+   * @returns Array of generated task suggestions
    */
-  async analyzeConversation(conversation: ConversationData, userId: string): Promise<void> {
+  async analyzeConversation(conversation: ConversationData, userId: string): Promise<TaskSuggestion[]> {
     performanceLogger.startOperation('analyzeConversation');
     try {
       if (!userId) {
         console.error('User ID is required for analyzeConversation');
-        return;
+        return [];
       }
 
       console.log('🔍 SuggestionAgent: Analyzing complete conversation');
@@ -313,6 +244,7 @@ Return your findings in this exact JSON format:
         console.log(`Found ${tasks.length} potential tasks in conversation`);
         
         // Generate task suggestions for each identified task
+        const suggestions: TaskSuggestion[] = [];
         for (const task of tasks) {
           const suggestion = await this.generateTaskSuggestion(
             task.content,
@@ -327,15 +259,19 @@ Return your findings in this exact JSON format:
           );
           
           if (suggestion) {
-            this.addSuggestionToQueue(suggestion);
+            suggestions.push(suggestion);
           }
         }
+        
+        return suggestions;
       } catch (parseError) {
         console.error('Error parsing conversation analysis:', parseError);
         console.error('Response content:', response.choices[0].message?.content);
+        return [];
       }
     } catch (error) {
       console.error('Error in analyzeConversation:', error);
+      return [];
     } finally {
       performanceLogger.endOperation('analyzeConversation');
     }
@@ -430,9 +366,9 @@ Generate a JSON object with these EXACT fields:
   }
 
   /**
-   * Upgrades a task suggestion to a quest suggestion
+   * Upgrades a task suggestion to a quest suggestion using LLM analysis
    * @param task The task suggestion to upgrade
-   * @returns A quest suggestion
+   * @returns A quest suggestion if successful, null otherwise
    */
   async upgradeTaskToQuest(task: TaskSuggestion): Promise<QuestSuggestion | null> {
     performanceLogger.startOperation('upgradeTaskToQuest');
@@ -542,123 +478,6 @@ IMPORTANT:
   }
 
   /**
-   * Adds a suggestion to the appropriate queue
-   * @param suggestion The suggestion to add
-   */
-  addSuggestionToQueue(suggestion: Suggestion): void {
-    console.log('\n=== SuggestionAgent.addSuggestionToQueue ===');
-    console.log('Adding suggestion:', {
-      type: suggestion.type,
-      id: suggestion.id,
-      title: suggestion.type === 'task' ? suggestion.title : (suggestion as QuestSuggestion).title,
-      sourceType: suggestion.sourceType,
-      timestamp: suggestion.timestamp
-    });
-    
-    // Add the suggestion to the global store instead of internal arrays
-    globalSuggestionStore.addSuggestion(suggestion);
-    
-    // CRITICAL FIX: Make sure we have handlers before trying to call them
-    if (this.updateHandlers && this.updateHandlers.onSuggestionUpdate) {
-      console.log('🚨 Calling direct update handler with:');
-      
-      try {
-        // Get the updated suggestions from the global store
-        const tasks = globalSuggestionStore.getTaskSuggestions();
-        const quests = globalSuggestionStore.getQuestSuggestions();
-        
-        // Pass them to the update handler
-        this.updateHandlers.onSuggestionUpdate(tasks, quests);
-        console.log('✅ Direct update handler executed successfully');
-      } catch (error) {
-        console.error('❌ Error in direct update handler:', error);
-        console.error(error);
-      }
-    } else {
-      console.warn('⚠️ No update handler registered or handler is undefined');
-    }
-  }
-
-  /**
-   * Clears all suggestion queues
-   */
-  clearSuggestionQueue(): void {
-    // Clear the global store
-    globalSuggestionStore.clearSuggestions();
-    
-    // Call direct update handler if registered
-    if (this.updateHandlers.onSuggestionUpdate) {
-      this.updateHandlers.onSuggestionUpdate([], []);
-    }
-  }
-  
-  /**
-   * Gets the current task suggestions
-   * @returns Array of task suggestions
-   */
-  getTaskSuggestions(): TaskSuggestion[] {
-    // Return from the global store
-    return globalSuggestionStore.getTaskSuggestions();
-  }
-  
-  /**
-   * Gets the current quest suggestions
-   * @returns Array of quest suggestions
-   */
-  getQuestSuggestions(): QuestSuggestion[] {
-    // Return from the global store
-    return globalSuggestionStore.getQuestSuggestions();
-  }
-  
-  /**
-   * Removes a task suggestion from the queue by ID
-   * @param id ID of the task suggestion to remove
-   */
-  removeTaskSuggestion(id: string): void {
-    console.log('🗑️ [SuggestionAgent] Removing task suggestion:', id);
-    
-    // Remove from the global store
-    globalSuggestionStore.removeTaskSuggestion(id);
-    
-    // Call direct update handler if registered
-    if (this.updateHandlers && this.updateHandlers.onSuggestionUpdate) {
-      console.log('🔄 [SuggestionAgent] Notifying handler of task removal');
-      
-      // Get the updated suggestions from the global store
-      const tasks = globalSuggestionStore.getTaskSuggestions();
-      const quests = globalSuggestionStore.getQuestSuggestions();
-      
-      this.updateHandlers.onSuggestionUpdate(tasks, quests);
-    } else {
-      console.warn('⚠️ No update handler registered for task removal');
-    }
-  }
-  
-  /**
-   * Removes a quest suggestion from the queue by ID
-   * @param id ID of the quest suggestion to remove
-   */
-  removeQuestSuggestion(id: string): void {
-    console.log('🗑️ [SuggestionAgent] Removing quest suggestion:', id);
-    
-    // Remove from the global store
-    globalSuggestionStore.removeQuestSuggestion(id);
-    
-    // Call direct update handler if registered
-    if (this.updateHandlers && this.updateHandlers.onSuggestionUpdate) {
-      console.log('🔄 [SuggestionAgent] Notifying handler of quest removal');
-      
-      // Get the updated suggestions from the global store
-      const tasks = globalSuggestionStore.getTaskSuggestions();
-      const quests = globalSuggestionStore.getQuestSuggestions();
-      
-      this.updateHandlers.onSuggestionUpdate(tasks, quests);
-    } else {
-      console.warn('⚠️ No update handler registered for quest removal');
-    }
-  }
-  
-  /**
    * Creates a task in the database from a task suggestion
    * @param suggestion The task suggestion to create
    * @param userId The user's ID
@@ -689,10 +508,7 @@ IMPORTANT:
         user_id: userId
       };
       
-      const task = await createTask(taskData);
-      this.removeTaskSuggestion(suggestion.id);
-      
-      return task;
+      return await createTask(taskData);
     } catch (error) {
       console.error('Error creating task from suggestion:', error);
       return null;
@@ -720,7 +536,6 @@ IMPORTANT:
       };
       
       const quest = await createQuest(userId, questData);
-      this.removeQuestSuggestion(suggestion.id);
       
       // Create related tasks if they exist
       if (suggestion.relatedTasks && suggestion.relatedTasks.length > 0) {

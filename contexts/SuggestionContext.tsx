@@ -1,8 +1,10 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { TaskSuggestion, QuestSuggestion, SuggestionAgent } from '@/services/agents/SuggestionAgent';
 import { Quest, Task } from '@/app/types';
 import { globalSuggestionStore } from '@/services/globalSuggestionStore';
 import { useSupabase } from './SupabaseContext';
+
+type Suggestion = TaskSuggestion | QuestSuggestion;
 
 // Define the shape of our context
 interface SuggestionContextType {
@@ -78,6 +80,36 @@ export const SuggestionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   
   // Get singleton instances
   const suggestionAgent = SuggestionAgent.getInstance();
+
+  // Internal helper functions moved from SuggestionAgent
+  const addSuggestionToQueue = useCallback((suggestion: Suggestion) => {
+    console.log('\n=== SuggestionContext.addSuggestionToQueue ===');
+    console.log('Adding suggestion:', {
+      type: suggestion.type,
+      id: suggestion.id,
+      title: suggestion.type === 'task' ? suggestion.title : (suggestion as QuestSuggestion).title,
+      sourceType: suggestion.sourceType,
+      timestamp: suggestion.timestamp
+    });
+    
+    // Add the suggestion to the global store
+    globalSuggestionStore.addSuggestion(suggestion);
+  }, []);
+
+  const clearSuggestionQueue = useCallback(() => {
+    console.log('🧹 [SuggestionContext] Clearing suggestion queue');
+    globalSuggestionStore.clearSuggestions();
+  }, []);
+
+  const removeTaskSuggestion = useCallback((id: string) => {
+    console.log('🗑️ [SuggestionContext] Removing task suggestion:', id);
+    globalSuggestionStore.removeTaskSuggestion(id);
+  }, []);
+
+  const removeQuestSuggestion = useCallback((id: string) => {
+    console.log('🗑️ [SuggestionContext] Removing quest suggestion:', id);
+    globalSuggestionStore.removeQuestSuggestion(id);
+  }, []);
   
   // Subscribe to changes in the globalSuggestionStore
   useEffect(() => {
@@ -114,6 +146,23 @@ export const SuggestionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     };
   }, [currentTaskIndex, currentQuestIndex]);
   
+  // Add event listener for new suggestions from ChatAgent
+  useEffect(() => {
+    const handleNewSuggestions = (event: CustomEvent<{ suggestions: TaskSuggestion[] }>) => {
+      console.log('📢 [SuggestionContext] Received new suggestions from ChatAgent:', event.detail.suggestions);
+      event.detail.suggestions.forEach(suggestion => {
+        addSuggestionToQueue(suggestion);
+      });
+    };
+
+    // Add event listener with type assertion
+    window.addEventListener('newSuggestions', handleNewSuggestions as EventListener);
+    
+    return () => {
+      window.removeEventListener('newSuggestions', handleNewSuggestions as EventListener);
+    };
+  }, [addSuggestionToQueue]);
+
   // Compute current suggestions based on indices
   const currentTaskSuggestion = 
     currentTaskIndex >= 0 && taskSuggestions.length > 0 ? 
@@ -139,12 +188,15 @@ export const SuggestionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     combinedSuggestionActive,
     isAnalyzing,
     
-    // Analysis methods
+    // Analysis methods - these still use SuggestionAgent for LLM operations
     analyzeMessage: async (message: string, userId: string) => {
       console.log('🔍 [SuggestionContext] Analyzing message');
       setIsAnalyzing(true);
       try {
-        await suggestionAgent.analyzeMessage(message, userId);
+        const result = await suggestionAgent.analyzeMessage(message, userId);
+        if (result) {
+          addSuggestionToQueue(result);
+        }
       } finally {
         setIsAnalyzing(false);
       }
@@ -154,7 +206,10 @@ export const SuggestionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       console.log('📝 [SuggestionContext] Analyzing journal entry');
       setIsAnalyzing(true);
       try {
-        await suggestionAgent.analyzeJournalEntry(entry, userId);
+        const result = await suggestionAgent.analyzeJournalEntry(entry, userId);
+        if (result) {
+          addSuggestionToQueue(result);
+        }
       } finally {
         setIsAnalyzing(false);
       }
@@ -195,19 +250,23 @@ export const SuggestionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       }
     },
     
-    // Action methods
+    // Action methods that use both local state and SuggestionAgent
     acceptTaskSuggestion: async (task: TaskSuggestion) => {
       console.log('✅ [SuggestionContext] Accepting task suggestion:', task.title);
       if (!userId) {
         console.error('No user ID available to accept task');
         return null;
       }
-      return await suggestionAgent.acceptTaskSuggestion(task, userId);
+      const result = await suggestionAgent.acceptTaskSuggestion(task, userId);
+      if (result) {
+        removeTaskSuggestion(task.id);
+      }
+      return result;
     },
     
     rejectTaskSuggestion: (taskId: string) => {
       console.log('❌ [SuggestionContext] Rejecting task suggestion:', taskId);
-      suggestionAgent.removeTaskSuggestion(taskId);
+      removeTaskSuggestion(taskId);
     },
     
     acceptQuestSuggestion: async (quest: QuestSuggestion) => {
@@ -216,30 +275,28 @@ export const SuggestionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         console.error('No user ID available to accept quest');
         return null;
       }
-      return await suggestionAgent.acceptQuestSuggestion(quest, userId);
+      const result = await suggestionAgent.acceptQuestSuggestion(quest, userId);
+      if (result) {
+        removeQuestSuggestion(quest.id);
+      }
+      return result;
     },
     
     rejectQuestSuggestion: (questId: string) => {
       console.log('❌ [SuggestionContext] Rejecting quest suggestion:', questId);
-      suggestionAgent.removeQuestSuggestion(questId);
+      removeQuestSuggestion(questId);
     },
     
     upgradeTaskToQuest: async (task: TaskSuggestion) => {
       console.log('⬆️ [SuggestionContext] Upgrading task to quest:', task.title);
       const quest = await suggestionAgent.upgradeTaskToQuest(task);
       if (quest) {
-        // Add the new quest to the store
-        globalSuggestionStore.addQuestSuggestion(quest);
-        // Remove the task from the store
-        suggestionAgent.removeTaskSuggestion(task.id);
+        addSuggestionToQueue(quest);
+        removeTaskSuggestion(task.id);
       }
     },
     
-    // Misc methods
-    clearSuggestions: () => {
-      console.log('🧹 [SuggestionContext] Clearing all suggestions');
-      suggestionAgent.clearSuggestionQueue();
-    },
+    clearSuggestions: clearSuggestionQueue,
   };
 
   return (
