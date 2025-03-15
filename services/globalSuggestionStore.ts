@@ -1,4 +1,4 @@
-import { TaskSuggestion, QuestSuggestion } from '@/services/agents/SuggestionAgent';
+import { TaskSuggestion, QuestSuggestion, MemoSuggestion } from '@/services/agents/SuggestionAgent';
 
 /**
  * GlobalSuggestionStore provides a centralized singleton for storing and accessing
@@ -12,9 +12,14 @@ class GlobalSuggestionStore {
   // The actual suggestion arrays
   private taskSuggestions: TaskSuggestion[] = [];
   private questSuggestions: QuestSuggestion[] = [];
+  private memoSuggestions: MemoSuggestion[] = [];
   
   // Callback handlers for data changes
-  private updateHandlers: Array<(tasks: TaskSuggestion[], quests: QuestSuggestion[]) => void> = [];
+  private updateHandlers: Array<(
+    tasks: TaskSuggestion[], 
+    quests: QuestSuggestion[],
+    memos: MemoSuggestion[]
+  ) => void> = [];
   
   // Private constructor to prevent direct instantiation
   private constructor() {
@@ -35,13 +40,13 @@ class GlobalSuggestionStore {
    * Register a handler to be called whenever suggestions change
    */
   registerUpdateHandler(
-    handler: (tasks: TaskSuggestion[], quests: QuestSuggestion[]) => void
+    handler: (tasks: TaskSuggestion[], quests: QuestSuggestion[], memos: MemoSuggestion[]) => void
   ): () => void {
     console.log('🌐 [GlobalSuggestionStore] Registering new update handler');
     this.updateHandlers.push(handler);
     
     // Call the handler immediately with current data
-    handler([...this.taskSuggestions], [...this.questSuggestions]);
+    handler([...this.taskSuggestions], [...this.questSuggestions], [...this.memoSuggestions]);
     
     // Return a function to unregister this handler
     return () => {
@@ -56,12 +61,13 @@ class GlobalSuggestionStore {
   private notifyHandlers(): void {
     console.log('🌐 [GlobalSuggestionStore] Notifying handlers of update:', {
       taskCount: this.taskSuggestions.length,
-      questCount: this.questSuggestions.length
+      questCount: this.questSuggestions.length,
+      memoCount: this.memoSuggestions.length
     });
     
     for (const handler of this.updateHandlers) {
       try {
-        handler([...this.taskSuggestions], [...this.questSuggestions]);
+        handler([...this.taskSuggestions], [...this.questSuggestions], [...this.memoSuggestions]);
       } catch (error) {
         console.error('🌐 [GlobalSuggestionStore] Error in update handler:', error);
       }
@@ -85,6 +91,15 @@ class GlobalSuggestionStore {
     this.questSuggestions = [...this.questSuggestions, quest];
     this.notifyHandlers();
   }
+
+  /**
+   * Add a memo suggestion to the store
+   */
+  addMemoSuggestion(memo: MemoSuggestion): void {
+    console.log('🌐 [GlobalSuggestionStore] Adding memo suggestion:', memo.content.substring(0, 30) + '...');
+    this.memoSuggestions = [...this.memoSuggestions, memo];
+    this.notifyHandlers();
+  }
   
   /**
    * Remove a task suggestion by ID
@@ -103,6 +118,15 @@ class GlobalSuggestionStore {
     this.questSuggestions = this.questSuggestions.filter(quest => quest.id !== questId);
     this.notifyHandlers();
   }
+
+  /**
+   * Remove a memo suggestion by ID
+   */
+  removeMemoSuggestion(memoId: string): void {
+    console.log('🌐 [GlobalSuggestionStore] Removing memo suggestion:', memoId);
+    this.memoSuggestions = this.memoSuggestions.filter(memo => memo.id !== memoId);
+    this.notifyHandlers();
+  }
   
   /**
    * Get all task suggestions
@@ -117,6 +141,13 @@ class GlobalSuggestionStore {
   getQuestSuggestions(): QuestSuggestion[] {
     return [...this.questSuggestions];
   }
+
+  /**
+   * Get all memo suggestions
+   */
+  getMemoSuggestions(): MemoSuggestion[] {
+    return [...this.memoSuggestions];
+  }
   
   /**
    * Clear all suggestions
@@ -125,17 +156,20 @@ class GlobalSuggestionStore {
     console.log('🌐 [GlobalSuggestionStore] Clearing all suggestions');
     this.taskSuggestions = [];
     this.questSuggestions = [];
+    this.memoSuggestions = [];
     this.notifyHandlers();
   }
   
   /**
-   * Add a suggestion (either task or quest)
+   * Add a suggestion (either task, quest, or memo)
    */
-  addSuggestion(suggestion: TaskSuggestion | QuestSuggestion): void {
+  addSuggestion(suggestion: TaskSuggestion | QuestSuggestion | MemoSuggestion): void {
     if (suggestion.type === 'task') {
       this.addTaskSuggestion(suggestion as TaskSuggestion);
-    } else {
+    } else if (suggestion.type === 'quest') {
       this.addQuestSuggestion(suggestion as QuestSuggestion);
+    } else if (suggestion.type === 'memo') {
+      this.addMemoSuggestion(suggestion as MemoSuggestion);
     }
   }
 }

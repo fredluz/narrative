@@ -46,6 +46,22 @@ export interface QuestSuggestion {
   relatedTasks?: TaskSuggestion[];
 }
 
+/**
+ * Represents a memo suggestion generated from user content
+ */
+export interface MemoSuggestion {
+  id: string;
+  sourceContent: string;
+  sourceType: 'chat' | 'journal' | 'ai';
+  timestamp: string;
+  type: 'memo';
+  content: string;
+  tags: string[];
+  source: string;
+  questId: number;
+  userId: string;
+}
+
 export interface ConversationMessage {
   role: "user" | "assistant";
   content: string;

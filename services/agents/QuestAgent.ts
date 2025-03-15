@@ -11,6 +11,8 @@ import {
   getQuestMemos
 } from '@/services/questsService';
 import type { Quest, Task } from '@/app/types';
+import { globalSuggestionStore } from '@/services/globalSuggestionStore';
+import { MemoSuggestion } from '@/services/agents/SuggestionAgent';
 
 interface TaskRelevanceItem {
     taskId: number;
@@ -632,7 +634,7 @@ Reply ONLY with a JSON object in this exact format:
                 const changes = {
                     updatedDescription: false,
                     updatedAnalysis: false,
-                    addedMemos: 0,
+                    addedMemoSuggestions: 0,
                     errors: [] as string[]
                 };
 
@@ -645,7 +647,6 @@ Reply ONLY with a JSON object in this exact format:
                         try {
                             const updateData: {description?: string, analysis?: string} = {};
                             
-                            // Only include fields that were actually provided
                             if (parsed.updates.description) {
                                 updateData.description = parsed.updates.description;
                                 changes.updatedDescription = true;
@@ -658,7 +659,6 @@ Reply ONLY with a JSON object in this exact format:
                                 console.log('📊 Updated quest analysis');
                             }
                             
-                            // Only make the database call if we have something to update
                             if (Object.keys(updateData).length > 0) {
                                 const updatedQuest = await this.updateQuest(questId, userId, updateData);
                                 console.log('✅ Quest updated successfully in database:', updatedQuest.id);
@@ -669,45 +669,52 @@ Reply ONLY with a JSON object in this exact format:
                         }
                     }
 
-                    // Add memos one by one to handle partial failures
+                    // Create memo suggestions instead of directly adding them
                     if (parsed.memos && parsed.memos.length > 0) {
-                        console.log(`📝 Adding ${parsed.memos.length} new memos to quest`);
+                        console.log(`📝 Creating ${parsed.memos.length} new memo suggestions`);
                         
                         for (const memo of parsed.memos) {
                             try {
                                 // Ensure tags is an array
-                                const memoWithValidTags = {
+                                const timestamp = new Date().toISOString();
+                                const memoSuggestion: MemoSuggestion = {
+                                    id: `memo-${timestamp}-${Math.random().toString(36).substring(2, 10)}`,
+                                    sourceContent: content,
+                                    sourceType: 'ai',
+                                    timestamp,
+                                    type: 'memo',
                                     content: memo.content,
                                     tags: Array.isArray(memo.tags) ? memo.tags : [],
-                                    source: memo.source
+                                    source: memo.source,
+                                    questId,
+                                    userId
                                 };
                                 
-                                const newMemo = await addMemoToQuest(questId, userId, memoWithValidTags);
-                                console.log(`✅ Created new memo: "${newMemo.content.substring(0, 30)}..."`);
-                                changes.addedMemos++;
+                                // Add to global suggestion store
+                                globalSuggestionStore.addMemoSuggestion(memoSuggestion);
+                                changes.addedMemoSuggestions++;
                             } catch (memoError) {
-                                console.error('❌ Error adding memo to quest:', memoError);
-                                changes.errors.push(`Failed to add memo: ${memoError instanceof Error ? memoError.message : 'Unknown error'}`);
+                                console.error('❌ Error creating memo suggestion:', memoError);
+                                changes.errors.push(`Failed to create memo suggestion: ${memoError instanceof Error ? memoError.message : 'Unknown error'}`);
                             }
                         }
                     }
 
                     // Log summary of changes
-                    console.log('📋 Summary of database changes:');
+                    console.log('📋 Summary of changes:');
                     console.log(`- Description updated: ${changes.updatedDescription}`);
                     console.log(`- Analysis updated: ${changes.updatedAnalysis}`);
-                    console.log(`- Memos added: ${changes.addedMemos}/${parsed.memos.length}`);
+                    console.log(`- Memo suggestions created: ${changes.addedMemoSuggestions}/${parsed.memos.length}`);
                     if (changes.errors.length > 0) {
                         console.log(`- Errors: ${changes.errors.length}`);
                         changes.errors.forEach(err => console.log(`  - ${err}`));
                     }
                 } else {
-                    console.log(`⚠️ Confidence level too low (${parsed.confidence}), no changes applied to database`);
+                    console.log(`⚠️ Confidence level too low (${parsed.confidence}), no changes applied`);
                 }
 
                 return {
                     ...parsed,
-                    // Add metadata about what actually happened for any consumers of this data
                     meta: {
                         actualChanges: changes
                     }
@@ -719,6 +726,24 @@ Reply ONLY with a JSON object in this exact format:
         } catch (error) {
             console.error('Error in analyzeContentForQuest:', error);
             return null;
+        }
+    }
+
+    // Add method to accept a memo suggestion
+    async acceptMemoSuggestion(suggestion: MemoSuggestion): Promise<void> {
+        try {
+            console.log('📝 Creating memo from suggestion:', suggestion.content.substring(0, 30) + '...');
+            await addMemoToQuest(suggestion.questId, suggestion.userId, {
+                content: suggestion.content,
+                tags: suggestion.tags,
+                source: suggestion.source
+            });
+            
+            // Remove the suggestion from the store
+            globalSuggestionStore.removeMemoSuggestion(suggestion.id);
+        } catch (error) {
+            console.error('Error creating memo from suggestion:', error);
+            throw error;
         }
     }
 }

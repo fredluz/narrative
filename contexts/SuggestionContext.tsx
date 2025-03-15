@@ -1,15 +1,17 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { TaskSuggestion, QuestSuggestion, SuggestionAgent } from '@/services/agents/SuggestionAgent';
+import { TaskSuggestion, QuestSuggestion, MemoSuggestion, SuggestionAgent } from '@/services/agents/SuggestionAgent';
 import { Quest, Task } from '@/app/types';
 import { globalSuggestionStore } from '@/services/globalSuggestionStore';
 import { useSupabase } from './SupabaseContext';
+import { QuestAgent } from '@/services/agents/QuestAgent';
 
-type Suggestion = TaskSuggestion | QuestSuggestion;
+type Suggestion = TaskSuggestion | QuestSuggestion | MemoSuggestion;
 
 // Define the shape of our context
 interface SuggestionContextType {
   taskSuggestions: TaskSuggestion[];
   questSuggestions: QuestSuggestion[];
+  memoSuggestions: MemoSuggestion[];
   currentTaskSuggestion: TaskSuggestion | null;
   currentQuestSuggestion: QuestSuggestion | null;
   combinedSuggestionActive: boolean;
@@ -30,9 +32,10 @@ interface SuggestionContextType {
   rejectTaskSuggestion: (taskId: string) => void;
   acceptQuestSuggestion: (quest: QuestSuggestion) => Promise<Quest | null>;
   rejectQuestSuggestion: (questId: string) => void;
+  acceptMemoSuggestion: (memo: MemoSuggestion) => Promise<void>;
+  rejectMemoSuggestion: (memoId: string) => void;
   upgradeTaskToQuest: (task: TaskSuggestion) => Promise<void>;
   
-  // Misc methods
   clearSuggestions: () => void;
 }
 
@@ -40,6 +43,7 @@ interface SuggestionContextType {
 const SuggestionContext = createContext<SuggestionContextType>({
   taskSuggestions: [],
   questSuggestions: [],
+  memoSuggestions: [],
   currentTaskSuggestion: null,
   currentQuestSuggestion: null,
   combinedSuggestionActive: false,
@@ -57,6 +61,8 @@ const SuggestionContext = createContext<SuggestionContextType>({
   rejectTaskSuggestion: () => {},
   acceptQuestSuggestion: async () => null,
   rejectQuestSuggestion: () => {},
+  acceptMemoSuggestion: async () => {},
+  rejectMemoSuggestion: () => {},
   upgradeTaskToQuest: async () => {},
   
   clearSuggestions: () => {},
@@ -73,6 +79,7 @@ export const SuggestionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   // Set up state for suggestions and tracking
   const [taskSuggestions, setTaskSuggestions] = useState<TaskSuggestion[]>([]);
   const [questSuggestions, setQuestSuggestions] = useState<QuestSuggestion[]>([]);
+  const [memoSuggestions, setMemoSuggestions] = useState<MemoSuggestion[]>([]);
   const [currentTaskIndex, setCurrentTaskIndex] = useState<number>(-1);
   const [currentQuestIndex, setCurrentQuestIndex] = useState<number>(-1);
   const [combinedSuggestionActive, setCombinedSuggestionActive] = useState<boolean>(false);
@@ -80,6 +87,7 @@ export const SuggestionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   
   // Get singleton instances
   const suggestionAgent = SuggestionAgent.getInstance();
+  const questAgent = new QuestAgent();
 
   // Internal helper functions moved from SuggestionAgent
   const addSuggestionToQueue = useCallback((suggestion: Suggestion) => {
@@ -87,7 +95,9 @@ export const SuggestionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     console.log('Adding suggestion:', {
       type: suggestion.type,
       id: suggestion.id,
-      title: suggestion.type === 'task' ? suggestion.title : (suggestion as QuestSuggestion).title,
+      title: suggestion.type === 'task' ? suggestion.title : 
+            suggestion.type === 'quest' ? (suggestion as QuestSuggestion).title :
+            (suggestion as MemoSuggestion).content.substring(0, 30) + '...',
       sourceType: suggestion.sourceType,
       timestamp: suggestion.timestamp
     });
@@ -110,20 +120,22 @@ export const SuggestionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     console.log('🗑️ [SuggestionContext] Removing quest suggestion:', id);
     globalSuggestionStore.removeQuestSuggestion(id);
   }, []);
-  
+
   // Subscribe to changes in the globalSuggestionStore
   useEffect(() => {
     console.log('🔌 [SuggestionContext] Setting up subscription to globalSuggestionStore');
     
     // Register an update handler with the global store
-    const unsubscribe = globalSuggestionStore.registerUpdateHandler((tasks, quests) => {
+    const unsubscribe = globalSuggestionStore.registerUpdateHandler((tasks, quests, memos) => {
       console.log('📢 [SuggestionContext] Received update from globalSuggestionStore:', {
         taskCount: tasks.length,
-        questCount: quests.length
+        questCount: quests.length,
+        memoCount: memos.length
       });
       
       setTaskSuggestions(tasks);
       setQuestSuggestions(quests);
+      setMemoSuggestions(memos);
       
       // Update indices if needed
       if (tasks.length > 0 && currentTaskIndex < 0) {
@@ -183,6 +195,7 @@ export const SuggestionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const value: SuggestionContextType = {
     taskSuggestions,
     questSuggestions,
+    memoSuggestions,
     currentTaskSuggestion,
     currentQuestSuggestion,
     combinedSuggestionActive,
@@ -285,6 +298,21 @@ export const SuggestionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     rejectQuestSuggestion: (questId: string) => {
       console.log('❌ [SuggestionContext] Rejecting quest suggestion:', questId);
       removeQuestSuggestion(questId);
+    },
+
+    acceptMemoSuggestion: async (memo: MemoSuggestion) => {
+      console.log('✅ [SuggestionContext] Accepting memo suggestion:', memo.content.substring(0, 30) + '...');
+      try {
+        await questAgent.acceptMemoSuggestion(memo);
+      } catch (error) {
+        console.error('Error accepting memo suggestion:', error);
+        throw error;
+      }
+    },
+
+    rejectMemoSuggestion: (memoId: string) => {
+      console.log('❌ [SuggestionContext] Rejecting memo suggestion:', memoId);
+      globalSuggestionStore.removeMemoSuggestion(memoId);
     },
     
     upgradeTaskToQuest: async (task: TaskSuggestion) => {
