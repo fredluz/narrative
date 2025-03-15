@@ -50,6 +50,13 @@ export interface Quest extends BaseEntity {
     description: string;
     relevance: string;
   }[];
+  memos?: {
+    id: string;
+    content: string;
+    created_at: string;
+    source: string;
+    context?: string;
+  }[];
 }
 
 export interface ChatMessage extends BaseEntity {

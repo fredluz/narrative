@@ -19,31 +19,31 @@ interface KanbanProps {
 
 type TaskStatus = 'ToDo' | 'InProgress' | 'Done';
 
+// Helper function to make text more visible against dark backgrounds
+const getBrightAccent = (baseColor: string) => {
+  const hex = baseColor.replace('#', '');
+  const r = parseInt(hex.substring(0, 2), 16);
+  const g = parseInt(hex.substring(2, 4), 16);
+  const b = parseInt(hex.substring(4, 6), 16);
+
+  if (r + g + b > 500) {
+    return '#FFFFFF';
+  }
+
+  const brightR = Math.min(255, r + 100);
+  const brightG = Math.min(255, g + 100);
+  const brightB = Math.min(255, b + 100);
+
+  return `#${brightR.toString(16).padStart(2, '0')}${brightG
+    .toString(16).padStart(2, '0')}${brightB.toString(16).padStart(2, '0')}`;
+};
+
 export function KanbanBoard({ mainQuest, onViewAllQuests, userId }: KanbanProps) {
   const router = useRouter();
   const { themeColor, secondaryColor } = useTheme();
   const { session } = useSupabase() as { session: Session }; // Assert session exists
   const [activeColumn, setActiveColumn] = useState<TaskStatus | 'all' | 'active'>('active');
   const [updatingTaskId, setUpdatingTaskId] = useState<number | null>(null);
-
-  {/* Make text more visible against dark backgrounds */}
-  const getBrightAccent = (baseColor: string) => {
-    const hex = baseColor.replace('#', '');
-    const r = parseInt(hex.substring(0, 2), 16);
-    const g = parseInt(hex.substring(2, 4), 16);
-    const b = parseInt(hex.substring(4, 6), 16);
-
-    if (r + g + b > 500) {
-      return '#FFFFFF';
-    }
-
-    const brightR = Math.min(255, r + 100);
-    const brightG = Math.min(255, g + 100);
-    const brightB = Math.min(255, b + 100);
-
-    return `#${brightR.toString(16).padStart(2, '0')}${brightG
-      .toString(16).padStart(2, '0')}${brightB.toString(16).padStart(2, '0')}`;
-  };
 
   const brightAccent = getBrightAccent(themeColor);
 
@@ -58,13 +58,12 @@ export function KanbanBoard({ mainQuest, onViewAllQuests, userId }: KanbanProps)
 
   const textColor = isDarkColor(themeColor) ? '#fff' : '#000';
 
-  {/* Add ownership verification */}
+  // Verify current user
   const verifyCurrentUser = React.useMemo(() => {
     if (!session?.user?.id || !userId) return false;
     return session.user.id === userId;
   }, [session?.user?.id, userId]);
 
-  {/* Add guard for unauthorized access */}
   if (!verifyCurrentUser) {
     return (
       <View style={{
@@ -131,7 +130,7 @@ export function KanbanBoard({ mainQuest, onViewAllQuests, userId }: KanbanProps)
     );
   }
 
-  {/* Add function to handle task status toggle */}
+  // Handle task status toggle
   const toggleTaskCompletion = async (task: Task) => {
     if (!verifyCurrentUser || task.user_id !== userId) {
       console.warn("Unauthorized task update attempt");
@@ -144,14 +143,14 @@ export function KanbanBoard({ mainQuest, onViewAllQuests, userId }: KanbanProps)
       const newStatus = getNextStatus(task.status);
       await updateTaskStatus(task.id, newStatus, userId);
       
-      {/* Update local state */}
+      // Update local state
       if (mainQuest && mainQuest.tasks) {
         mainQuest.tasks = mainQuest.tasks.map(t => 
           t.id === task.id ? { ...t, status: newStatus } : t
         );
       }
       
-      {/* Force a re-render */}
+      // Force a re-render
       setActiveColumn(prev => prev);
     } catch (error) {
       console.error('Failed to update task status:', error);
@@ -160,81 +159,53 @@ export function KanbanBoard({ mainQuest, onViewAllQuests, userId }: KanbanProps)
     }
   };
 
-  {/* Extract tasks from mainQuest */}
+  // Extract and filter tasks
   const tasks = mainQuest?.tasks || [];
-
-  {/* Filter tasks based on activeColumn */}
   const filteredTasks = 
     activeColumn === 'all' ? tasks :
     activeColumn === 'active' ? tasks.filter((task) => task.status === 'ToDo' || task.status === 'InProgress') :
     tasks.filter((task) => task.status === activeColumn);
 
-  {/* No tasks UI */}
+  // No tasks UI
   if (tasks.length === 0) {
     return (
-      <Card
-        style={[
-          questStyles.mainQuestCard,
-          {
-            borderColor: themeColor,
-            borderWidth: 1,
-            borderLeftWidth: 3,
-            overflow: 'hidden',
-          },
-        ]}
-      >
-        {/* Background with cyberpunk elements */}
-        <View
-          style={{
-            position: 'absolute',
-            width: '100%',
-            height: '100%',
-            backgroundColor: '#151515',
-          }}
-        />
-
-        {/* Digital noise effect */}
-        <View
-          style={{
-            position: 'absolute',
-            top: 0,
-            height: '100%',
-            width: 40,
-            right: 20,
-            opacity: 0.05,
-            backgroundColor: themeColor,
-          }}
-        />
-
-
-        {/* Main quest header section */}
+      <Card style={[questStyles.mainQuestCard, {
+        borderColor: themeColor,
+        borderWidth: 1,
+        borderLeftWidth: 3,
+        overflow: 'hidden',
+      }]}>
+        <View style={{
+          position: 'absolute',
+          width: '100%',
+          height: '100%',
+          backgroundColor: '#151515',
+        }}/><View style={{
+          position: 'absolute',
+          top: 0,
+          height: '100%',
+          width: 40,
+          right: 20,
+          opacity: 0.05,
+          backgroundColor: themeColor,
+        }}/>
         <View style={[questStyles.cardHeader, { borderBottomColor: 'rgba(255, 255, 255, 0.1)' }]}>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Text
-              style={[
-                questStyles.mainQuestTitle,
-                {
-                  color: '#FFFFFF',
-                  textShadowColor: themeColor,
-                  textShadowOffset: { width: 1, height: 1 },
-                  textShadowRadius: 4,
-                },
-              ]}
-            >
-              MAIN QUEST
-            </Text>
-            <View
-              style={{
-                height: 3,
-                width: 20,
-                backgroundColor: themeColor,
-                marginLeft: 8,
-                borderRadius: 2,
-              }}
-            />
+            <Text style={[questStyles.mainQuestTitle, {
+              color: '#FFFFFF',
+              textShadowColor: themeColor,
+              textShadowOffset: { width: 1, height: 1 },
+              textShadowRadius: 4,
+            }]}>MAIN QUEST</Text>
+            <View style={{
+              height: 3,
+              width: 20,
+              backgroundColor: themeColor,
+              marginLeft: 8,
+              borderRadius: 2,
+            }}/>
           </View>
         </View>
-
         <View style={{ padding: 15 }}>
           <Text
             style={[
@@ -309,32 +280,21 @@ export function KanbanBoard({ mainQuest, onViewAllQuests, userId }: KanbanProps)
         questStyles.mainQuestCard,
         { borderColor: themeColor, borderWidth: 1, borderLeftWidth: 3, overflow: 'hidden' },
       ]}
-    >
-      {/* Background with cyberpunk elements */}
-      <View
-        style={{
-          position: 'absolute',
-          width: '100%',
-          height: '100%',
-          backgroundColor: '#151515',
-        }}
-      />
-
-      {/* Digital noise effect */}
-      <View
-        style={{
-          position: 'absolute',
-          top: 0,
-          height: '100%',
-          width: 40,
-          right: 20,
-          opacity: 0.05,
-          backgroundColor: themeColor,
-        }}
-      />
-
-
-      {/* Main quest header section */}
+    >{/* Background elements */}
+      <View style={{
+        position: 'absolute',
+        width: '100%',
+        height: '100%',
+        backgroundColor: '#151515',
+      }}/><View style={{
+        position: 'absolute',
+        top: 0,
+        height: '100%',
+        width: 40,
+        right: 20,
+        opacity: 0.05,
+        backgroundColor: themeColor,
+      }}/>
       <View style={[questStyles.cardHeader, { borderBottomColor: 'rgba(255, 255, 255, 0.1)' }]}>
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           <Text
@@ -350,18 +310,15 @@ export function KanbanBoard({ mainQuest, onViewAllQuests, userId }: KanbanProps)
           >
             MAIN QUEST
           </Text>
-          <View
-            style={{
-              height: 3,
-              width: 20,
-              backgroundColor: themeColor,
-              marginLeft: 8,
-              borderRadius: 2,
-            }}
-          />
+          <View style={{
+            height: 3,
+            width: 20,
+            backgroundColor: themeColor,
+            marginLeft: 8,
+            borderRadius: 2,
+          }}/>
         </View>
       </View>
-
       <View style={{ padding: 15 }}>
         <Text
           style={[
@@ -379,7 +336,6 @@ export function KanbanBoard({ mainQuest, onViewAllQuests, userId }: KanbanProps)
         >
           {mainQuest.title}
         </Text>
-
         {mainQuest.start_date && (
           <Text style={[questStyles.questDetails, { color: '#AAA', marginBottom: 3 }]}>
             Started: {formatDateTime(mainQuest.start_date)}
@@ -457,7 +413,7 @@ export function KanbanBoard({ mainQuest, onViewAllQuests, userId }: KanbanProps)
                           {task.title}
                         </Text>
 
-                        {task.description ? (
+                        {task.description && (
                           <Text
                             style={[
                               questStyles.taskDescription,
@@ -470,9 +426,8 @@ export function KanbanBoard({ mainQuest, onViewAllQuests, userId }: KanbanProps)
                           >
                             {task.description}
                           </Text>
-                        ) : null}
+                        )}
 
-                        {/* Task metadata row */}
                         <View
                           style={{
                             flexDirection: 'row',
@@ -481,42 +436,46 @@ export function KanbanBoard({ mainQuest, onViewAllQuests, userId }: KanbanProps)
                             opacity: task.status === 'Done' ? 0.6 : 0.8,
                           }}
                         >
-                          <MaterialIcons
-                            name="schedule"
-                            size={12}
-                            color="#888"
-                            style={{ marginRight: 4 }}
-                          />
-                          <Text style={{ fontSize: 12, color: '#888', fontFamily: 'Inter_400Regular' }}>
-                            {formatDateTime(task.scheduled_for)}
-                          </Text>
+                          {task.scheduled_for && (
+                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                              <MaterialIcons
+                                name="schedule"
+                                size={12}
+                                color="#888"
+                                style={{ marginRight: 4 }}
+                              />
+                              <Text style={{ fontSize: 12, color: '#888', fontFamily: 'Inter_400Regular' }}>
+                                {formatDateTime(task.scheduled_for)}
+                              </Text>
+                            </View>
+                          )}
 
                           {task.location && (
-                            <>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 8 }}>
                               <MaterialIcons
                                 name="place"
                                 size={12}
                                 color="#888"
-                                style={{ marginLeft: 8, marginRight: 4 }}
+                                style={{ marginRight: 4 }}
                               />
                               <Text style={{ fontSize: 12, color: '#888', fontFamily: 'Inter_400Regular' }}>
                                 {task.location}
                               </Text>
-                            </>
+                            </View>
                           )}
 
                           {task.deadline && (
-                            <>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 8 }}>
                               <MaterialIcons
                                 name="warning"
                                 size={12}
                                 color="#FF4444"
-                                style={{ marginLeft: 8, marginRight: 4 }}
+                                style={{ marginRight: 4 }}
                               />
                               <Text style={{ fontSize: 12, color: '#FF4444', fontFamily: 'Inter_400Regular' }}>
                                 {formatDateTime(task.deadline)}
                               </Text>
-                            </>
+                            </View>
                           )}
                         </View>
                       </View>

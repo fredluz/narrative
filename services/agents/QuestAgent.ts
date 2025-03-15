@@ -1,11 +1,14 @@
 import { GoogleGenerativeAI, type GenerativeModel } from "@google/generative-ai";
+import OpenAI from 'openai';
 import { 
   createQuest,
   updateQuest,
   deleteQuest,
   moveTasksToQuest,
   getQuestsWithTasks,
-  getOrCreateMiscQuest
+  getOrCreateMiscQuest,
+  addMemoToQuest,
+  getQuestMemos
 } from '@/services/questsService';
 import type { Quest, Task } from '@/app/types';
 
@@ -28,13 +31,41 @@ interface TaskMoveInfo {
     reason: string;
 }
 
+interface QuestMemo {
+    id: string;
+    content: string;
+    created_at: string;
+    source: string;
+}
+
+interface ContentAnalysis {
+    questId: number;
+    updates: {
+        description?: string;
+        analysis?: string;
+    };
+    memos: {
+        title: string;
+        content: string;
+        tags: string[];
+        source: string;
+    }[];
+    confidence: number;
+}
+
 export class QuestAgent {
     private genAI: GoogleGenerativeAI;
     private model: GenerativeModel;
-    
+    private openai: OpenAI;
+
     constructor() {
         this.genAI = new GoogleGenerativeAI(process.env.EXPO_PUBLIC_GEMINI_API_KEY || '');
         this.model = this.genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+        this.openai = new OpenAI({
+            apiKey: process.env.EXPO_PUBLIC_DEEPSEEK_API_KEY,
+            baseURL: 'https://api.deepseek.com',
+            dangerouslyAllowBrowser: true
+        });
     }
 
     async createQuest(userId: string, questData: {
@@ -513,6 +544,181 @@ OR if relevant:
         } catch (error) {
             console.error('❌ Error in findRelevantQuests:', error);
             throw error;
+        }
+    }
+
+    async analyzeContentForQuest(content: string, questId: number, userId: string, source: string): Promise<ContentAnalysis | null> {
+        if (!userId) {
+            console.error('User ID is required for analyzeContentForQuest');
+            return null;
+        }
+
+        try {
+            console.log('🔍 Analyzing content for quest updates:', questId);
+
+            // Get the quest and its existing memos
+            const quests = await getQuestsWithTasks(userId);
+            const quest = quests.find(q => q.id === questId);
+            const memos = await getQuestMemos(questId, userId);
+
+            if (!quest) {
+                console.error('Quest not found');
+                return null;
+            }
+
+            // Create the system prompt for deepseek-reasoner
+            const systemPrompt = `You are analyzing new content related to a quest, looking for:
+1. Information that should update the quest's description
+2. Important details worth preserving as memos
+3. New context or insights about the quest that advances it's narrative
+
+You will be asked to both update the quest's description/analysis and create new memos if needed.
+For the quest's description, you must make sure not to deviate from the existing narrative arc. Don't delete, contradict or replace existing information unless new content clearly supersedes it.
+Your example should be RPGs, where the quest is a story arc and the memos are important lore or story details.
+As in RPGs, a new quest description should be a continuation of the existing story, not a complete rewrite.
+`;
+
+            const result = await this.openai.chat.completions.create({
+                model: "deepseek-reasoner",
+                messages: [
+                    {
+                        role: "system",
+                        content: systemPrompt
+                    },
+                    {
+                        role: "user",
+                        content: `Analyze this new content in relation to an existing quest:
+
+Quest Details:
+Title: ${quest.title}
+Current Description: ${quest.description || 'No description'}
+Current Analysis: ${quest.analysis || 'No analysis'}
+
+Existing Memos:
+${memos.map(memo => `- ${memo.content}`).join('\n')}
+
+New Content to Analyze:
+${content}
+
+Reply ONLY with a JSON object in this exact format:
+{
+    "questId": ${quest.id},
+    "updates": {
+        "description": "Updated description incorporating new information concerning the narrative. What you write here will replace the existing description field.",
+        "analysis": "New analysis incorporating insights"
+    },
+    "memos": [
+        {
+            "content": "The memo's content - important information worth preserving",
+            "tags": ["relevant", "tags"],
+            "source": "${source}"
+        }
+    ],
+    "confidence": 0.0 to 1.0
+}`
+                    }
+                ],
+                temperature: 0.7,
+                max_tokens: 8000
+            });
+
+            const aiResponse = this.cleanResponseText(result.choices[0].message?.content || '');
+
+            try {
+                const parsed = JSON.parse(aiResponse) as ContentAnalysis;
+                console.log('📊 Confidence level:', parsed.confidence);
+                
+                // Track changes made to report back
+                const changes = {
+                    updatedDescription: false,
+                    updatedAnalysis: false,
+                    addedMemos: 0,
+                    errors: [] as string[]
+                };
+
+                // Apply updates if confidence is high
+                if (parsed.confidence >= 0.8) {
+                    console.log('🔄 Applying high-confidence updates to database');
+                    
+                    // Update quest fields if provided
+                    if (parsed.updates.description || parsed.updates.analysis) {
+                        try {
+                            const updateData: {description?: string, analysis?: string} = {};
+                            
+                            // Only include fields that were actually provided
+                            if (parsed.updates.description) {
+                                updateData.description = parsed.updates.description;
+                                changes.updatedDescription = true;
+                                console.log('📝 Updated quest description');
+                            }
+                            
+                            if (parsed.updates.analysis) {
+                                updateData.analysis = parsed.updates.analysis;
+                                changes.updatedAnalysis = true;
+                                console.log('📊 Updated quest analysis');
+                            }
+                            
+                            // Only make the database call if we have something to update
+                            if (Object.keys(updateData).length > 0) {
+                                const updatedQuest = await this.updateQuest(questId, userId, updateData);
+                                console.log('✅ Quest updated successfully in database:', updatedQuest.id);
+                            }
+                        } catch (updateError) {
+                            console.error('❌ Error updating quest in database:', updateError);
+                            changes.errors.push(`Failed to update quest: ${updateError instanceof Error ? updateError.message : 'Unknown error'}`);
+                        }
+                    }
+
+                    // Add memos one by one to handle partial failures
+                    if (parsed.memos && parsed.memos.length > 0) {
+                        console.log(`📝 Adding ${parsed.memos.length} new memos to quest`);
+                        
+                        for (const memo of parsed.memos) {
+                            try {
+                                // Ensure tags is an array
+                                const memoWithValidTags = {
+                                    content: memo.content,
+                                    tags: Array.isArray(memo.tags) ? memo.tags : [],
+                                    source: memo.source
+                                };
+                                
+                                const newMemo = await addMemoToQuest(questId, userId, memoWithValidTags);
+                                console.log(`✅ Created new memo: "${newMemo.content.substring(0, 30)}..."`);
+                                changes.addedMemos++;
+                            } catch (memoError) {
+                                console.error('❌ Error adding memo to quest:', memoError);
+                                changes.errors.push(`Failed to add memo: ${memoError instanceof Error ? memoError.message : 'Unknown error'}`);
+                            }
+                        }
+                    }
+
+                    // Log summary of changes
+                    console.log('📋 Summary of database changes:');
+                    console.log(`- Description updated: ${changes.updatedDescription}`);
+                    console.log(`- Analysis updated: ${changes.updatedAnalysis}`);
+                    console.log(`- Memos added: ${changes.addedMemos}/${parsed.memos.length}`);
+                    if (changes.errors.length > 0) {
+                        console.log(`- Errors: ${changes.errors.length}`);
+                        changes.errors.forEach(err => console.log(`  - ${err}`));
+                    }
+                } else {
+                    console.log(`⚠️ Confidence level too low (${parsed.confidence}), no changes applied to database`);
+                }
+
+                return {
+                    ...parsed,
+                    // Add metadata about what actually happened for any consumers of this data
+                    meta: {
+                        actualChanges: changes
+                    }
+                } as ContentAnalysis & { meta: { actualChanges: typeof changes } };
+            } catch (parseError) {
+                console.error('Error parsing AI response:', parseError);
+                return null;
+            }
+        } catch (error) {
+            console.error('Error in analyzeContentForQuest:', error);
+            return null;
         }
     }
 }

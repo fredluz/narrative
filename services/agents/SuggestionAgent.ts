@@ -61,16 +61,6 @@ export interface ConversationData {
   };
 }
 
-interface TaskGroup {
-  content: string;
-  context: {
-    sourceMessage: string;
-    relatedMessages: string[];
-    confidence: number;
-    dependencies?: string[];
-    timing?: 'immediate' | 'short-term' | 'long-term';
-  };
-}
 
 interface TaskContext {
   sourceMessage: string;

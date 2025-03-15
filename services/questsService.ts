@@ -29,6 +29,17 @@ type QuestUpdateInput = Partial<Omit<QuestInput, 'user_id'>>;
 
 type QuestRealtimePayload = RealtimePostgresChangesPayload<QuestUpdate>;
 
+interface QuestMemo {
+  id: string;
+  content: string;
+  created_at: string;
+  updated_at: string;
+  quest_id: number;
+  user_id: string;
+  tags: string[];
+  source: string;
+}
+
 // Database operations
 export async function fetchQuests(userId: string): Promise<Quest[]> {
   const { data, error } = await supabase
@@ -280,6 +291,51 @@ async function updateMainQuest(questId: number, userId: string): Promise<void> {
   }
 }
 
+async function addMemoToQuest(questId: number, userId: string, memoData: Omit<QuestMemo, 'id' | 'created_at' | 'updated_at' | 'quest_id' | 'user_id'>): Promise<QuestMemo> {
+  // First verify quest ownership
+  const { data: quest, error: fetchError } = await supabase
+    .from('quests')
+    .select('user_id')
+    .eq('id', questId)
+    .single();
+
+  if (fetchError) {
+    console.error('Error verifying quest ownership:', fetchError);
+    throw new Error(`Failed to verify quest ownership: ${fetchError.message}`);
+  }
+
+  if (!quest || quest.user_id !== userId) {
+    throw new Error('You do not have permission to add memos to this quest');
+  }
+
+  const { data, error } = await supabase
+    .from('memos')
+    .insert({
+      ...memoData,
+      quest_id: questId,
+      user_id: userId,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+async function getQuestMemos(questId: number, userId: string): Promise<QuestMemo[]> {
+  const { data, error } = await supabase
+    .from('memos')
+    .select('*')
+    .eq('quest_id', questId)
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+  return data || [];
+}
+
 // Export all database operation functions together
 export { 
   createQuest, 
@@ -288,7 +344,9 @@ export {
   moveTasksToQuest, 
   updateMainQuest, 
   getQuestsWithTasks,
-  getOrCreateMiscQuest
+  getOrCreateMiscQuest,
+  addMemoToQuest,
+  getQuestMemos
 };
 
 // React Hook

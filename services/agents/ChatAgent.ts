@@ -97,6 +97,20 @@ export class ChatAgent {
           questInfo += `Description: ${quest.description || 'No description available'}\n`;
           questInfo += `Current Status: ${quest.status || 'Unknown'}\n`;
           
+          // Add memos section before tasks
+          if (quest.memos && quest.memos.length > 0) {
+            questInfo += '\nRecent Memos:\n';
+            quest.memos
+              .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+                            .forEach(memo => {
+                const date = new Date(memo.created_at).toLocaleDateString('en-US', {
+                  month: 'short',
+                  day: 'numeric'
+                });
+                questInfo += `- [${date}] ${memo.content}\n`;
+              });
+          }
+          
           if (quest.relevantTasks && quest.relevantTasks.length > 0) {
             questInfo += '\nRelevant Tasks:\n';
             quest.relevantTasks.forEach(task => {
@@ -364,14 +378,28 @@ CONVERSATION CONTEXT:
       }
       performanceLogger.endOperation('analyzeChatSuggestions');
 
-      // Create a checkup entry based on this chat session
-      performanceLogger.startOperation('createCheckup');
+      // After analyzing for task suggestions, check for quest updates
+      const relevantQuests = await this.questAgent.findRelevantQuests(
+        messages.map(m => m.message).join('\n'),
+        userId
+      );
+
+      // For each relevant quest, analyze the conversation for potential updates
+      for (const quest of relevantQuests) {
+        await this.questAgent.analyzeContentForQuest(
+          messages.map(m => m.message).join('\n'),
+          quest.id,
+          userId,
+          'chat'
+        );
+      }
+
+      // Continue with existing session storage...
       await this.createCheckupEntryFromSession(
         messages.filter(m => m.user_id === userId), // Extra safety: only include user's messages
         summary,
         tags
       );
-      performanceLogger.endOperation('createCheckup');
 
       return sessionData.id;
     } catch (error) {
