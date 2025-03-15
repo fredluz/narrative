@@ -799,124 +799,135 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
                             </TouchableOpacity>
                           </View>
 
-                          {selectedQuest.tasks?.map((task) => (
-                            <View 
-                              key={task.id}
-                              style={{
-                                backgroundColor: 'rgba(30, 30, 30, 0.7)',
-                                borderRadius: 6,
-                                padding: 15,
-                                marginBottom: 10,
-                                borderLeftWidth: 2,
-                                borderLeftColor: task.status === 'Done' ? secondaryColor : themeColor,
-                              }}
-                            >
-                              <Text style={{ 
-                                fontSize: 16,
-                                color: task.status === 'Done' ? '#AAA' : '#FFF',
-                                textDecorationLine: task.status === 'Done' ? 'line-through' : 'none',
-                                marginBottom: 5,
-                              }}>
-                                {task.title}
-                              </Text>
-                              
-                              <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}>
-                                <MaterialIcons 
-                                  name="schedule" 
-                                  size={14} 
-                                  color="#888"
-                                  style={{ marginRight: 4 }}
-                                />
-                                <Text style={{ fontSize: 13, color: '#888' }}>
-                                  Start: {task.scheduled_for}
-                                </Text>
-                                
-                                {task.location && (
-                                  <>
-                                    <MaterialIcons 
-                                      name="place" 
-                                      size={14} 
-                                      color="#888"
-                                      style={{ marginLeft: 12, marginRight: 4 }}
-                                    />
-                                    <Text style={{ fontSize: 13, color: "#888" }}>
-                                      {task.location}
-                                    </Text>
-                                  </>
-                                )}
-                              </View>
+                          {/* Group and sort tasks by status */}
+                          {(['InProgress', 'ToDo', 'Done'] as TaskStatus[]).map(statusGroup => {
+                            const tasksInGroup = selectedQuest.tasks?.filter(t => t.status === statusGroup) || [];
+                            if (tasksInGroup.length === 0) return null;
 
-                              <View style={{ 
-                                flexDirection: 'row', 
-                                alignItems: 'center',
-                                marginTop: 4,
-                                justifyContent: 'space-between'
-                              }}>
-                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                  {task.deadline && (
+                            return (
+                              <View key={statusGroup}>
+                                {tasksInGroup.map((task) => (
+                                  <View 
+                                    key={task.id}
+                                    style={{
+                                      backgroundColor: 'rgba(30, 30, 30, 0.7)',
+                                      borderRadius: 6,
+                                      padding: 15,
+                                      marginBottom: 10,
+                                      borderLeftWidth: 2,
+                                      borderLeftColor: task.status === 'Done' ? secondaryColor : 
+                                                    task.status === 'InProgress' ? themeColor : '#666',
+                                    }}
+                                  >
+                                    <Text style={{ 
+                                      fontSize: 16,
+                                      color: task.status === 'Done' ? '#AAA' : '#FFF',
+                                      textDecorationLine: task.status === 'Done' ? 'line-through' : 'none',
+                                      marginBottom: 5,
+                                    }}>
+                                      {task.title}
+                                    </Text>
+                                    
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}>
+                                      <MaterialIcons 
+                                        name="schedule" 
+                                        size={14} 
+                                        color="#888"
+                                        style={{ marginRight: 4 }}
+                                      />
+                                      <Text style={{ fontSize: 13, color: '#888' }}>
+                                        Start: {task.scheduled_for}
+                                      </Text>
+                                      
+                                      {task.location && (
+                                        <>
+                                          <MaterialIcons 
+                                            name="place" 
+                                            size={14} 
+                                            color="#888"
+                                            style={{ marginLeft: 12, marginRight: 4 }}
+                                          />
+                                          <Text style={{ fontSize: 13, color: "#888" }}>
+                                            {task.location}
+                                          </Text>
+                                        </>
+                                      )}
+                                    </View>
+
                                     <View style={{ 
                                       flexDirection: 'row', 
                                       alignItems: 'center',
-                                      marginRight: 10
+                                      marginTop: 4,
+                                      justifyContent: 'space-between'
                                     }}>
-                                      <MaterialIcons 
-                                        name="warning" 
-                                        size={14} 
-                                        color={colors.error}
-                                        style={{ marginRight: 4 }}
-                                      />
-                                      <Text style={{ fontSize: 13, color: colors.error }}>
-                                        Deadline: {task.deadline}
-                                      </Text>
+                                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                        {task.deadline && (
+                                          <View style={{ 
+                                            flexDirection: 'row', 
+                                            alignItems: 'center',
+                                            marginRight: 10
+                                          }}>
+                                            <MaterialIcons 
+                                              name="warning" 
+                                              size={14} 
+                                              color={colors.error}
+                                              style={{ marginRight: 4 }}
+                                            />
+                                            <Text style={{ fontSize: 13, color: colors.error }}>
+                                              Deadline: {task.deadline}
+                                            </Text>
+                                          </View>
+                                        )}
+                                        
+                                        {/* Add Edit Task Button */}
+                                        <TouchableOpacity 
+                                          onPress={() => openEditTaskModal(task)}
+                                          style={{
+                                            backgroundColor: 'rgba(40, 40, 40, 0.7)',
+                                            paddingHorizontal: 8,
+                                            paddingVertical: 4,
+                                            borderRadius: 4,
+                                            flexDirection: 'row',
+                                            alignItems: 'center',
+                                          }}
+                                        >
+                                          <MaterialIcons 
+                                            name="edit" 
+                                            size={14} 
+                                            color="#AAA"
+                                          />
+                                          <Text style={{ 
+                                            color: '#AAA',
+                                            fontSize: 12,
+                                            marginLeft: 2
+                                          }}>
+                                            EDIT
+                                          </Text>
+                                        </TouchableOpacity>
+                                      </View>
+                                      
+                                      {/* Task Status Button */}
+                                      <TouchableOpacity 
+                                        onPress={() => toggleTaskCompletion(task)}
+                                        disabled={updatingTaskId === task.id}
+                                        style={{ padding: 8 }}
+                                      >
+                                        {updatingTaskId === task.id ? (
+                                          <ActivityIndicator size="small" color={task.status === 'Done' ? secondaryColor : themeColor} />
+                                        ) : task.status === 'Done' ? (
+                                          <MaterialIcons name="check-circle" size={20} color={secondaryColor} />
+                                        ) : task.status === 'InProgress' ? (
+                                          <MaterialIcons name="timelapse" size={20} color={themeColor} />
+                                        ) : (
+                                          <MaterialIcons name="radio-button-unchecked" size={20} color="#666" />
+                                        )}
+                                      </TouchableOpacity>
                                     </View>
-                                  )}
-                                  
-                                  {/* Add Edit Task Button */}
-                                  <TouchableOpacity 
-                                    onPress={() => openEditTaskModal(task)}
-                                    style={{
-                                      backgroundColor: 'rgba(40, 40, 40, 0.7)',
-                                      paddingHorizontal: 8,
-                                      paddingVertical: 4,
-                                      borderRadius: 4,
-                                      flexDirection: 'row',
-                                      alignItems: 'center',
-                                    }}
-                                  >
-                                    <MaterialIcons 
-                                      name="edit" 
-                                      size={14} 
-                                      color="#AAA"
-                                    />
-                                    <Text style={{ 
-                                      color: '#AAA',
-                                      fontSize: 12,
-                                      marginLeft: 2
-                                    }}>
-                                      EDIT
-                                    </Text>
-                                  </TouchableOpacity>
-                                </View>
-                                
-                                {/* Task Status Button */}
-                                <TouchableOpacity 
-                                  onPress={() => toggleTaskCompletion(task)}
-                                  disabled={updatingTaskId === task.id}
-                                  style={{ padding: 8 }}
-                                >
-                                  {updatingTaskId === task.id ? (
-                                    <ActivityIndicator size="small" color={task.status === 'Done' ? secondaryColor : themeColor} />
-                                  ) : task.status === 'Done' ? (
-                                    <MaterialIcons name="check-circle" size={20} color={secondaryColor} />
-                                  ) : task.status === 'InProgress' ? (
-                                    <MaterialIcons name="timelapse" size={20} color={themeColor} />
-                                  ) : (
-                                    <MaterialIcons name="radio-button-unchecked" size={20} color="#666" />
-                                  )}
-                                </TouchableOpacity>
+                                  </View>
+                                ))}
                               </View>
-                            </View>
-                          ))}
+                            );
+                          })}
                         </View>
                       </View>
                     </Card>

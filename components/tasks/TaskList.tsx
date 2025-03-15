@@ -234,84 +234,93 @@ export function TaskList({ compactMode = false }: TaskListProps) {
             paddingBottom: 5
           }}
         >
-          {tasks.map((task) => (
-            <View 
-              key={task.id} 
-              style={{ 
-                backgroundColor: 'rgba(25, 25, 25, 0.7)',
-                borderLeftWidth: 2,
-                borderLeftColor: task.status === 'Done' ? secondaryColor : 
-                              task.status === 'InProgress' ? themeColor : '#666',
-                marginBottom: compactMode ? 5 : 8,
-                padding: compactMode ? 8 : 10,
-                borderRadius: 4,
-              }}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <TouchableOpacity
-                  onPress={() => toggleTaskCompletion(task.id, task.status, task.user_id)}
-                  style={{ padding: compactMode ? 4 : 8 }}
-                  disabled={!session?.user?.id || task.user_id !== session.user.id}
-                >
-                  <MaterialIcons 
-                    name={
-                      task.status === 'Done' ? 'check-circle' :
-                      task.status === 'InProgress' ? 'timelapse' :
-                      'radio-button-unchecked'
-                    }
-                    size={compactMode ? 18 : 24}
-                    color={
-                      !session?.user?.id || task.user_id !== session.user.id ? '#444' :
-                      task.status === 'Done' ? secondaryColor :
-                      task.status === 'InProgress' ? themeColor :
-                      '#666'
-                    }
-                  />
-                </TouchableOpacity>
-                <View style={{ marginLeft: compactMode ? 4 : 8, flex: 1 }}>
-                  <Text style={{ 
-                    fontSize: compactMode ? 16 : 18,  // Increased from 14/16
-                    color: task.status === 'Done' ? '#AAA' : '#FFF',
-                    textDecorationLine: task.status === 'Done' ? 'line-through' : 'none',
-                    opacity: task.status === 'Done' ? 0.7 : 1,
-                    fontWeight: '600',  // Added to match KanbanBoard style
-                  }}>
-                    {task.title}
-                  </Text>
-                  {!compactMode && task.description ? (
-                    <Text style={{ 
-                      fontSize: 15, // Increased from 14
-                      color: '#999',
-                      marginTop: 4,
-                      opacity: task.status === 'Done' ? 0.5 : 0.8, 
-                    }}>
-                      {task.description}
-                    </Text>
-                  ) : null}
-                  {task.quest?.title ? (
-                    <View style={{ 
-                      flexDirection: 'row', 
-                      alignItems: 'center', 
-                      marginTop: compactMode ? 2 : 3 
-                    }}>
-                      <MaterialIcons 
-                        name="assignment" 
-                        size={compactMode ? 12 : 14} // Increased from 10/12
-                        color={task.status === 'Done' ? '#888' : secondaryColor} 
-                        style={{ marginRight: 4 }} 
-                      />
-                      <Text style={{ 
-                        fontSize: compactMode ? 12 : 14, // Increased from 10/12
-                        color: task.status === 'Done' ? '#888' : secondaryColor,
-                      }}>
-                        {task.quest.title}
-                      </Text>
+          {(['InProgress', 'ToDo', 'Done'] as TaskStatus[]).map(statusGroup => {
+            const tasksInGroup = tasks.filter(t => t.status === statusGroup);
+            if (tasksInGroup.length === 0) return null;
+
+            return (
+              <View key={statusGroup}>
+                {tasksInGroup.map((task) => (
+                  <View 
+                    key={task.id} 
+                    style={{ 
+                      backgroundColor: 'rgba(25, 25, 25, 0.7)',
+                      borderLeftWidth: 2,
+                      borderLeftColor: task.status === 'Done' ? secondaryColor : 
+                                    task.status === 'InProgress' ? themeColor : '#666',
+                      marginBottom: compactMode ? 5 : 8,
+                      padding: compactMode ? 8 : 10,
+                      borderRadius: 4,
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <TouchableOpacity
+                        onPress={() => toggleTaskCompletion(task.id, task.status, task.user_id)}
+                        style={{ padding: compactMode ? 4 : 8 }}
+                        disabled={!session?.user?.id || task.user_id !== session.user.id}
+                      >
+                        <MaterialIcons 
+                          name={
+                            task.status === 'Done' ? 'check-circle' :
+                            task.status === 'InProgress' ? 'timelapse' :
+                            'radio-button-unchecked'
+                          }
+                          size={compactMode ? 18 : 24}
+                          color={
+                            !session?.user?.id || task.user_id !== session.user.id ? '#444' :
+                            task.status === 'Done' ? secondaryColor :
+                            task.status === 'InProgress' ? themeColor :
+                            '#666'
+                          }
+                        />
+                      </TouchableOpacity>
+                      <View style={{ marginLeft: compactMode ? 4 : 8, flex: 1 }}>
+                        <Text style={{ 
+                          fontSize: compactMode ? 16 : 18,  // Increased from 14/16
+                          color: task.status === 'Done' ? '#AAA' : '#FFF',
+                          textDecorationLine: task.status === 'Done' ? 'line-through' : 'none',
+                          opacity: task.status === 'Done' ? 0.7 : 1,
+                          fontWeight: '600',  // Added to match KanbanBoard style
+                        }}>
+                          {task.title}
+                        </Text>
+                        {!compactMode && task.description ? (
+                          <Text style={{ 
+                            fontSize: 15, // Increased from 14
+                            color: '#999',
+                            marginTop: 4,
+                            opacity: task.status === 'Done' ? 0.5 : 0.8, 
+                          }}>
+                            {task.description}
+                          </Text>
+                        ) : null}
+                        {task.quest?.title ? (
+                          <View style={{ 
+                            flexDirection: 'row', 
+                            alignItems: 'center', 
+                            marginTop: compactMode ? 2 : 3 
+                          }}>
+                            <MaterialIcons 
+                              name="assignment" 
+                              size={compactMode ? 12 : 14} // Increased from 10/12
+                              color={task.status === 'Done' ? '#888' : secondaryColor} 
+                              style={{ marginRight: 4 }} 
+                            />
+                            <Text style={{ 
+                              fontSize: compactMode ? 12 : 14, // Increased from 10/12
+                              color: task.status === 'Done' ? '#888' : secondaryColor,
+                            }}>
+                              {task.quest.title}
+                            </Text>
+                          </View>
+                        ) : null}
+                      </View>
                     </View>
-                  ) : null}
-                </View>
+                  </View>
+                ))}
               </View>
-            </View>
-          ))}
+            );
+          })}
         </ScrollView>
       )}
     </Card>

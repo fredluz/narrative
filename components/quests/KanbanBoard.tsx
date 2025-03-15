@@ -410,234 +410,139 @@ export function KanbanBoard({ mainQuest, onViewAllQuests, userId }: KanbanProps)
           </Text>
         </TouchableOpacity>
 
-        <View style={{ marginTop: 15 }}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={{ marginBottom: 10 }}
-            contentContainerStyle={{ paddingHorizontal: 5 }}
-          >
-            <TouchableOpacity
-              style={[
-                questStyles.columnFilter,
-                activeColumn === 'active'
-                  ? {
-                      backgroundColor: 'rgba(30, 30, 30, 0.9)',
-                      borderBottomWidth: 2,
-                      borderBottomColor: brightAccent,
-                    }
-                  : { backgroundColor: 'rgba(20, 20, 20, 0.7)' },
-              ]}
-              onPress={() => setActiveColumn('active')}
-            >
-              <MaterialIcons
-                name="pending-actions"
-                size={16}
-                color={activeColumn === 'active' ? brightAccent : '#AAA'}
-                style={{ marginRight: 5 }}
-              />
-              <Text
-                style={[
-                  questStyles.columnFilterText,
-                  { color: activeColumn === 'active' ? brightAccent : '#AAA', fontFamily: 'Inter_500Medium' },
-                ]}
-              >
-                To Do & In Progress
-              </Text>
-            </TouchableOpacity>
+        <ScrollView style={{ maxHeight: 300 }}>
+          {(['InProgress', 'ToDo', 'Done'] as TaskStatus[]).map(statusGroup => {
+            const tasksInGroup = filteredTasks.filter(t => t.status === statusGroup);
+            if (tasksInGroup.length === 0) return null;
 
-            <TouchableOpacity
-              style={[
-                questStyles.columnFilter,
-                activeColumn === 'Done'
-                  ? {
-                      backgroundColor: 'rgba(30, 30, 30, 0.9)',
-                      borderBottomWidth: 2,
-                      borderBottomColor: brightAccent,
-                    }
-                  : { backgroundColor: 'rgba(20, 20, 20, 0.7)' },
-              ]}
-              onPress={() => setActiveColumn('Done')}
-            >
-              <MaterialIcons
-                name="check-circle-outline"
-                size={16}
-                color={activeColumn === 'Done' ? brightAccent : '#AAA'}
-                style={{ marginRight: 5 }}
-              />
-              <Text
-                style={[
-                  questStyles.columnFilterText,
-                  { color: activeColumn === 'Done' ? brightAccent : '#AAA', fontFamily: 'Inter_500Medium' },
-                ]}
-              >
-                Completed
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                questStyles.columnFilter,
-                activeColumn === 'all'
-                  ? {
-                      backgroundColor: 'rgba(30, 30, 30, 0.9)',
-                      borderBottomWidth: 2,
-                      borderBottomColor: brightAccent,
-                    }
-                  : { backgroundColor: 'rgba(20, 20, 20, 0.7)' },
-              ]}
-              onPress={() => setActiveColumn('all')}
-            >
-              <MaterialIcons
-                name="format-list-bulleted"
-                size={16}
-                color={activeColumn === 'all' ? brightAccent : '#AAA'}
-                style={{ marginRight: 5 }}
-              />
-              <Text
-                style={[
-                  questStyles.columnFilterText,
-                  { color: activeColumn === 'all' ? brightAccent : '#AAA', fontFamily: 'Inter_500Medium' },
-                ]}
-              >
-                All
-              </Text>
-            </TouchableOpacity>
-          </ScrollView>
-
-          <ScrollView style={{ maxHeight: 300 }}>
-            {filteredTasks.length === 0 ? (
-              <View style={questStyles.emptyColumn}>
-                <Text style={[questStyles.emptyColumnText, { fontFamily: 'Inter_400Regular' }]}>
-                  No tasks in this category
-                </Text>
-              </View>
-            ) : (
-              filteredTasks.map((task) => (
-                <Card
-                  key={task.id}
-                  style={[
-                    questStyles.taskItem,
-                    task.status === 'Done'
-                      ? {
-                          backgroundColor: 'rgba(20, 20, 20, 0.7)',
-                          borderLeftWidth: 2,
-                          borderLeftColor: secondaryColor,
-                        }
-                      : task.status === 'InProgress'
-                      ? {
-                          backgroundColor: 'rgba(25, 25, 25, 0.8)',
-                          borderLeftWidth: 2,
-                          borderLeftColor: themeColor,
-                        }
-                      : {
-                          backgroundColor: 'rgba(30, 30, 30, 0.9)',
-                          borderLeftWidth: 2,
-                          borderLeftColor: '#666',
-                        },
-                  ]}
-                >
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                    <View style={{ flex: 1 }}>
-                      <Text
-                        style={[
-                          questStyles.taskTitle,
-                          {
-                            color: task.status === 'Done' ? '#AAA' : '#FFF',
-                            textDecorationLine: task.status === 'Done' ? 'line-through' : 'none',
-                            opacity: task.status === 'Done' ? 0.7 : 1,
-                            fontFamily: 'Poppins_600SemiBold',
+            return (
+              <View key={statusGroup}>
+                {tasksInGroup.map((task) => (
+                  <Card
+                    key={task.id}
+                    style={[
+                      questStyles.taskItem,
+                      task.status === 'Done'
+                        ? {
+                            backgroundColor: 'rgba(20, 20, 20, 0.7)',
+                            borderLeftWidth: 2,
+                            borderLeftColor: secondaryColor,
+                          }
+                        : task.status === 'InProgress'
+                        ? {
+                            backgroundColor: 'rgba(25, 25, 25, 0.8)',
+                            borderLeftWidth: 2,
+                            borderLeftColor: themeColor,
+                          }
+                        : {
+                            backgroundColor: 'rgba(30, 30, 30, 0.9)',
+                            borderLeftWidth: 2,
+                            borderLeftColor: '#666',
                           },
-                        ]}
-                      >
-                        {task.title}
-                      </Text>
-
-                      {task.description ? (
+                    ]}
+                  >
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                      <View style={{ flex: 1 }}>
                         <Text
                           style={[
-                            questStyles.taskDescription,
+                            questStyles.taskTitle,
                             {
-                              color: task.status === 'Done' ? '#888' : '#BBB',
-                              opacity: task.status === 'Done' ? 0.6 : 0.9,
-                              fontFamily: 'Inter_400Regular',
+                              color: task.status === 'Done' ? '#AAA' : '#FFF',
+                              textDecorationLine: task.status === 'Done' ? 'line-through' : 'none',
+                              opacity: task.status === 'Done' ? 0.7 : 1,
+                              fontFamily: 'Poppins_600SemiBold',
                             },
                           ]}
                         >
-                          {task.description}
-                        </Text>
-                      ) : null}
-
-                      {/* Task metadata row */}
-                      <View
-                        style={{
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          marginTop: 8,
-                          opacity: task.status === 'Done' ? 0.6 : 0.8,
-                        }}
-                      >
-                        <MaterialIcons
-                          name="schedule"
-                          size={12}
-                          color="#888"
-                          style={{ marginRight: 4 }}
-                        />
-                        <Text style={{ fontSize: 12, color: '#888', fontFamily: 'Inter_400Regular' }}>
-                          {formatDateTime(task.scheduled_for)}
+                          {task.title}
                         </Text>
 
-                        {task.location && (
-                          <>
-                            <MaterialIcons
-                              name="place"
-                              size={12}
-                              color="#888"
-                              style={{ marginLeft: 8, marginRight: 4 }}
-                            />
-                            <Text style={{ fontSize: 12, color: '#888', fontFamily: 'Inter_400Regular' }}>
-                              {task.location}
-                            </Text>
-                          </>
-                        )}
+                        {task.description ? (
+                          <Text
+                            style={[
+                              questStyles.taskDescription,
+                              {
+                                color: task.status === 'Done' ? '#888' : '#BBB',
+                                opacity: task.status === 'Done' ? 0.6 : 0.9,
+                                fontFamily: 'Inter_400Regular',
+                              },
+                            ]}
+                          >
+                            {task.description}
+                          </Text>
+                        ) : null}
 
-                        {task.deadline && (
-                          <>
-                            <MaterialIcons
-                              name="warning"
-                              size={12}
-                              color="#FF4444"
-                              style={{ marginLeft: 8, marginRight: 4 }}
-                            />
-                            <Text style={{ fontSize: 12, color: '#FF4444', fontFamily: 'Inter_400Regular' }}>
-                              {formatDateTime(task.deadline)}
-                            </Text>
-                          </>
-                        )}
+                        {/* Task metadata row */}
+                        <View
+                          style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            marginTop: 8,
+                            opacity: task.status === 'Done' ? 0.6 : 0.8,
+                          }}
+                        >
+                          <MaterialIcons
+                            name="schedule"
+                            size={12}
+                            color="#888"
+                            style={{ marginRight: 4 }}
+                          />
+                          <Text style={{ fontSize: 12, color: '#888', fontFamily: 'Inter_400Regular' }}>
+                            {formatDateTime(task.scheduled_for)}
+                          </Text>
+
+                          {task.location && (
+                            <>
+                              <MaterialIcons
+                                name="place"
+                                size={12}
+                                color="#888"
+                                style={{ marginLeft: 8, marginRight: 4 }}
+                              />
+                              <Text style={{ fontSize: 12, color: '#888', fontFamily: 'Inter_400Regular' }}>
+                                {task.location}
+                              </Text>
+                            </>
+                          )}
+
+                          {task.deadline && (
+                            <>
+                              <MaterialIcons
+                                name="warning"
+                                size={12}
+                                color="#FF4444"
+                                style={{ marginLeft: 8, marginRight: 4 }}
+                              />
+                              <Text style={{ fontSize: 12, color: '#FF4444', fontFamily: 'Inter_400Regular' }}>
+                                {formatDateTime(task.deadline)}
+                              </Text>
+                            </>
+                          )}
+                        </View>
                       </View>
-                    </View>
 
-                    <TouchableOpacity 
-                      style={questStyles.taskStatusIcon}
-                      onPress={() => toggleTaskCompletion(task)}
-                      disabled={updatingTaskId === task.id}
-                    >
-                      {updatingTaskId === task.id ? (
-                        <ActivityIndicator size="small" color={task.status === 'Done' ? secondaryColor : themeColor} />
-                      ) : task.status === 'Done' ? (
-                        <MaterialIcons name="check-circle" size={20} color={secondaryColor} />
-                      ) : task.status === 'InProgress' ? (
-                        <MaterialIcons name="timelapse" size={20} color={themeColor} />
-                      ) : (
-                        <MaterialIcons name="radio-button-unchecked" size={20} color="#666" />
-                      )}
-                    </TouchableOpacity>
-                  </View>
-                </Card>
-              ))
-            )}
-          </ScrollView>
-        </View>
+                      <TouchableOpacity 
+                        style={questStyles.taskStatusIcon}
+                        onPress={() => toggleTaskCompletion(task)}
+                        disabled={updatingTaskId === task.id}
+                      >
+                        {updatingTaskId === task.id ? (
+                          <ActivityIndicator size="small" color={task.status === 'Done' ? secondaryColor : themeColor} />
+                        ) : task.status === 'Done' ? (
+                          <MaterialIcons name="check-circle" size={20} color={secondaryColor} />
+                        ) : task.status === 'InProgress' ? (
+                          <MaterialIcons name="timelapse" size={20} color={themeColor} />
+                        ) : (
+                          <MaterialIcons name="radio-button-unchecked" size={20} color="#666" />
+                        )}
+                      </TouchableOpacity>
+                    </View>
+                  </Card>
+                ))}
+              </View>
+            );
+          })}
+        </ScrollView>
       </View>
     </Card>
   );

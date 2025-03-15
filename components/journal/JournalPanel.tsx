@@ -43,7 +43,7 @@ export function JournalPanel({
     goToPreviousDay, 
     goToNextDay
   } = useJournal();
-  const { analyzeMessage } = useSuggestions();
+  const { analyzeJournalEntry } = useSuggestions();
   
   const [localLoading, setLocalLoading] = useState(false);
   const [aiGenerating, setAiGenerating] = useState(false);
@@ -260,7 +260,7 @@ export function JournalPanel({
       );
       
       // After successful save, analyze the checkup content for suggestions
-      await analyzeMessage(localEntry, session.user.id);
+      await analyzeJournalEntry(localEntry, session.user.id);
       
       // Refresh entries
       await refreshEntries();
@@ -291,7 +291,7 @@ export function JournalPanel({
       setLocalLoading(false);
       setAiGenerating(false);
     }
-  }, [currentDate, localEntry, localTags, refreshEntries, getAiResponses, aiAnalysis, session, analyzeMessage]);
+  }, [currentDate, localEntry, localTags, refreshEntries, getAiResponses, aiAnalysis, session, analyzeJournalEntry]);
 
   {/* Create a daily entry and link all unlinked checkups via foreign key */}
   const handleDailyEntry = useCallback(async () => {
