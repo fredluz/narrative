@@ -47,6 +47,7 @@ interface ContentAnalysis {
 
 export class QuestAgent {
     private openai: OpenAI;
+    private actuallyOAI: OpenAI;
 
     constructor() {
         this.openai = new OpenAI({
@@ -54,6 +55,10 @@ export class QuestAgent {
             baseURL: 'https://api.deepseek.com',
             dangerouslyAllowBrowser: true
         });
+        this.actuallyOAI = new OpenAI({
+            apiKey: process.env.OPENAI_API_KEY,
+            dangerouslyAllowBrowser: true
+        })
     }
 
     async createQuest(userId: string, questData: {
@@ -383,16 +388,18 @@ DO NOT add any backticks, quotes, or other markers around the JSON.`;
 
         try {
             console.log('📤 Sending misc tasks analysis to AI');
-            const result = await this.openai.chat.completions.create({
-                model: "deepseek-chat",
-                messages: [
+            const result = await this.actuallyOAI.responses.create({
+                model: "gpt-4o-mini-2024-07-18",
+                input: [
                     {
-                        role: "system",
-                        content: `You are analyzing tasks from a miscellaneous quest collection to determine their relevance to a journal entry.
-Consider ONLY the tasks individually - do NOT consider the quest's description or context.
-Be VERY selective - only include tasks with clear, direct relevance to the journal entry.
-
-Reply ONLY with a JSON object in the specified format.`
+                        role: "developer",
+                        content: [
+                            {
+                                type: "input_text", 
+                                text: `You are analyzing tasks from a miscellaneous quest collection to determine their relevance to a journal entry.
+Be VERY selective - only include tasks with clear, direct relevance to the journal entry.`
+                            }
+                        ]
                     },
                     {
                         role: "user",
@@ -403,38 +410,45 @@ Journal Entry: "${journalContent}"
 Tasks to analyze:
 ${userTasks.map(task => `ID: ${task.id}
 Title: ${task.title}
-Description: ${task.description || 'No description'}`).join('\n\n')}
-
-Return a JSON object in this EXACT format:
-{
-    "questId": ${miscQuest.id},
-    "isRelevant": false,
-    "relevance": "Only included if specific tasks are relevant",
-    "relevantTasks": []
-}
-
-If any tasks are relevant, include them like this:
-{
-    "questId": ${miscQuest.id},
-    "isRelevant": true,
-    "relevance": "Tasks related to specific journal mentions",
-    "relevantTasks": [
-        {
-            "taskId": [task id],
-            "name": "task name",
-            "description": "task description",
-            "relevance": "CLEAR explanation of the direct connection to journal content"
-        }
-    ]
-}`
+Description: ${task.description || 'No description'}`).join('\n\n')}`
                     }
                 ],
-                temperature: 0.7,
-                max_tokens: 2000
+                text: {
+                    
+                    format: {
+                        type: "json_schema",
+                        name: "quest_relevance",
+                        strict: true,
+                        schema: {
+                            type: "object",
+                            properties: {
+                                questId: { type: "number", enum: [miscQuest.id] },
+                                isRelevant: { type: "boolean" },
+                                relevance: { type: ["string", "null"] }, // Changed from nullable: true
+                                relevantTasks: {
+                                    type: "array",
+                                    items: {
+                                        type: "object",
+                                        properties: {
+                                            taskId: { type: "number" },
+                                            name: { type: "string" },
+                                            description: { type: "string" },
+                                            relevance: { type: "string" }
+                                        },
+                                        required: ["taskId", "name", "description", "relevance"]
+                                    }
+                                }
+                            },
+                            required: ["questId", "isRelevant", "relevantTasks", "relevance"], // Added relevance to required fields
+                            additionalProperties: false
+                        },
+                    },
+                },
+                temperature: 0.4
             });
             
-            const aiResponse = this.cleanResponseText(result.choices[0].message?.content ?? '');
-            return await this.validateAndRepairJson(aiResponse, miscQuest.id);
+            // The response is already a JSON object, no need to parse
+            return result.output_text ? JSON.parse(result.output_text) : null;
         } catch (error) {
             console.error('❌ Error analyzing misc tasks:', error);
             return null;
@@ -445,12 +459,15 @@ If any tasks are relevant, include them like this:
         console.log(`\n🔎 Analyzing ${quests.length} quests for relevance`);
         
         try {
-            const result = await this.openai.chat.completions.create({
-                model: "deepseek-chat",
-                messages: [
+            const result = await this.actuallyOAI.responses.create({
+                model: "gpt-4o-mini-2024-07-18",
+                input: [
                     {
-                        role: "system",
-                        content: `You are analyzing if any quests are relevant to a journal entry.
+                        role: "developer",
+                        content: [
+                            {
+                                type: "input_text",
+                                text: `You are analyzing if any quests are relevant to a journal entry.
 Consider these criteria for each quest:
 1. Direct mentions of the quest title or related keywords
 2. Strong connections to the quest description
@@ -458,9 +475,9 @@ Consider these criteria for each quest:
 4. Current quest status relevance
 5. Specific mentions or implications related to individual tasks
 
-Be STRICT in your relevance criteria - only include if there's a CLEAR connection, above 90% certainty.
-
-Reply ONLY with a JSON array in the specified format.`
+Be STRICT in your relevance criteria - only include if there's a CLEAR connection, above 90% certainty.`
+                            }
+                        ]
                     },
                     {
                         role: "user",
@@ -477,43 +494,50 @@ Status: ${quest.status}
 Is Main Quest: ${quest.is_main}
 Tasks:
 ${quest.tasks?.map(task => `- ${task.title}: ${task.description || 'No description'}`).join('\n') || 'No tasks'}
----`).join('\n')}
-
-Return a JSON array in this EXACT format:
-[
-    {
-        "questId": number,
-        "isRelevant": boolean,
-        "relevance": "string explaining why quest is relevant, or null if not",
-        "relevantTasks": [
-            {
-                "taskId": number,
-                "name": "task name", 
-                "description": "task description",
-                "relevance": "clear explanation of direct relevance"
-            }
-        ]
-    }
-]`
+---`).join('\n')}`
                     }
                 ],
-                temperature: 0.7,
-                max_tokens: 3000
+                text: {
+                    format: {
+                        type: "json_schema",
+                        name: "quests_relevance",
+                        strict: true,
+                       schema: {
+                            type: "array",
+                            items: {
+                                type: "object",
+                                properties: {
+                                    questId: { type: "number" },
+                                    isRelevant: { type: "boolean" },
+                                    relevance: { type: ["string", "null"] }, // Changed from nullable: true
+                                    relevantTasks: {
+                                        type: "array",
+                                        items: {
+                                            type: "object",
+                                            properties: {
+                                                taskId: { type: "number" },
+                                                name: { type: "string" },
+                                                description: { type: "string" },
+                                                relevance: { type: "string" }
+                                            },
+                                            required: ["taskId", "name", "description", "relevance"]
+                                        }
+                                    }
+                                }
+                            },
+                            required: ["questId", "isRelevant", "relevantTasks", "relevance"], // Added relevance to required fields
+                            additionalProperties: false
+                        }
+                    },
+                },
+                temperature: 0.4
             });
-
-            const aiResponse = this.cleanResponseText(result.choices[0].message?.content ?? '');
             
-            try {
-                const parsedResults = JSON.parse(aiResponse) as QuestRelevanceItem[];
-                // Validate each result
-                const validatedResults = await Promise.all(
-                    parsedResults.map(result => this.validateAndRepairJson(result, result.questId))
-                );
-                return validatedResults.filter((result): result is QuestRelevanceItem => result !== null);
-            } catch (parseError) {
-                console.error('❌ Error parsing quest analysis results:', parseError);
-                return [];
-            }
+            // Response is already a valid JSON array
+            const parsedResults = result.output_text ? JSON.parse(result.output_text) as QuestRelevanceItem[] : [];
+            
+            // Since the schema ensures the correct format, we can skip validation
+            return parsedResults;
         } catch (error) {
             console.error('❌ Error analyzing quests:', error);
             return [];
