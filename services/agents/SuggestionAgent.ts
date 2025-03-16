@@ -156,11 +156,10 @@ export class SuggestionAgent {
     content: string,
     userId: string,
     context?: TaskContext
-  ): Promise<TaskSuggestion | null> {
+  ): Promise<TaskSuggestion[]> {
     performanceLogger.startOperation('generateTaskSuggestion');
     try {
-      
-      const prompt = `Create a task based on this content and context:
+      const prompt = `Analyze this content and generate ONE OR MORE separate tasks. If multiple distinct tasks are mentioned, create a separate task for each one.
 
 Content: "${content}"
 
@@ -169,17 +168,28 @@ ${context ? `Context:
 - Related Messages: ${context.relatedMessages.join('\n')}
 - Confidence: ${context.confidence}` : ''}
 
-Generate a JSON object with these EXACT fields:
+Generate a JSON object with this EXACT format:
 {
-  "title": "Brief task title",
-  "description": "Detailed description incorporating context",
-  "scheduled_for": "YYYY-MM-DD format date when task should start",
-  "deadline": "YYYY-MM-DD format deadline if mentioned, otherwise null",
-  "location": "Location if mentioned, otherwise null",
-  "priority": "high, medium, or low based on urgency/importance",
-  "tags": ["relevant", "keyword", "tags"],
-  "subtasks": "Comma-separated list of subtasks if appropriate, otherwise empty string"
-}`;
+  "tasks": [
+    {
+      "title": "Brief task title for first task",
+      "description": "Detailed description incorporating context",
+      "scheduled_for": "YYYY-MM-DD format date when task should start",
+      "deadline": "YYYY-MM-DD format deadline if mentioned, otherwise null",
+      "location": "Location if mentioned, otherwise null",
+      "priority": "high, medium, or low based on urgency/importance",
+      "tags": ["relevant", "keyword", "tags"],
+      "subtasks": "Comma-separated list of subtasks if appropriate, otherwise empty string"
+    }
+  ]
+}
+
+IMPORTANT:
+- Create SEPARATE tasks for distinct activities (e.g. "Bake a cake" and "Take dog to vet" should be TWO tasks)
+- Each task should be focused and specific
+- Do not combine unrelated tasks into one`;
+
+      console.log(`🚀 Generating task suggestion(s). Content: ${JSON.stringify(content)} Context: ${JSON.stringify(context)}\n Prompt: ${prompt}`);
 
       const response = await this.openai.chat.completions.create({
         model: "deepseek-chat",
@@ -191,7 +201,6 @@ Generate a JSON object with these EXACT fields:
         max_tokens: 3000,
         response_format: { type: "json_object" }
       });
-      console.log(`🚀 Generated task suggestion. Content: ${JSON.stringify(content)} Context: ${JSON.stringify(context)}\n Prompt: ${prompt}`);
 
       const responseText = response.choices[0].message?.content;
       if (!responseText) {
@@ -202,33 +211,50 @@ Generate a JSON object with these EXACT fields:
         const parsed = JSON.parse(responseText);
         const timestamp = new Date().toISOString();
         const sourceType = content.length > 200 ? 'journal' : 'chat';
-        
-        const suggestion: TaskSuggestion = {
+
+        // Return empty array if no tasks
+        if (!parsed.tasks || parsed.tasks.length === 0) {
+          console.log('No tasks generated from content');
+          return [];
+        }
+
+        // Process all tasks
+        const suggestions = parsed.tasks.map((taskData: {
+          title: string;
+          description: string;
+          scheduled_for: string;
+          deadline: string | null;
+          location: string | null;
+          priority: 'high' | 'medium' | 'low';
+          tags: string[];
+          subtasks: string;
+        }) => ({
           id: `task-${timestamp}-${Math.random().toString(36).substring(2, 10)}`,
           sourceContent: content,
           sourceType,
           timestamp,
           type: 'task',
-          title: parsed.title,
-          description: parsed.description,
-          scheduled_for: parsed.scheduled_for,
-          deadline: parsed.deadline === 'null' ? undefined : parsed.deadline,
-          location: parsed.location === 'null' ? undefined : parsed.location,
+          title: taskData.title,
+          description: taskData.description,
+          scheduled_for: taskData.scheduled_for,
+          deadline: taskData.deadline === 'null' ? undefined : taskData.deadline,
+          location: taskData.location === 'null' ? undefined : taskData.location,
           status: 'ToDo',
-          tags: parsed.tags || [],
-          priority: parsed.priority || 'medium',
-          subtasks: parsed.subtasks || undefined
-        };
-        
-        console.log('✅ Generated task suggestion:', suggestion.title);
-        return suggestion;
+          tags: taskData.tags || [],
+          priority: taskData.priority || 'medium',
+          subtasks: taskData.subtasks || undefined
+        } as TaskSuggestion));
+
+        console.log('✅ Generated task suggestions:', suggestions.map((s: TaskSuggestion) => s.title));
+        return suggestions;
+
       } catch (parseError) {
         console.error('Error parsing task suggestion:', parseError);
-        return null;
+        return [];
       }
     } catch (error) {
       console.error('Error generating task suggestion:', error);
-      return null;
+      return [];
     } finally {
       performanceLogger.endOperation('generateTaskSuggestion');
     }

@@ -178,75 +178,78 @@ export const SuggestionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     // Process using async IIFE to handle async operations
     (async () => {
       try {
-        // 1. First generate the basic task suggestion
-        console.log('🎯 Generating initial task suggestion');
-        const suggestion = await suggestionAgent.generateTaskSuggestion(data.entry, data.userId, {
+        // 1. First generate the task suggestions
+        console.log('🎯 Generating task suggestions');
+        const suggestions = await suggestionAgent.generateTaskSuggestion(data.entry, data.userId, {
           sourceMessage: data.entry,
           relatedMessages: [],
           confidence: 0.7,
           timing: 'short-term'
         });
 
-        if (!suggestion) {
-          console.log('No task suggestion generated');
+        if (!suggestions || suggestions.length === 0) {
+          console.log('No task suggestions generated');
           return;
         }
 
-        // 2. Check for similar existing tasks
-        console.log('🔍 Checking for similar existing tasks');
-        const similarityResult = await suggestionAgent.checkForDuplicatesBeforeShowing(suggestion, data.userId);
+        // Process each suggestion through the pipeline
+        for (const suggestion of suggestions) {
+          // 2. Check for similar existing tasks
+          console.log('🔍 Checking for similar existing tasks:', suggestion.title);
+          const similarityResult = await suggestionAgent.checkForDuplicatesBeforeShowing(suggestion, data.userId);
 
-        // 3. Handle the result based on similarity and continuation
-        if (similarityResult.isMatch && similarityResult.existingTask) {
-          if (similarityResult.isContinuation) {
-            // This is a continuation of an existing task
-            console.log('🔄 Task identified as continuation:', similarityResult.continuationReason);
-            
-            // Mark the previous task as done
-            const updateData = {
-              status: 'Done' as const,
-              updated_at: new Date().toISOString()
-            };
-            await updateTask(similarityResult.existingTask.id, updateData, data.userId);
-            
-            // Get quest context if available
-            const questContext = similarityResult.existingTask.quest_id ? 
-              await fetchQuests(data.userId).then(quests => 
-                quests.find(q => q.id === similarityResult.existingTask?.quest_id)
-              ) : undefined;
-            
-            // Regenerate the suggestion with continuation context
-            const enhancedSuggestion = await suggestionAgent.regenerateTaskWithContinuationContext(
-              suggestion,
-              similarityResult.existingTask,
-              questContext
-            );
-            
-            if (enhancedSuggestion) {
-              // Add the enhanced suggestion to queue
-              console.log('✨ Adding continuation task suggestion to queue');
-              addSuggestionToQueue(enhancedSuggestion);
+          // 3. Handle the result based on similarity and continuation
+          if (similarityResult.isMatch && similarityResult.existingTask) {
+            if (similarityResult.isContinuation) {
+              // This is a continuation of an existing task
+              console.log('🔄 Task identified as continuation:', similarityResult.continuationReason);
+              
+              // Mark the previous task as done
+              const updateData = {
+                status: 'Done' as const,
+                updated_at: new Date().toISOString()
+              };
+              await updateTask(similarityResult.existingTask.id, updateData, data.userId);
+              
+              // Get quest context if available
+              const questContext = similarityResult.existingTask.quest_id ? 
+                await fetchQuests(data.userId).then(quests => 
+                  quests.find(q => q.id === similarityResult.existingTask?.quest_id)
+                ) : undefined;
+              
+              // Regenerate the suggestion with continuation context
+              const enhancedSuggestion = await suggestionAgent.regenerateTaskWithContinuationContext(
+                suggestion,
+                similarityResult.existingTask,
+                questContext
+              );
+              
+              if (enhancedSuggestion) {
+                // Add the enhanced suggestion to queue
+                console.log('✨ Adding continuation task suggestion to queue');
+                addSuggestionToQueue(enhancedSuggestion);
+              }
+            } else if (similarityResult.matchConfidence > 0.7) {
+              // If we found a very similar task with high confidence, convert to edit suggestion
+              console.log(`Found similar existing task (${similarityResult.matchConfidence.toFixed(2)} confidence). Converting to edit suggestion.`);
+              const editSuggestion = await suggestionAgent.convertToEditSuggestion(suggestion, similarityResult.existingTask);
+              addSuggestionToQueue(editSuggestion);
             }
-          } else if (similarityResult.matchConfidence > 0.7) {
-            // If we found a very similar task with high confidence, convert to edit suggestion
-            console.log(`Found similar existing task (${similarityResult.matchConfidence.toFixed(2)} confidence). Converting to edit suggestion.`);
-            const editSuggestion = await suggestionAgent.convertToEditSuggestion(suggestion, similarityResult.existingTask);
-            addSuggestionToQueue(editSuggestion);
-          }
-        } else {
-          // 4. If no similar task found, find the best quest for this task
-          console.log('🔄 Finding best quest match for new task');
-          const questId = await suggestionAgent.findBestQuestForTask(suggestion, data.userId);
-          
-          // 5. Update the suggestion with the found quest ID
-          const finalSuggestion = {
-            ...suggestion,
-            quest_id: questId
-          };
+          } else {
+            // 4. If no similar task found, find the best quest for this task
+            console.log('🔄 Finding best quest match for new task');
+            const questId = await suggestionAgent.findBestQuestForTask(suggestion, data.userId);
+            
+            // 5. Update the suggestion with the found quest ID
+            const finalSuggestion = {
+              ...suggestion,
+              quest_id: questId
+            };
 
-          // 6. Add the suggestion to the queue
-          console.log('✨ Adding new task suggestion to queue');
-          addSuggestionToQueue(finalSuggestion);
+            // 6. Add the suggestion to the queue
+            console.log('✨ Adding new task suggestion to queue');
+            addSuggestionToQueue(finalSuggestion);
+          }
         }
       } catch (error) {
         console.error('❌ Error in analyzeJournalEntry:', error);
