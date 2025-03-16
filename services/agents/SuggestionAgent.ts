@@ -39,6 +39,7 @@ export interface TaskSuggestion {
     priority?: 'high' | 'medium' | 'low';
   };
   previousTaskId?: number; // Reference to the previous task for continuation
+  continuesFromTask?: Task; // Reference to the task this suggestion continues from
 }
 
 /**
@@ -51,6 +52,7 @@ export interface QuestSuggestion {
   timestamp: string;
   type: 'quest';
   title: string;
+  quest_id?: number;
   tagline: string;
   description: string;
   status: 'Active';
@@ -159,7 +161,10 @@ export class SuggestionAgent {
   ): Promise<TaskSuggestion[]> {
     performanceLogger.startOperation('generateTaskSuggestion');
     try {
-      const prompt = `Analyze this content and generate ONE OR MORE separate tasks. If multiple distinct tasks are mentioned, create a separate task for each one.
+      const currentDate = new Date().toISOString().split('T')[0];
+      const prompt = `Current date is: ${currentDate}
+
+Analyze this content and generate ONE OR MORE separate tasks. If multiple distinct tasks are mentioned, create a separate task for each one.
 
 Content: "${content}"
 
@@ -174,8 +179,8 @@ Generate a JSON object with this EXACT format:
     {
       "title": "Brief task title for first task",
       "description": "Detailed description incorporating context",
-      "scheduled_for": "YYYY-MM-DD format date when task should start",
-      "deadline": "YYYY-MM-DD format deadline if mentioned, otherwise null",
+      "scheduled_for": "YYYY-MM-DD format date when task should start (must be ${currentDate} or later)",
+      "deadline": "YYYY-MM-DD format deadline if mentioned (must be ${currentDate} or later), otherwise null",
       "location": "Location if mentioned, otherwise null",
       "priority": "high, medium, or low based on urgency/importance",
       "tags": ["relevant", "keyword", "tags"],
@@ -185,9 +190,11 @@ Generate a JSON object with this EXACT format:
 }
 
 IMPORTANT:
-- Create SEPARATE tasks for distinct activities (e.g. "Bake a cake" and "Take dog to vet" should be TWO tasks)
+- Create SEPARATE tasks for distinct activities
 - Each task should be focused and specific
-- Do not combine unrelated tasks into one`;
+- Do not combine unrelated tasks into one
+- All dates must be ${currentDate} or later
+- Never use dates from the past`;
 
       console.log(`🚀 Generating task suggestion(s). Content: ${JSON.stringify(content)} Context: ${JSON.stringify(context)}\n Prompt: ${prompt}`);
 
@@ -268,9 +275,12 @@ IMPORTANT:
   async upgradeTaskToQuest(task: TaskSuggestion): Promise<QuestSuggestion | null> {
     performanceLogger.startOperation('upgradeTaskToQuest');
     try {
+      const currentDate = new Date().toISOString().split('T')[0];
       console.log('⬆️ Upgrading task to quest:', task.title);
       
-      const prompt = `Upgrade this task to a quest (a larger goal that might require multiple tasks):
+      const prompt = `Current date is: ${currentDate}
+
+Upgrade this task to a quest (a larger goal that might require multiple tasks):
 
 Task Title: ${task.title}
 Task Description: ${task.description}
@@ -286,8 +296,8 @@ Generate a JSON object with these EXACT fields:
   "title": "Quest title - can be based on the original task or expanded",
   "tagline": "Short, one-line description of the quest",
   "description": "Detailed description of the overall goal/objective",
-  "start_date": "YYYY-MM-DD - use the original task's scheduled_for date",
-  "end_date": "YYYY-MM-DD - use the original task's deadline or a reasonable date",
+  "start_date": "YYYY-MM-DD - must be ${currentDate} or later",
+  "end_date": "YYYY-MM-DD - must be after start_date",
   "relatedTasks": [
     {
       "title": "First related task - include the original task here",
@@ -306,7 +316,8 @@ IMPORTANT:
 - Make the original task the first related task
 - Add 2-3 more related tasks that would help achieve this quest
 - Make the quest a meaningful expansion of the original task
-- Set reasonable dates based on the original task`;
+- All dates must be ${currentDate} or later
+- Never use dates from the past`;
 
       const response = await this.openai.chat.completions.create({
         model: "deepseek-chat",
@@ -806,9 +817,12 @@ Reply ONLY with a JSON object in this format:
     questContext?: Quest
   ): Promise<TaskSuggestion | null> {
     try {
+      const currentDate = new Date().toISOString().split('T')[0];
       console.log('♻️ Regenerating task suggestion with continuation context');
       
-      const prompt = `Generate an improved task description using the context of its predecessor task and quest.
+      const prompt = `Current date is: ${currentDate}
+
+Generate an improved task description using the context of its predecessor task and quest.
 
 Previous Task:
 Title: ${previousTask.title}
@@ -831,9 +845,13 @@ Generate a JSON object with these EXACT fields that incorporates this context:
   "title": "Improved task title that shows continuity",
   "description": "Enhanced description that references the previous task",
   "priority": "high/medium/low (based on previous task)",
-  "scheduled_for": "YYYY-MM-DD (should be after previous task's completion)",
+  "scheduled_for": "YYYY-MM-DD (must be ${currentDate} or later)",
   "tags": ["relevant", "tags", "including", "continuation"]
-}`;
+}
+
+IMPORTANT:
+- All dates must be ${currentDate} or later
+- Never use dates from the past`;
 
       const response = await this.openai.chat.completions.create({
         model: "deepseek-chat",
@@ -862,7 +880,8 @@ Generate a JSON object with these EXACT fields that incorporates this context:
         priority: parsed.priority,
         tags: parsed.tags,
         timestamp,
-        previousTaskId: previousTask.id // Add reference to previous task
+        previousTaskId: previousTask.id, // Add reference to previous task
+        quest_id: previousTask.quest_id // Carry over the quest ID from the previous task
       };
 
       console.log('✨ Generated enhanced continuation task:', enhancedSuggestion.title);
@@ -885,10 +904,10 @@ Generate a JSON object with these EXACT fields that incorporates this context:
       // Generate update fields based on the source content
       const updateFields = await this.generateTaskUpdateFields(suggestion, existingTask, suggestion.sourceContent);
       
-      // Modify the suggestion to indicate it's an edit suggestion
+      // Modify the suggestion to indicate it's an edit suggestion and preserve quest context
       suggestion.isEditSuggestion = true;
       suggestion.existingTaskId = existingTask.id;
-      suggestion.quest_id = existingTask.quest_id;
+      suggestion.quest_id = existingTask.quest_id; // Ensure quest_id is carried over
       suggestion.updateValues = updateFields.updateValues;
       
       // Update the title to indicate it's an edit
@@ -903,6 +922,14 @@ Generate a JSON object with these EXACT fields that incorporates this context:
         suggestion.description = `Edit to existing task "${existingTask.title}":\n\n${suggestion.description}\n\nFields to update: ${updateFieldsList}`;
       }
       
+      // Log for tracking quest context
+      console.log('Created edit suggestion with quest context:', {
+        taskId: suggestion.id,
+        questId: suggestion.quest_id,
+        title: suggestion.title
+      });
+      
+
       return suggestion;
     } catch (error) {
       console.error('Error converting to edit suggestion:', error);

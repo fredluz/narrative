@@ -36,8 +36,22 @@ export function TaskSuggestionOverlay({
   };
 
   // Handle accepting the suggestion directly from compact view
-  const handleAcceptSuggestion = () => {
-    handleExpandSuggestion(); // Show modal for confirmation
+  const handleAcceptSuggestion = async () => {
+    if (!userId || !taskSuggestion) return;
+    
+    setIsSubmitting(true);
+    try {
+      const task = await acceptTaskSuggestion(taskSuggestion); // Use suggestion data directly
+      if (onSuggestionHandled) {
+        onSuggestionHandled();
+      }
+    } catch (error) {
+      console.error('Error accepting task suggestion:', error);
+      // If direct acceptance fails, fall back to showing modal
+      handleExpandSuggestion();
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Handle creating a task from the suggestion via modal
@@ -46,7 +60,14 @@ export function TaskSuggestionOverlay({
     
     setIsSubmitting(true);
     try {
-      const task = await acceptTaskSuggestion(taskSuggestion);
+      // Merge the form data with the suggestion to preserve the quest_id
+      const mergedData = {
+        ...taskSuggestion,  // Keep original suggestion data including quest_id
+        ...formData,        // Override with form values
+        quest_id: taskSuggestion.quest_id  // Ensure quest_id is preserved
+      };
+      
+      const task = await acceptTaskSuggestion(mergedData);
       setShowTaskModal(false);
       if (onSuggestionHandled) {
         onSuggestionHandled();
@@ -89,6 +110,7 @@ export function TaskSuggestionOverlay({
           onReject={handleRejectSuggestion}
           onExpand={handleExpandSuggestion}
           onUpgradeToQuest={handleUpgradeToQuest}
+          isSubmitting={isSubmitting}
         />
       </View>
       
@@ -112,6 +134,7 @@ export function TaskSuggestionOverlay({
           status: 'ToDo',
           priority: taskSuggestion.priority || 'medium',
           subtasks: taskSuggestion.subtasks,
+          quest_id: taskSuggestion.quest_id, // Add quest_id to initialData
           user_id: userId
         }}
       />

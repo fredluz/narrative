@@ -45,6 +45,7 @@ export function CreateTaskModal({
   const { themeColor, secondaryColor } = useTheme();
   const { session } = useSupabase();
   const [localQuests, setLocalQuests] = useState<Array<{ id: number; title: string }>>([]);
+  const [showQuestDropdown, setShowQuestDropdown] = useState(false);
   
   // Create default form data that doesn't depend on initialData
   const getDefaultFormData = () => ({
@@ -56,20 +57,21 @@ export function CreateTaskModal({
     tags: [],
     priority: 'medium' as 'high' | 'medium' | 'low',
     subtasks: '',
-    user_id: userId
+    user_id: userId,
+    quest_id: undefined as number | undefined
   });
 
-  // Initialize with default form data
   const [formData, setFormData] = useState<TaskFormData>(getDefaultFormData());
   
   // Apply initialData when it exists and component becomes visible
   useEffect(() => {
     if (visible) {
       if (initialData) {
-        // Apply initialData over default values
+        // Apply initialData over default values, preserving quest_id
         setFormData({
           ...getDefaultFormData(),
           ...initialData,
+          quest_id: initialData.quest_id,
           user_id: userId // Always ensure user_id is set
         });
       } else {
@@ -86,6 +88,12 @@ export function CreateTaskModal({
       try {
         const loadedQuests = await fetchQuests(session.user.id);
         setLocalQuests(loadedQuests);
+        
+        // If we have initialData with quest_id and it matches a loaded quest,
+        // expand the dropdown to show the selection
+        if (initialData?.quest_id && loadedQuests.some(q => q.id === initialData.quest_id)) {
+          setShowQuestDropdown(true);
+        }
       } catch (err) {
         console.error('Error loading quests:', err);
       }
@@ -94,9 +102,13 @@ export function CreateTaskModal({
     if (visible) {
       loadQuests();
     }
-  }, [visible, session?.user?.id]);
+  }, [visible, session?.user?.id, initialData?.quest_id]);
 
   const handleSubmit = async () => {
+    console.log('📝 [CreateTaskModal] Submitting form data:', {
+      ...formData,
+      quest_id: formData.quest_id // Log quest_id specifically
+    });
     await onSubmit({
       ...formData,
       user_id: userId
@@ -175,39 +187,66 @@ export function CreateTaskModal({
               backgroundColor: '#2A2A2A',
               borderRadius: 4,
               marginBottom: 15,
-              maxHeight: 200,
               overflow: 'hidden'
             }}>
               {displayQuests.length > 0 ? (
-                <ScrollView style={{ maxHeight: 200 }}>
-                  {displayQuests.map(quest => (
-                    <TouchableOpacity
-                      key={quest.id}
-                      style={{
-                        padding: 10,
-                        borderBottomWidth: 1,
-                        borderBottomColor: 'rgba(255, 255, 255, 0.1)',
-                        backgroundColor: formData.quest_id === quest.id ? 'rgba(255, 255, 255, 0.1)' : 'transparent',
-                        flexDirection: 'row',
-                        alignItems: 'center'
-                      }}
-                      onPress={() => setFormData({ ...formData, quest_id: quest.id })}
-                    >
-                      <MaterialIcons 
-                        name={formData.quest_id === quest.id ? 'radio-button-checked' : 'radio-button-unchecked'} 
-                        size={20} 
-                        color={formData.quest_id === quest.id ? themeColor : '#AAA'}
-                        style={{ marginRight: 10 }}
-                      />
-                      <Text style={{ color: '#FFF' }}>{quest.title}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
+                <TouchableOpacity
+                  style={{
+                    padding: 10,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between'
+                  }}
+                  onPress={() => {
+                    // Toggle dropdown
+                    setShowQuestDropdown(!showQuestDropdown);
+                  }}
+                >
+                  <Text style={{ color: '#FFF' }}>
+                    {formData.quest_id 
+                      ? displayQuests.find(q => q.id === formData.quest_id)?.title || 'Select Quest'
+                      : 'Select Quest'}
+                  </Text>
+                  <MaterialIcons 
+                    name={showQuestDropdown ? 'expand-less' : 'expand-more'} 
+                    size={24} 
+                    color="#AAA"
+                  />
+                </TouchableOpacity>
               ) : (
                 <View style={{ padding: 15, alignItems: 'center' }}>
                   <Text style={{ color: '#AAA', fontStyle: 'italic' }}>
                     {visible ? 'Loading quests...' : 'No quests available. Create a quest first.'}
                   </Text>
+                </View>
+              )}
+
+              {/* Dropdown options */}
+              {showQuestDropdown && displayQuests.length > 0 && (
+                <View style={{ 
+                  maxHeight: 200,
+                  borderTopWidth: 1,
+                  borderTopColor: 'rgba(255, 255, 255, 0.1)'
+                }}>
+                  <ScrollView>
+                    {displayQuests.map(quest => (
+                      <TouchableOpacity
+                        key={quest.id}
+                        style={{
+                          padding: 10,
+                          backgroundColor: formData.quest_id === quest.id ? 'rgba(255, 255, 255, 0.1)' : 'transparent',
+                          borderBottomWidth: 1,
+                          borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+                        }}
+                        onPress={() => {
+                          setFormData({ ...formData, quest_id: quest.id });
+                          setShowQuestDropdown(false);
+                        }}
+                      >
+                        <Text style={{ color: '#FFF' }}>{quest.title}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
                 </View>
               )}
             </View>

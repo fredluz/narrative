@@ -47,6 +47,7 @@ export function EditTaskModal({
   const { themeColor } = useTheme();
   const [quests, setQuests] = useState<Array<{ id: number; title: string }>>([]);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showQuestDropdown, setShowQuestDropdown] = useState(false);
   const [formData, setFormData] = React.useState<TaskFormData>({
     title: '',
     description: '',
@@ -178,6 +179,65 @@ export function EditTaskModal({
           </View>
 
           <ScrollView style={{ maxHeight: '100%' }}>
+            {/* Quest Selection - Added Section */}
+            <Text style={{ color: '#AAA', fontSize: 14, marginBottom: 5 }}>Quest</Text>
+            <View style={{
+              backgroundColor: '#2A2A2A',
+              borderRadius: 4,
+              marginBottom: 15,
+              overflow: 'hidden'
+            }}>
+              <TouchableOpacity
+                style={{
+                  padding: 10,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between'
+                }}
+                onPress={() => setShowQuestDropdown(!showQuestDropdown)}
+              >
+                <Text style={{ color: '#FFF' }}>
+                  {formData.quest_id 
+                    ? quests.find(q => q.id === formData.quest_id)?.title || 'Select Quest'
+                    : 'Select Quest'}
+                </Text>
+                <MaterialIcons 
+                  name={showQuestDropdown ? 'expand-less' : 'expand-more'} 
+                  size={24} 
+                  color="#AAA"
+                />
+              </TouchableOpacity>
+
+              {/* Dropdown options */}
+              {showQuestDropdown && (
+                <View style={{ 
+                  maxHeight: 200,
+                  borderTopWidth: 1,
+                  borderTopColor: 'rgba(255, 255, 255, 0.1)'
+                }}>
+                  <ScrollView>
+                    {quests.map(quest => (
+                      <TouchableOpacity
+                        key={quest.id}
+                        style={{
+                          padding: 10,
+                          backgroundColor: formData.quest_id === quest.id ? 'rgba(255, 255, 255, 0.1)' : 'transparent',
+                          borderBottomWidth: 1,
+                          borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+                        }}
+                        onPress={() => {
+                          setFormData({ ...formData, quest_id: quest.id });
+                          setShowQuestDropdown(false);
+                        }}
+                      >
+                        <Text style={{ color: '#FFF' }}>{quest.title}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+            </View>
+
             <Text style={{ color: '#AAA', fontSize: 14, marginBottom: 5 }}>Title *</Text>
             <TextInput
               value={formData.title}
@@ -210,38 +270,6 @@ export function EditTaskModal({
               placeholderTextColor="#666"
               placeholder="Enter task description"
             />
-
-            {/* Quest Selection - Added Section */}
-            <Text style={{ color: '#AAA', fontSize: 14, marginBottom: 5 }}>Quest</Text>
-            <View style={{
-              backgroundColor: '#2A2A2A',
-              borderRadius: 4,
-              marginBottom: 15,
-              overflow: 'hidden'
-            }}>
-              {quests.map(quest => (
-                <TouchableOpacity
-                  key={quest.id}
-                  style={{
-                    padding: 10,
-                    borderBottomWidth: 1,
-                    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
-                    backgroundColor: formData.quest_id === quest.id ? 'rgba(255, 255, 255, 0.1)' : 'transparent',
-                    flexDirection: 'row',
-                    alignItems: 'center'
-                  }}
-                  onPress={() => setFormData({ ...formData, quest_id: quest.id })}
-                >
-                  <MaterialIcons 
-                    name={formData.quest_id === quest.id ? 'radio-button-checked' : 'radio-button-unchecked'} 
-                    size={20} 
-                    color={formData.quest_id === quest.id ? themeColor : '#AAA'}
-                    style={{ marginRight: 10 }}
-                  />
-                  <Text style={{ color: '#FFF' }}>{quest.title}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
 
             {/* Priority Selection */}
             <Text style={{ color: '#AAA', fontSize: 14, marginBottom: 5 }}>Priority</Text>

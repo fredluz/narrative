@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Animated } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Animated, ActivityIndicator } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
 import { TaskSuggestion } from '@/services/agents/SuggestionAgent';
@@ -10,7 +10,8 @@ interface CompactTaskSuggestionProps {
   onAccept: () => void;
   onReject: () => void;
   onExpand: () => void;
-  onUpgradeToQuest?: () => void; // Added prop for upgrading task to quest
+  onUpgradeToQuest?: () => void;
+  isSubmitting?: boolean;
 }
 
 const CompactTaskSuggestion: React.FC<CompactTaskSuggestionProps> = ({
@@ -18,7 +19,8 @@ const CompactTaskSuggestion: React.FC<CompactTaskSuggestionProps> = ({
   onAccept,
   onReject,
   onExpand,
-  onUpgradeToQuest
+  onUpgradeToQuest,
+  isSubmitting = false
 }) => {
   const { themeColor, secondaryColor } = useTheme();
   const fadeAnim = React.useRef(new Animated.Value(0)).current;
@@ -76,6 +78,7 @@ const CompactTaskSuggestion: React.FC<CompactTaskSuggestionProps> = ({
           <TouchableOpacity 
             style={[styles.actionButton, styles.upgradeButton, { backgroundColor: secondaryColor }]}
             onPress={onUpgradeToQuest}
+            disabled={isSubmitting}
           >
             <MaterialIcons name="upgrade" size={14} color="#fff" />
             <Text style={styles.actionText}>Quest</Text>
@@ -85,16 +88,29 @@ const CompactTaskSuggestion: React.FC<CompactTaskSuggestionProps> = ({
         <TouchableOpacity 
           style={[styles.actionButton, styles.expandButton]}
           onPress={onExpand}
+          disabled={isSubmitting}
         >
           <MaterialIcons name="open-in-full" size={14} color="#fff" />
           <Text style={styles.actionText}>Details</Text>
         </TouchableOpacity>
         
         <TouchableOpacity 
-          style={[styles.actionButton, styles.acceptButton, { backgroundColor: themeColor }]}
+          style={[
+            styles.actionButton, 
+            styles.acceptButton, 
+            { 
+              backgroundColor: themeColor,
+              opacity: isSubmitting ? 0.7 : 1 
+            }
+          ]}
           onPress={onAccept}
+          disabled={isSubmitting}
         >
-          <MaterialIcons name="check" size={14} color="#fff" />
+          {isSubmitting ? (
+            <ActivityIndicator size="small" color="#fff" style={{ marginRight: 4 }} />
+          ) : (
+            <MaterialIcons name="check" size={14} color="#fff" />
+          )}
           <Text style={styles.actionText}>Accept</Text>
         </TouchableOpacity>
       </View>

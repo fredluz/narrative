@@ -89,9 +89,10 @@ export const SuggestionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     console.log('Adding suggestion:', {
       type: suggestion.type,
       id: suggestion.id,
+      quest_id: suggestion.quest_id ? suggestion.quest_id : 'no quest id',
       title: suggestion.type === 'task' ? suggestion.title : 
-            suggestion.type === 'quest' ? (suggestion as QuestSuggestion).title : 
-            null,
+        suggestion.type === 'quest' ? (suggestion as QuestSuggestion).title : 
+        null,
       sourceType: suggestion.sourceType,
       timestamp: suggestion.timestamp
     });
@@ -204,22 +205,18 @@ export const SuggestionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
               // This is a continuation of an existing task
               console.log('🔄 Task identified as continuation:', similarityResult.continuationReason);
               
-              // Mark the previous task as done
-              const updateData = {
-                status: 'Done' as const,
-                updated_at: new Date().toISOString()
-              };
-              await updateTask(similarityResult.existingTask.id, updateData, data.userId);
-              
               // Get quest context if available
               const questContext = similarityResult.existingTask.quest_id ? 
                 await fetchQuests(data.userId).then(quests => 
                   quests.find(q => q.id === similarityResult.existingTask?.quest_id)
                 ) : undefined;
               
-              // Regenerate the suggestion with continuation context
+              // Regenerate the suggestion with continuation context and store the previous task info
               const enhancedSuggestion = await suggestionAgent.regenerateTaskWithContinuationContext(
-                suggestion,
+                {
+                  ...suggestion,
+                  continuesFromTask: similarityResult.existingTask // Store reference to previous task
+                },
                 similarityResult.existingTask,
                 questContext
               );
@@ -233,6 +230,7 @@ export const SuggestionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
               // If we found a very similar task with high confidence, convert to edit suggestion
               console.log(`Found similar existing task (${similarityResult.matchConfidence.toFixed(2)} confidence). Converting to edit suggestion.`);
               const editSuggestion = await suggestionAgent.convertToEditSuggestion(suggestion, similarityResult.existingTask);
+              
               addSuggestionToQueue(editSuggestion);
             }
           } else {
@@ -364,6 +362,16 @@ export const SuggestionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         console.error('No user ID available to accept task');
         return null;
       }
+
+      // If this is a continuation task, mark the previous task as done first
+      if (task.continuesFromTask) {
+        console.log('🔄 Marking previous task as done before accepting continuation');
+        await updateTask(task.continuesFromTask.id, {
+          status: 'Done' as const,
+          updated_at: new Date().toISOString()
+        }, userId);
+      }
+
       const result = await suggestionAgent.acceptTaskSuggestion(task, userId);
       if (result) {
         removeTaskSuggestion(task.id);
