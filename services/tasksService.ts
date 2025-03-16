@@ -7,7 +7,7 @@ import { useSupabase } from '@/contexts/SupabaseContext';
 export type TaskStatus = 'ToDo' | 'InProgress' | 'Done';
 
 // Database operations
-async function fetchTasks(userId: string): Promise<Task[]> {
+export async function fetchTasks(userId: string): Promise<Task[]> {
   console.log('Fetching tasks...');
   const { data, error } = await supabase
     .from('tasks')
@@ -35,7 +35,7 @@ async function fetchTasks(userId: string): Promise<Task[]> {
   return data as Task[];
 }
 
-async function fetchTasksByQuest(questId: number, userId: string): Promise<Task[]> {
+export async function fetchTasksByQuest(questId: number, userId: string): Promise<Task[]> {
   const { data, error } = await supabase
     .from('tasks')
     .select('*')
@@ -77,6 +77,59 @@ export async function getTasksByDate(date: string, userId: string): Promise<Task
   }
 
   return data || [];
+}
+
+/**
+ * Update a task with specified fields
+ * @param taskId ID of the task to update
+ * @param updateData Object containing fields to update
+ * @param userId User ID for ownership verification
+ * @returns The updated task
+ */
+export async function updateTask(taskId: number, updateData: Record<string, any>, userId: string): Promise<Task> {
+  console.log('[tasksService] Updating task:', { taskId, fields: Object.keys(updateData) });
+  
+  // First verify ownership
+  const { data: task, error: fetchError } = await supabase
+    .from('tasks')
+    .select('user_id')
+    .eq('id', taskId)
+    .single();
+
+  if (fetchError) {
+    console.error('[tasksService] Error verifying task ownership:', fetchError);
+    throw new Error(`Failed to verify task ownership: ${fetchError.message}`);
+  }
+
+  if (!task || task.user_id !== userId) {
+    console.error('[tasksService] Cannot update task: User does not own this task');
+    throw new Error('You do not have permission to update this task');
+  }
+  
+  // Add updated_at timestamp if not provided
+  if (!updateData.updated_at) {
+    updateData.updated_at = new Date().toISOString();
+  }
+  
+  // Perform the update
+  const { data, error } = await supabase
+    .from('tasks')
+    .update(updateData)
+    .eq('id', taskId)
+    .eq('user_id', userId)
+    .select()
+    .single();
+  
+  if (error) {
+    console.error('[tasksService] Error updating task:', error);
+    throw new Error(`Failed to update task: ${error.message}`);
+  }
+  
+  if (!data) {
+    throw new Error('Failed to retrieve updated task data');
+  }
+  
+  return data as Task;
 }
 
 // New function to update task status in Supabase

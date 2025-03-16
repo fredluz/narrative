@@ -97,20 +97,6 @@ export class ChatAgent {
           questInfo += `Description: ${quest.description || 'No description available'}\n`;
           questInfo += `Current Status: ${quest.status || 'Unknown'}\n`;
           
-          // Add memos section before tasks
-          if (quest.memos && quest.memos.length > 0) {
-            questInfo += '\nRecent Memos:\n';
-            quest.memos
-              .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-                            .forEach(memo => {
-                const date = new Date(memo.created_at).toLocaleDateString('en-US', {
-                  month: 'short',
-                  day: 'numeric'
-                });
-                questInfo += `- [${date}] ${memo.content}\n`;
-              });
-          }
-          
           if (quest.relevantTasks && quest.relevantTasks.length > 0) {
             questInfo += '\nRelevant Tasks:\n';
             quest.relevantTasks.forEach(task => {
@@ -347,37 +333,6 @@ CONVERSATION CONTEXT:
       }
       performanceLogger.endOperation('dbOperations');
 
-      // Analyze the complete chat session for task and quest suggestions
-      performanceLogger.startOperation('analyzeChatSuggestions');
-      try {
-        // Use existing context-building code that already formats messages with roles
-        const chatMessages = messages.map(msg => ({
-          role: msg.is_user ? ("user" as const) : ("assistant" as const),
-          content: msg.message,
-          timestamp: msg.created_at
-        }));
-
-        // Pass the complete conversation context to SuggestionAgent and add any found suggestions
-        const suggestions = await this.suggestionAgent.analyzeConversation({
-          messages: chatMessages,
-          metadata: {
-            startTime: messages[0]?.created_at,
-            endTime: messages[messages.length - 1]?.created_at,
-            totalMessages: messages.length
-          }
-        }, messages[0].user_id);
-
-        // Add each suggestion to the global store via SuggestionContext
-        const suggestionEvent = new CustomEvent('newSuggestions', { 
-          detail: { suggestions } 
-        });
-        window.dispatchEvent(suggestionEvent);
-      } catch (analyzeError) {
-        console.error('Error analyzing chat for suggestions:', analyzeError);
-        // Don't throw - this is an enhancement and shouldn't break the main flow
-      }
-      performanceLogger.endOperation('analyzeChatSuggestions');
-
       // After analyzing for task suggestions, check for quest updates
       const relevantQuests = await this.questAgent.findRelevantQuests(
         messages.map(m => m.message).join('\n'),
@@ -545,7 +500,7 @@ CONVERSATION CONTEXT:
 
 YOUR TASK: 
 Write a short reflective journal entry (1-2 paragraphs) that accurately records what the USER talked about in their chat messages. This must be written in their authentic voice and style.
-
+It is very important that you write down every single task, goal, objective or other kind of mission that the user mentioned in their messages. Writing down tasks in this journal is critical for the functioning of this system.
 CRITICAL GUIDELINES:
 1. ONLY include topics, thoughts and feelings the user EXPLICITLY mentioned in their messages
 2. DO NOT invent any details, decisions, plans, or thoughts that weren't directly expressed by the user

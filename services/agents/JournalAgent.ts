@@ -170,20 +170,6 @@ export class JournalAgent {
           prompt += `Description: ${quest.description || 'No description available'}\n`;
           prompt += `Current Status: ${quest.status || 'Unknown'}\n`;
           
-          // Add memos section before tasks
-          if (quest.memos && quest.memos.length > 0) {
-            prompt += '\nRecent Memos:\n';
-            quest.memos
-              .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-              .forEach(memo => {
-                const date = new Date(memo.created_at).toLocaleDateString('en-US', {
-                  month: 'short',
-                  day: 'numeric'
-                });
-                prompt += `- [${date}] ${memo.content}\n`;
-              });
-          }
-          
           // Add specifically relevant tasks section with explanations
           if (quest.relevantTasks && quest.relevantTasks.length > 0) {
             prompt += '\nRelevant Tasks (with explanations):\n';
@@ -255,20 +241,6 @@ export class JournalAgent {
         relevantQuests.forEach(quest => {
           prompt += `\nQuest: ${quest.title}\n`;
           
-          // Add memos section first
-          if (quest.memos && quest.memos.length > 0) {
-            prompt += '\nRecent Context from Memos:\n';
-            quest.memos
-              .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-              .forEach(memo => {
-                const date = new Date(memo.created_at).toLocaleDateString('en-US', {
-                  month: 'short',
-                  day: 'numeric'
-                });
-                prompt += `- [${date}] ${memo.content}\n`;
-              });
-          }
-
           if (quest.relevance) {
             prompt += `Why Relevant: ${quest.relevance}\n`;
           }

@@ -1,4 +1,3 @@
-import { GoogleGenerativeAI, type GenerativeModel } from "@google/generative-ai";
 import OpenAI from 'openai';
 import { 
   createQuest,
@@ -7,12 +6,9 @@ import {
   moveTasksToQuest,
   getQuestsWithTasks,
   getOrCreateMiscQuest,
-  addMemoToQuest,
-  getQuestMemos
 } from '@/services/questsService';
 import type { Quest, Task } from '@/app/types';
 import { globalSuggestionStore } from '@/services/globalSuggestionStore';
-import { MemoSuggestion } from '@/services/agents/SuggestionAgent';
 
 interface TaskRelevanceItem {
     taskId: number;
@@ -43,26 +39,16 @@ interface QuestMemo {
 interface ContentAnalysis {
     questId: number;
     updates: {
-        description?: string;
-        analysis?: string;
+        description_sugg?: string;
+        analysis_sugg?: string;
     };
-    memos: {
-        title: string;
-        content: string;
-        tags: string[];
-        source: string;
-    }[];
     confidence: number;
 }
 
 export class QuestAgent {
-    private genAI: GoogleGenerativeAI;
-    private model: GenerativeModel;
     private openai: OpenAI;
 
     constructor() {
-        this.genAI = new GoogleGenerativeAI(process.env.EXPO_PUBLIC_GEMINI_API_KEY || '');
-        this.model = this.genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
         this.openai = new OpenAI({
             apiKey: process.env.EXPO_PUBLIC_DEEPSEEK_API_KEY,
             baseURL: 'https://api.deepseek.com',
@@ -107,7 +93,7 @@ export class QuestAgent {
                 const userTasks = miscQuest.tasks.filter(task => task.user_id === userId);
 
                 if (userTasks.length > 0) {
-                    const prompt = `You are analyzing tasks from a miscellaneous quest collection to see if they would be better suited for a newly created quest.
+                    const prompt = `
 
 New Quest Details:
 Title: ${questData.title}
@@ -120,7 +106,16 @@ Misc Tasks to Analyze:
 ${userTasks.map(task => `ID: ${task.id}
 Title: ${task.title}
 Description: ${task.description || 'No description'}`).join('\n\n')}
+.`;
 
+                    try {
+                        console.log('📤 Sending task analysis to AI');
+                        const result = await this.openai.chat.completions.create({
+                            model: "deepseek-chat",
+                            messages: [
+                                {
+                                    role: "system",
+                                    content: `You are analyzing tasks from a miscellaneous quest collection to see if they would be better suited for a newly created quest.
 For each task, determine if it would be better suited in the new quest based on:
 1. Direct relevance to the new quest's title or description
 2. Thematic alignment with the quest's purpose
@@ -137,12 +132,18 @@ RESPOND ONLY WITH A JSON OBJECT IN THIS EXACT FORMAT:
   ]
 }
 
-Be SELECTIVE - only include tasks that have a CLEAR and STRONG connection to the new quest.`;
-
-                    try {
-                        console.log('📤 Sending task analysis to AI');
-                        const result = await this.model.generateContent(prompt);
-                        const aiResponse = this.cleanResponseText(result.response.text().trim());
+Be SELECTIVE - only include tasks that have a CLEAR and STRONG connection to the new quest.`
+                                },
+                                {
+                                    role: "user",
+                                    content: prompt
+                                }
+                            ],
+                            temperature: 0.7,
+                            max_tokens: 2000
+                        });
+                        
+                        const aiResponse = this.cleanResponseText(result.choices[0].message?.content ?? '');
                         
                         try {
                             const parsed = JSON.parse(aiResponse);
@@ -182,8 +183,11 @@ Be SELECTIVE - only include tasks that have a CLEAR and STRONG connection to the
         title?: string;
         tagline?: string;
         description?: string;
+        description_sugg?: string;
         status?: 'Active' | 'On-Hold' | 'Completed';
         is_main?: boolean;
+        analysis?: string;
+        analysis_sugg?: string;
         start_date?: string;
         end_date?: string;
         parent_quest_id?: number;
@@ -236,7 +240,28 @@ Be SELECTIVE - only include tasks that have a CLEAR and STRONG connection to the
         }
     }
 
-    private async validateAndRepairJson(rawResponse: string, questId: number): Promise<QuestRelevanceItem | null> {
+    private async validateAndRepairJson(rawResponse: string | object, questId: number): Promise<QuestRelevanceItem | null> {
+        // If rawResponse is already an object, validate its structure directly
+        if (typeof rawResponse === 'object') {
+            console.log('🔍 Validating JavaScript object');
+            try {
+                const response = rawResponse as QuestRelevanceItem;
+                // Verify the required fields are present and of correct type
+                if (typeof response.questId !== 'number' || 
+                    typeof response.isRelevant !== 'boolean' || 
+                    !Array.isArray(response.relevantTasks)) {
+                    console.log('❌ Object is missing required fields or has wrong types');
+                    return null;
+                }
+                console.log('✅ Object validated successfully');
+                return response;
+            } catch (error) {
+                console.error('❌ Error validating object:', error);
+                return null;
+            }
+        }
+
+        // If rawResponse is a string, proceed with LLM validation
         console.log('🔍 Validating JSON response:', rawResponse);
         
         const prompt = `You are a JSON validator and repair system. Your job is to:
@@ -271,8 +296,22 @@ DO NOT add any backticks, quotes, or other markers around the JSON.`;
 
         try {
             console.log('📤 Sending JSON validation request to AI');
-            const result = await this.model.generateContent(prompt);
-            const validatedResponse = result.response.text().trim();
+            const result = await this.openai.chat.completions.create({
+                model: "deepseek-chat",
+                messages: [
+                    {
+                        role: "system",
+                        content: "You are a JSON validator and repair system."
+                    },
+                    {
+                        role: "user",
+                        content: prompt
+                    }
+                ],
+                temperature: 0.7,
+                max_tokens: 2000
+            });
+            const validatedResponse = result.choices[0].message?.content ?? '';
 
             if (!validatedResponse) {
                 console.log('❌ No response received from validator');
@@ -340,10 +379,24 @@ DO NOT add any backticks, quotes, or other markers around the JSON.`;
         }
 
         // Filter tasks by user_id
-        const userTasks = miscQuest.tasks
+        const userTasks = miscQuest.tasks;
 
-        const prompt = `You are analyzing ONLY the tasks from a miscellaneous quest collection to see if they're relevant to a journal entry.
-DO NOT consider the quest's description or context - ONLY look at each task individually.
+        try {
+            console.log('📤 Sending misc tasks analysis to AI');
+            const result = await this.openai.chat.completions.create({
+                model: "deepseek-chat",
+                messages: [
+                    {
+                        role: "system",
+                        content: `You are analyzing tasks from a miscellaneous quest collection to determine their relevance to a journal entry.
+Consider ONLY the tasks individually - do NOT consider the quest's description or context.
+Be VERY selective - only include tasks with clear, direct relevance to the journal entry.
+
+Reply ONLY with a JSON object in the specified format.`
+                    },
+                    {
+                        role: "user",
+                        content: `Review these tasks for relevance to this journal entry:
 
 Journal Entry: "${journalContent}"
 
@@ -352,39 +405,35 @@ ${userTasks.map(task => `ID: ${task.id}
 Title: ${task.title}
 Description: ${task.description || 'No description'}`).join('\n\n')}
 
-For each task, determine if it's specifically relevant to the journal content.
-Only include tasks that have a STRONG, DIRECT connection to the journal entry.
-
-RESPOND ONLY WITH A JSON OBJECT IN THIS EXACT FORMAT:
+Return a JSON object in this EXACT format:
 {
-  "questId": ${miscQuest.id},
-  "isRelevant": false,
-  "relevance": "Only included if specific tasks are relevant",
-  "relevantTasks": []
+    "questId": ${miscQuest.id},
+    "isRelevant": false,
+    "relevance": "Only included if specific tasks are relevant",
+    "relevantTasks": []
 }
 
 If any tasks are relevant, include them like this:
 {
-  "questId": ${miscQuest.id},
-  "isRelevant": true,
-  "relevance": "Tasks related to specific journal mentions",
-  "relevantTasks": [
-    {
-      "taskId": [task id],
-      "name": "task name",
-      "description": "task description",
-      "relevance": "CLEAR explanation of the direct connection to journal content"
-    }
-  ]
-}
-
-Be VERY selective - only include tasks with clear, direct relevance to the journal entry.`;
-
-        try {
-            console.log('📤 Sending misc tasks analysis to AI');
-            const result = await this.model.generateContent(prompt);
-            const aiResponse = this.cleanResponseText(result.response.text().trim());
+    "questId": ${miscQuest.id},
+    "isRelevant": true,
+    "relevance": "Tasks related to specific journal mentions",
+    "relevantTasks": [
+        {
+            "taskId": [task id],
+            "name": "task name",
+            "description": "task description",
+            "relevance": "CLEAR explanation of the direct connection to journal content"
+        }
+    ]
+}`
+                    }
+                ],
+                temperature: 0.7,
+                max_tokens: 2000
+            });
             
+            const aiResponse = this.cleanResponseText(result.choices[0].message?.content ?? '');
             return await this.validateAndRepairJson(aiResponse, miscQuest.id);
         } catch (error) {
             console.error('❌ Error analyzing misc tasks:', error);
@@ -392,61 +441,82 @@ Be VERY selective - only include tasks with clear, direct relevance to the journ
         }
     }
 
-    private async analyzeRegularQuest(journalContent: string, quest: Quest, userId: string): Promise<QuestRelevanceItem | null> {
-        console.log(`\n🔎 Analyzing regular quest: "${quest.title}"`);
+    private async analyzeRegularQuest(journalContent: string, quests: Quest[], userId: string): Promise<QuestRelevanceItem[]> {
+        console.log(`\n🔎 Analyzing ${quests.length} quests for relevance`);
         
-        // Filter tasks by user_id
-        const userTasks = quest.tasks || [];
-
-        const prompt = `You are analyzing if this quest is relevant to a journal entry. Reply ONLY with a JSON object.
-
-Journal Entry: "${journalContent}"
-
-Quest Details:
-Title: ${quest.title}
-Description: ${quest.description || 'No description yet'}
-Tasks:
-${userTasks.map(task => `- ${task.title}: ${task.description || 'No description'}`).join('\n') || 'No tasks'}
-
-Consider:
+        try {
+            const result = await this.openai.chat.completions.create({
+                model: "deepseek-chat",
+                messages: [
+                    {
+                        role: "system",
+                        content: `You are analyzing if any quests are relevant to a journal entry.
+Consider these criteria for each quest:
 1. Direct mentions of the quest title or related keywords
 2. Strong connections to the quest description
 3. Clear references to related activities or goals
 4. Current quest status relevance
 5. Specific mentions or implications related to individual tasks
 
-Be STRICT in your relevance criteria - only include if there's a CLEAR connection.
+Be STRICT in your relevance criteria - only include if there's a CLEAR connection, above 90% certainty.
 
-RESPOND ONLY WITH A JSON OBJECT IN THIS EXACT FORMAT:
-{
-  "questId": ${quest.id},
-  "isRelevant": false,
-  "relevance": null,
-  "relevantTasks": []
-}
+Reply ONLY with a JSON array in the specified format.`
+                    },
+                    {
+                        role: "user",
+                        content: `Analyze this journal entry's relevance to these quests:
 
-OR if relevant:
-{
-  "questId": ${quest.id},
-  "isRelevant": true,
-  "relevance": "detailed explanation of relevance",
-  "relevantTasks": [
+Journal Entry: "${journalContent}"
+
+Quests to Analyze:
+${quests.map(quest => `
+Quest ID: ${quest.id}
+Title: ${quest.title}
+Description: ${quest.description || 'No description yet'}
+Status: ${quest.status}
+Is Main Quest: ${quest.is_main}
+Tasks:
+${quest.tasks?.map(task => `- ${task.title}: ${task.description || 'No description'}`).join('\n') || 'No tasks'}
+---`).join('\n')}
+
+Return a JSON array in this EXACT format:
+[
     {
-      "taskId": [task id],
-      "name": "task name",
-      "description": "task description",
-      "relevance": "clear explanation of direct relevance"
+        "questId": number,
+        "isRelevant": boolean,
+        "relevance": "string explaining why quest is relevant, or null if not",
+        "relevantTasks": [
+            {
+                "taskId": number,
+                "name": "task name", 
+                "description": "task description",
+                "relevance": "clear explanation of direct relevance"
+            }
+        ]
     }
-  ]
-}`;
+]`
+                    }
+                ],
+                temperature: 0.7,
+                max_tokens: 3000
+            });
 
-        try {
-            const result = await this.model.generateContent(prompt);
-            const aiResponse = this.cleanResponseText(result.response.text().trim());
-            return await this.validateAndRepairJson(aiResponse, quest.id);
+            const aiResponse = this.cleanResponseText(result.choices[0].message?.content ?? '');
+            
+            try {
+                const parsedResults = JSON.parse(aiResponse) as QuestRelevanceItem[];
+                // Validate each result
+                const validatedResults = await Promise.all(
+                    parsedResults.map(result => this.validateAndRepairJson(result, result.questId))
+                );
+                return validatedResults.filter((result): result is QuestRelevanceItem => result !== null);
+            } catch (parseError) {
+                console.error('❌ Error parsing quest analysis results:', parseError);
+                return [];
+            }
         } catch (error) {
-            console.error('❌ Error analyzing regular quest:', error);
-            return null;
+            console.error('❌ Error analyzing quests:', error);
+            return [];
         }
     }
 
@@ -468,56 +538,32 @@ OR if relevant:
 
             console.log(`📋 Found ${quests.length} total quests to analyze`);
 
-            // Get the misc quest and main quest
+            // Get the misc quest and separate regular quests
             const miscQuest = await getOrCreateMiscQuest(userId);
-            const mainQuest = quests.find(q => q.is_main);
-            const regularQuests = quests.filter(q => !q.is_main && q.id !== miscQuest.id);
+            const regularQuests = quests.filter(q => q.id !== miscQuest.id);
+            
+            // Filter tasks by user_id for all quests
+            regularQuests.forEach(quest => {
+                quest.tasks = quest.tasks?.filter(task => task.user_id === userId) || [];
+            });
 
             // Store all relevant quest data
-            const relevantQuestData: QuestRelevanceItem[] = [];
+            let relevantQuestData: QuestRelevanceItem[] = [];
 
-            // First analyze main quest if it exists
-            if (mainQuest) {
-                console.log('📋 Analyzing main quest first:', mainQuest.title);
-                mainQuest.tasks = mainQuest.tasks?.filter(task => task.user_id === userId) || [];
-                const mainQuestAnalysis = await this.analyzeRegularQuest(journalContent, mainQuest, userId);
-                if (mainQuestAnalysis?.isRelevant) {
-                    relevantQuestData.push(mainQuestAnalysis);
-                }
+            // First analyze all regular quests together
+            if (regularQuests.length > 0) {
+                console.log('📋 Analyzing all regular quests');
+                const questAnalyses = await this.analyzeRegularQuest(journalContent, regularQuests, userId);
+                relevantQuestData.push(...questAnalyses);
             }
 
             // Then analyze misc quest tasks if it exists and has tasks
-            let miscTaskIds: number[] = [];
             if (miscQuest.tasks && miscQuest.tasks.length > 0) {
                 console.log('📋 Analyzing Misc quest tasks');
                 miscQuest.tasks = miscQuest.tasks.filter(task => task.user_id === userId);
                 const miscAnalysis = await this.analyzeMiscQuestTasks(journalContent, miscQuest, userId);
                 if (miscAnalysis?.isRelevant) {
-                    miscTaskIds = miscAnalysis.relevantTasks.map(task => task.taskId);
                     relevantQuestData.push(miscAnalysis);
-                }
-            }
-
-            // Finally analyze remaining regular quests
-            console.log(`📋 Analyzing ${regularQuests.length} regular quests`);
-            for (const quest of regularQuests) {
-                quest.tasks = quest.tasks?.filter(task => task.user_id === userId) || [];
-                const questAnalysis = await this.analyzeRegularQuest(journalContent, quest, userId);
-                if (questAnalysis?.isRelevant) {
-                    if (miscTaskIds.length > 0) {
-                        const miscQuestData = relevantQuestData.find(q => q.questId === miscQuest?.id);
-                        if (miscQuestData) {
-                            // Remove any misc tasks that are now associated with this specific quest
-                            miscQuestData.relevantTasks = miscQuestData.relevantTasks.filter(
-                                task => !questAnalysis.relevantTasks.some(rt => rt.taskId === task.taskId)
-                            );
-                            if (miscQuestData.relevantTasks.length === 0) {
-                                miscQuestData.isRelevant = false;
-                                miscQuestData.relevance = undefined;
-                            }
-                        }
-                    }
-                    relevantQuestData.push(questAnalysis);
                 }
             }
 
@@ -555,67 +601,56 @@ OR if relevant:
             return null;
         }
 
+        // Only proceed if this is an end of day entry
+        if (source !== 'end-of-day') {
+            console.log('Skipping quest analysis - not an end of day entry');
+            return null;
+        }
+
         try {
             console.log('🔍 Analyzing content for quest updates:', questId);
 
-            // Get the quest and its existing memos
+            // Get the quest
             const quests = await getQuestsWithTasks(userId);
             const quest = quests.find(q => q.id === questId);
-            const memos = await getQuestMemos(questId, userId);
 
             if (!quest) {
                 console.error('Quest not found');
                 return null;
             }
 
-            // Create the system prompt for deepseek-reasoner
-            const systemPrompt = `You are analyzing new content related to a quest, looking for:
-1. Information that should update the quest's description
-2. Important details worth preserving as memos
-3. New context or insights about the quest that advances it's narrative
-
-You will be asked to both update the quest's description/analysis and create new memos if needed.
-For the quest's description, you must make sure not to deviate from the existing narrative arc. Don't delete, contradict or replace existing information unless new content clearly supersedes it.
-Your example should be RPGs, where the quest is a story arc and the memos are important lore or story details.
-As in RPGs, a new quest description should be a continuation of the existing story, not a complete rewrite.
-`;
-
             const result = await this.openai.chat.completions.create({
                 model: "deepseek-reasoner",
                 messages: [
                     {
                         role: "system",
-                        content: systemPrompt
+                        content: `You are analyzing an end-of-day journal entry to suggest updates to a quest's description and analysis.
+1. Information that could update the quest's description
+2. New context or insights about the quest that advances its narrative
+
+Generate suggested updates - these will be saved separately and reviewed by the user.
+Don't try to maintain the exact existing narrative - instead, focus on incorporating the new information
+in a way that adds value.`
                     },
                     {
                         role: "user",
-                        content: `Analyze this new content in relation to an existing quest:
+                        content: `Analyze this end-of-day journal entry in relation to an existing quest:
 
 Quest Details:
 Title: ${quest.title}
 Current Description: ${quest.description || 'No description'}
 Current Analysis: ${quest.analysis || 'No analysis'}
 
-Existing Memos:
-${memos.map(memo => `- ${memo.content}`).join('\n')}
-
 New Content to Analyze:
 ${content}
 
-Reply ONLY with a JSON object in this exact format:
+Generate suggested updates that the user can review. Reply ONLY with a JSON object in this exact format:
 {
     "questId": ${quest.id},
     "updates": {
-        "description": "Updated description incorporating new information concerning the narrative. What you write here will replace the existing description field.",
-        "analysis": "New analysis incorporating insights"
+        "description_sugg": "Suggested updated description incorporating new information from today's reflection",
+        "analysis_sugg": "Suggested new analysis incorporating today's insights"
     },
-    "memos": [
-        {
-            "content": "The memo's content - important information worth preserving",
-            "tags": ["relevant", "tags"],
-            "source": "${source}"
-        }
-    ],
     "confidence": 0.0 to 1.0
 }`
                     }
@@ -624,7 +659,7 @@ Reply ONLY with a JSON object in this exact format:
                 max_tokens: 8000
             });
 
-            const aiResponse = this.cleanResponseText(result.choices[0].message?.content || '');
+            const aiResponse = this.cleanResponseText(result.choices[0].message?.content ?? '');
 
             try {
                 const parsed = JSON.parse(aiResponse) as ContentAnalysis;
@@ -632,85 +667,52 @@ Reply ONLY with a JSON object in this exact format:
                 
                 // Track changes made to report back
                 const changes = {
-                    updatedDescription: false,
-                    updatedAnalysis: false,
-                    addedMemoSuggestions: 0,
+                    updatedDescriptionSugg: false,
+                    updatedAnalysisSugg: false,
                     errors: [] as string[]
                 };
 
-                // Apply updates if confidence is high
+                // Only save suggestions if confidence is high
                 if (parsed.confidence >= 0.8) {
-                    console.log('🔄 Applying high-confidence updates to database');
+                    console.log('🔄 Saving high-confidence update suggestions to database');
                     
                     // Update quest fields if provided
-                    if (parsed.updates.description || parsed.updates.analysis) {
+                    if (parsed.updates.description_sugg || parsed.updates.analysis_sugg) {
                         try {
-                            const updateData: {description?: string, analysis?: string} = {};
+                            const updateData: {description_sugg?: string, analysis_sugg?: string} = {};
                             
-                            if (parsed.updates.description) {
-                                updateData.description = parsed.updates.description;
-                                changes.updatedDescription = true;
-                                console.log('📝 Updated quest description');
+                            if (parsed.updates.description_sugg) {
+                                updateData.description_sugg = parsed.updates.description_sugg;
+                                changes.updatedDescriptionSugg = true;
+                                console.log('📝 Saved suggested quest description');
                             }
                             
-                            if (parsed.updates.analysis) {
-                                updateData.analysis = parsed.updates.analysis;
-                                changes.updatedAnalysis = true;
-                                console.log('📊 Updated quest analysis');
+                            if (parsed.updates.analysis_sugg) {
+                                updateData.analysis_sugg = parsed.updates.analysis_sugg;
+                                changes.updatedAnalysisSugg = true;
+                                console.log('📊 Saved suggested quest analysis');
                             }
                             
                             if (Object.keys(updateData).length > 0) {
                                 const updatedQuest = await this.updateQuest(questId, userId, updateData);
-                                console.log('✅ Quest updated successfully in database:', updatedQuest.id);
+                                console.log('✅ Quest suggestions saved successfully in database:', updatedQuest.id);
                             }
                         } catch (updateError) {
-                            console.error('❌ Error updating quest in database:', updateError);
-                            changes.errors.push(`Failed to update quest: ${updateError instanceof Error ? updateError.message : 'Unknown error'}`);
-                        }
-                    }
-
-                    // Create memo suggestions instead of directly adding them
-                    if (parsed.memos && parsed.memos.length > 0) {
-                        console.log(`📝 Creating ${parsed.memos.length} new memo suggestions`);
-                        
-                        for (const memo of parsed.memos) {
-                            try {
-                                // Ensure tags is an array
-                                const timestamp = new Date().toISOString();
-                                const memoSuggestion: MemoSuggestion = {
-                                    id: `memo-${timestamp}-${Math.random().toString(36).substring(2, 10)}`,
-                                    sourceContent: content,
-                                    sourceType: 'ai',
-                                    timestamp,
-                                    type: 'memo',
-                                    content: memo.content,
-                                    tags: Array.isArray(memo.tags) ? memo.tags : [],
-                                    source: memo.source,
-                                    questId,
-                                    userId
-                                };
-                                
-                                // Add to global suggestion store
-                                globalSuggestionStore.addMemoSuggestion(memoSuggestion);
-                                changes.addedMemoSuggestions++;
-                            } catch (memoError) {
-                                console.error('❌ Error creating memo suggestion:', memoError);
-                                changes.errors.push(`Failed to create memo suggestion: ${memoError instanceof Error ? memoError.message : 'Unknown error'}`);
-                            }
+                            console.error('❌ Error saving quest suggestions to database:', updateError);
+                            changes.errors.push(`Failed to save suggestions: ${updateError instanceof Error ? updateError.message : 'Unknown error'}`);
                         }
                     }
 
                     // Log summary of changes
                     console.log('📋 Summary of changes:');
-                    console.log(`- Description updated: ${changes.updatedDescription}`);
-                    console.log(`- Analysis updated: ${changes.updatedAnalysis}`);
-                    console.log(`- Memo suggestions created: ${changes.addedMemoSuggestions}/${parsed.memos.length}`);
+                    console.log(`- Description suggestion saved: ${changes.updatedDescriptionSugg}`);
+                    console.log(`- Analysis suggestion saved: ${changes.updatedAnalysisSugg}`);
                     if (changes.errors.length > 0) {
                         console.log(`- Errors: ${changes.errors.length}`);
                         changes.errors.forEach(err => console.log(`  - ${err}`));
                     }
                 } else {
-                    console.log(`⚠️ Confidence level too low (${parsed.confidence}), no changes applied`);
+                    console.log(`⚠️ Confidence level too low (${parsed.confidence}), no suggestions saved`);
                 }
 
                 return {
@@ -729,21 +731,4 @@ Reply ONLY with a JSON object in this exact format:
         }
     }
 
-    // Add method to accept a memo suggestion
-    async acceptMemoSuggestion(suggestion: MemoSuggestion): Promise<void> {
-        try {
-            console.log('📝 Creating memo from suggestion:', suggestion.content.substring(0, 30) + '...');
-            await addMemoToQuest(suggestion.questId, suggestion.userId, {
-                content: suggestion.content,
-                tags: suggestion.tags,
-                source: suggestion.source
-            });
-            
-            // Remove the suggestion from the store
-            globalSuggestionStore.removeMemoSuggestion(suggestion.id);
-        } catch (error) {
-            console.error('Error creating memo from suggestion:', error);
-            throw error;
-        }
-    }
 }

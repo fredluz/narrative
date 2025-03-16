@@ -1,4 +1,4 @@
-import { TaskSuggestion, QuestSuggestion, MemoSuggestion } from '@/services/agents/SuggestionAgent';
+import { TaskSuggestion, QuestSuggestion } from '@/services/agents/SuggestionAgent';
 
 /**
  * GlobalSuggestionStore provides a centralized singleton for storing and accessing
@@ -12,13 +12,11 @@ class GlobalSuggestionStore {
   // The actual suggestion arrays
   private taskSuggestions: TaskSuggestion[] = [];
   private questSuggestions: QuestSuggestion[] = [];
-  private memoSuggestions: MemoSuggestion[] = [];
   
   // Callback handlers for data changes
   private updateHandlers: Array<(
     tasks: TaskSuggestion[], 
     quests: QuestSuggestion[],
-    memos: MemoSuggestion[]
   ) => void> = [];
   
   // Private constructor to prevent direct instantiation
@@ -40,13 +38,13 @@ class GlobalSuggestionStore {
    * Register a handler to be called whenever suggestions change
    */
   registerUpdateHandler(
-    handler: (tasks: TaskSuggestion[], quests: QuestSuggestion[], memos: MemoSuggestion[]) => void
+    handler: (tasks: TaskSuggestion[], quests: QuestSuggestion[], ) => void
   ): () => void {
     console.log('🌐 [GlobalSuggestionStore] Registering new update handler');
     this.updateHandlers.push(handler);
     
     // Call the handler immediately with current data
-    handler([...this.taskSuggestions], [...this.questSuggestions], [...this.memoSuggestions]);
+    handler([...this.taskSuggestions], [...this.questSuggestions]);
     
     // Return a function to unregister this handler
     return () => {
@@ -62,12 +60,11 @@ class GlobalSuggestionStore {
     console.log('🌐 [GlobalSuggestionStore] Notifying handlers of update:', {
       taskCount: this.taskSuggestions.length,
       questCount: this.questSuggestions.length,
-      memoCount: this.memoSuggestions.length
     });
     
     for (const handler of this.updateHandlers) {
       try {
-        handler([...this.taskSuggestions], [...this.questSuggestions], [...this.memoSuggestions]);
+        handler([...this.taskSuggestions], [...this.questSuggestions]);
       } catch (error) {
         console.error('🌐 [GlobalSuggestionStore] Error in update handler:', error);
       }
@@ -93,15 +90,6 @@ class GlobalSuggestionStore {
   }
 
   /**
-   * Add a memo suggestion to the store
-   */
-  addMemoSuggestion(memo: MemoSuggestion): void {
-    console.log('🌐 [GlobalSuggestionStore] Adding memo suggestion:', memo.content.substring(0, 30) + '...');
-    this.memoSuggestions = [...this.memoSuggestions, memo];
-    this.notifyHandlers();
-  }
-  
-  /**
    * Remove a task suggestion by ID
    */
   removeTaskSuggestion(taskId: string): void {
@@ -119,14 +107,6 @@ class GlobalSuggestionStore {
     this.notifyHandlers();
   }
 
-  /**
-   * Remove a memo suggestion by ID
-   */
-  removeMemoSuggestion(memoId: string): void {
-    console.log('🌐 [GlobalSuggestionStore] Removing memo suggestion:', memoId);
-    this.memoSuggestions = this.memoSuggestions.filter(memo => memo.id !== memoId);
-    this.notifyHandlers();
-  }
   
   /**
    * Get all task suggestions
@@ -143,33 +123,23 @@ class GlobalSuggestionStore {
   }
 
   /**
-   * Get all memo suggestions
-   */
-  getMemoSuggestions(): MemoSuggestion[] {
-    return [...this.memoSuggestions];
-  }
-  
-  /**
    * Clear all suggestions
    */
   clearSuggestions(): void {
     console.log('🌐 [GlobalSuggestionStore] Clearing all suggestions');
     this.taskSuggestions = [];
     this.questSuggestions = [];
-    this.memoSuggestions = [];
     this.notifyHandlers();
   }
   
   /**
-   * Add a suggestion (either task, quest, or memo)
+   * Add a suggestion (either task or quest)
    */
-  addSuggestion(suggestion: TaskSuggestion | QuestSuggestion | MemoSuggestion): void {
+  addSuggestion(suggestion: TaskSuggestion | QuestSuggestion): void {
     if (suggestion.type === 'task') {
       this.addTaskSuggestion(suggestion as TaskSuggestion);
     } else if (suggestion.type === 'quest') {
       this.addQuestSuggestion(suggestion as QuestSuggestion);
-    } else if (suggestion.type === 'memo') {
-      this.addMemoSuggestion(suggestion as MemoSuggestion);
     }
   }
 }

@@ -36,10 +36,12 @@ export interface Quest extends BaseEntity {
   title: string;
   tagline: string;
   description?: string;
+  description_sugg?: string;
+  analysis?: string;
+  analysis_sugg?: string;
   is_main: boolean;
   status: 'Active' | 'On-Hold' | 'Completed';
   tasks?: Task[];
-  analysis?: string;
   parent_quest_id?: number;
   start_date?: string;
   end_date?: string;
@@ -49,13 +51,6 @@ export interface Quest extends BaseEntity {
     name: string;
     description: string;
     relevance: string;
-  }[];
-  memos?: {
-    id: string;
-    content: string;
-    created_at: string;
-    source: string;
-    context?: string;
   }[];
 }
 

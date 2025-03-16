@@ -18,7 +18,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { useSuggestions } from '@/contexts/SuggestionContext';
 import TriangularSpinner from '../loading/TriangularSpinner';
 import CompactTaskSuggestion from '../suggestions/CompactTaskSuggestion';
-import { TaskSuggestion, QuestSuggestion, MemoSuggestion } from '@/services/agents/SuggestionAgent';
+import { TaskSuggestion, QuestSuggestion } from '@/services/agents/SuggestionAgent';
 import { CreateTaskModal } from '@/components/modals/CreateTaskModal';
 import { fetchQuests } from '@/services/questsService';
 
@@ -60,14 +60,11 @@ export function ChatInterface({
   const { 
     taskSuggestions, 
     questSuggestions,
-    memoSuggestions, // Add memoSuggestions
     acceptTaskSuggestion, 
     rejectTaskSuggestion, 
     upgradeTaskToQuest,
     rejectQuestSuggestion,
     acceptQuestSuggestion,
-    acceptMemoSuggestion, // Add memo handlers
-    rejectMemoSuggestion
   } = useSuggestions();
 
   // Load quests for task modal
@@ -158,19 +155,6 @@ export function ChatInterface({
     rejectQuestSuggestion(questId);
   };
 
-  // Add handlers for memo suggestions
-  const handleAcceptMemo = (memo: MemoSuggestion) => {
-    console.log('✅ [ChatInterface] Accepting memo:', memo.content.substring(0, 30) + '...');
-    if (userId) {
-      acceptMemoSuggestion(memo);
-    }
-  };
-
-  const handleRejectMemo = (memoId: string) => {
-    console.log('❌ [ChatInterface] Rejecting memo:', memoId);
-    rejectMemoSuggestion(memoId);
-  };
-  
   // Clear message when session ends
   useEffect(() => {
     if (sessionEnded) {
@@ -260,7 +244,7 @@ export function ChatInterface({
     });
   }, [taskSuggestions, questSuggestions]);
   // Check if we have any suggestions to show
-  const hasSuggestions = taskSuggestions.length > 0 || questSuggestions.length > 0 || memoSuggestions.length > 0;
+  const hasSuggestions = taskSuggestions.length > 0 || questSuggestions.length > 0 ;
 
   // Update session processing state when session ends
   useEffect(() => {
@@ -632,7 +616,7 @@ export function ChatInterface({
                       fontSize: 14,
                       textTransform: 'uppercase',
                     }}>
-                      Suggestions ({taskSuggestions.length + questSuggestions.length + memoSuggestions.length})
+                      Suggestions ({taskSuggestions.length + questSuggestions.length})
                     </Text>
                   </View>
                 </View>
@@ -763,101 +747,9 @@ export function ChatInterface({
                       ))}
                     </View>
                   )}
-
-                  {/* Memo Suggestions */}
-                  {memoSuggestions.length > 0 && (
-                    <View>
-                      <Text style={{ 
-                        color: '#AAA', 
-                        fontSize: 12, 
-                        marginBottom: 8,
-                        paddingHorizontal: 4,
-                      }}>
-                        MEMOS
-                      </Text>
-                      
-                      {memoSuggestions.map((memo) => (
-                        <View key={memo.id} style={{ marginBottom: 8 }}>
-                          <View style={{
-                            backgroundColor: 'rgba(20, 20, 20, 0.95)',
-                            borderRadius: 6,
-                            borderLeftWidth: 3,
-                            borderColor: themeColor,
-                            shadowColor: '#000',
-                            shadowOffset: { width: 0, height: 3 },
-                            shadowOpacity: 0.3,
-                            shadowRadius: 4,
-                            elevation: 6,
-                            overflow: 'hidden',
-                          }}>
-                            <View style={{
-                              flexDirection: 'row',
-                              alignItems: 'center',
-                              padding: 10,
-                              paddingHorizontal: 12,
-                              borderBottomWidth: 1,
-                              borderBottomColor: 'rgba(255, 255, 255, 0.1)',
-                            }}>
-                              <MaterialIcons name="note" size={16} color={themeColor} />
-                              <Text style={{
-                                fontSize: 12,
-                                fontWeight: 'bold',
-                                marginLeft: 6,
-                                flex: 1,
-                                color: '#AAA',
-                              }}>
-                                Memo
-                              </Text>
-                              <TouchableOpacity style={{ padding: 2 }} onPress={() => handleRejectMemo(memo.id)}>
-                                <MaterialIcons name="close" size={16} color="#999" />
-                              </TouchableOpacity>
-                            </View>
-                            
-                            <View style={{ padding: 12 }}>
-                              <Text style={{
-                                color: '#AAA',
-                                fontSize: 12,
-                                marginBottom: 8
-                              }} numberOfLines={3}>
-                                {memo.content}
-                              </Text>
-                            </View>
-                            
-                            <View style={{
-                              flexDirection: 'row',
-                              borderTopWidth: 1,
-                              borderTopColor: 'rgba(255, 255, 255, 0.1)',
-                            }}>
-                              <TouchableOpacity
-                                style={{
-                                  flexDirection: 'row',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  padding: 8,
-                                  backgroundColor: themeColor,
-                                  flex: 1
-                                }}
-                                onPress={() => handleAcceptMemo(memo)}
-                              >
-                                <MaterialIcons name="check" size={14} color="#fff" />
-                                <Text style={{
-                                  color: '#FFF',
-                                  fontSize: 12,
-                                  marginLeft: 4
-                                }}>
-                                  Accept
-                                </Text>
-                              </TouchableOpacity>
-                            </View>
-                          </View>
-                        </View>
-                      ))}
-                    </View>
-                  )}
                 </ScrollView>
               </View>
             )}
-
             {/* Chat input */}
             <View style={{
               flexDirection: 'row',
