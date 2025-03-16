@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import { GoogleGenerativeAI, type GenerativeModel, SchemaType } from "@google/generative-ai";
 import { 
   createQuest,
   updateQuest,
@@ -48,6 +49,8 @@ interface ContentAnalysis {
 export class QuestAgent {
     private openai: OpenAI;
     private actuallyOAI: OpenAI;
+    private genAI: GoogleGenerativeAI;
+    private geminiModel: GenerativeModel;
 
     constructor() {
         this.openai = new OpenAI({
@@ -56,9 +59,15 @@ export class QuestAgent {
             dangerouslyAllowBrowser: true
         });
         this.actuallyOAI = new OpenAI({
-            apiKey: process.env.OPENAI_API_KEY,
+            apiKey: process.env.EXPO_PUBLIC_OPENAI_API_KEY,
             dangerouslyAllowBrowser: true
-        })
+        });
+        
+        // Initialize Gemini
+        this.genAI = new GoogleGenerativeAI(process.env.EXPO_PUBLIC_GEMINI_API_KEY || '');
+        this.geminiModel = this.genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+        
+        console.log('🔧 [QuestAgent] Initialized with OpenAI, OpenAI actual, and Gemini models');
     }
 
     async createQuest(userId: string, questData: {
@@ -456,32 +465,71 @@ Description: ${task.description || 'No description'}`).join('\n\n')}`
     }
 
     private async analyzeRegularQuest(journalContent: string, quests: Quest[], userId: string): Promise<QuestRelevanceItem[]> {
-        console.log(`\n🔎 Analyzing ${quests.length} quests for relevance`);
+        console.log(`\n🔎 Analyzing ${quests.length} quests for relevance using Gemini model`);
         
         try {
-            const result = await this.actuallyOAI.responses.create({
-                model: "gpt-4o-mini-2024-07-18",
-                input: [
-                    {
-                        role: "developer",
-                        content: [
-                            {
-                                type: "input_text",
-                                text: `You are analyzing if any quests are relevant to a journal entry.
-Consider these criteria for each quest:
-1. Direct mentions of the quest title or related keywords
-2. Strong connections to the quest description
-3. Clear references to related activities or goals
-4. Current quest status relevance
-5. Specific mentions or implications related to individual tasks
-
-Be STRICT in your relevance criteria - only include if there's a CLEAR connection, above 90% certainty.`
+            // Define the schema for structured output that matches QuestRelevanceItem[]
+            const questRelevanceSchema = {
+                type: SchemaType.ARRAY as const,
+                description: "Analysis of quests' relevance to journal entry",
+                items: {
+                    type: SchemaType.OBJECT as const,
+                    properties: {
+                        questId: {
+                            type: SchemaType.INTEGER as const,
+                            description: "ID of the quest being analyzed"
+                        },
+                        isRelevant: {
+                            type: SchemaType.BOOLEAN as const,
+                            description: "Whether the quest is relevant to the journal entry"
+                        },
+                        relevance: {
+                            type: SchemaType.STRING as const,
+                            description: "Explanation of why the quest is relevant, or null if not relevant",
+                            nullable: true
+                        },
+                        relevantTasks: {
+                            type: SchemaType.ARRAY as const,
+                            description: "List of tasks from this quest that are relevant to the journal entry",
+                            items: {
+                                type: SchemaType.OBJECT as const,
+                                properties: {
+                                    taskId: {
+                                        type: SchemaType.INTEGER as const,
+                                        description: "ID of the relevant task"
+                                    },
+                                    name: {
+                                        type: SchemaType.STRING as const,
+                                        description: "Title of the task"
+                                    },
+                                    description: {
+                                        type: SchemaType.STRING as const,
+                                        description: "Description of the task"
+                                    },
+                                    relevance: {
+                                        type: SchemaType.STRING as const,
+                                        description: "Explanation of why this task is relevant to the journal entry"
+                                    }
+                                },
                             }
-                        ]
+                        }
                     },
-                    {
-                        role: "user",
-                        content: `Analyze this journal entry's relevance to these quests:
+                    required: ["questId", "isRelevant", "relevantTasks", "relevance"]
+                }
+            };
+
+            // Create a model with the schema for structured output
+            const structuredModel = this.genAI.getGenerativeModel({
+                model: "gemini-2.0-flash",
+                generationConfig: {
+                    temperature: 0.4,
+                    responseMimeType: "application/json",
+                    responseSchema: questRelevanceSchema
+                }
+            });
+
+            // Prepare the prompt text
+            const promptText = `Analyze this journal entry's relevance to these quests:
 
 Journal Entry: "${journalContent}"
 
@@ -493,53 +541,40 @@ Description: ${quest.description || 'No description yet'}
 Status: ${quest.status}
 Is Main Quest: ${quest.is_main}
 Tasks:
-${quest.tasks?.map(task => `- ${task.title}: ${task.description || 'No description'}`).join('\n') || 'No tasks'}
----`).join('\n')}`
-                    }
-                ],
-                text: {
-                    format: {
-                        type: "json_schema",
-                        name: "quests_relevance",
-                        strict: true,
-                       schema: {
-                            type: "array",
-                            items: {
-                                type: "object",
-                                properties: {
-                                    questId: { type: "number" },
-                                    isRelevant: { type: "boolean" },
-                                    relevance: { type: ["string", "null"] }, // Changed from nullable: true
-                                    relevantTasks: {
-                                        type: "array",
-                                        items: {
-                                            type: "object",
-                                            properties: {
-                                                taskId: { type: "number" },
-                                                name: { type: "string" },
-                                                description: { type: "string" },
-                                                relevance: { type: "string" }
-                                            },
-                                            required: ["taskId", "name", "description", "relevance"]
-                                        }
-                                    }
-                                }
-                            },
-                            required: ["questId", "isRelevant", "relevantTasks", "relevance"], // Added relevance to required fields
-                            additionalProperties: false
-                        }
-                    },
-                },
-                temperature: 0.4
-            });
+${quest.tasks?.map(task => `- Task ID: ${task.id}, Title: ${task.title}, Description: ${task.description || 'No description'}`).join('\n') || 'No tasks'}
+---`).join('\n')}
+
+Analyze criteria:
+1. Direct mentions of quest title or related keywords
+2. Strong connections to quest description
+3. Clear references to related activities or goals
+4. Current quest status relevance
+5. Specific mentions related to individual tasks
+
+IMPORTANT: Be VERY STRICT in your relevance criteria - only include quests or tasks with CLEAR, DIRECT connections, above 90% certainty.
+For each quest, determine if it's relevant and which specific tasks are mentioned or implied in the journal entry.`;
+
+            // Generate content with structured output
+            const result = await structuredModel.generateContent(promptText);
+            const responseText = result.response.text();
             
-            // Response is already a valid JSON array
-            const parsedResults = result.output_text ? JSON.parse(result.output_text) as QuestRelevanceItem[] : [];
+            if (!responseText) {
+                console.log('⚠️ Empty response from Gemini for quest analysis');
+                return [];
+            }
             
-            // Since the schema ensures the correct format, we can skip validation
-            return parsedResults;
+            // Parse the JSON response - should already be well-structured
+            try {
+                const parsedResults = JSON.parse(responseText) as QuestRelevanceItem[];
+                console.log(`✅ Gemini returned analysis for ${parsedResults.length} quests`);
+                return parsedResults;
+            } catch (parseError) {
+                console.error('❌ Error parsing Gemini response:', parseError);
+                console.error('Raw response:', responseText);
+                return [];
+            }
         } catch (error) {
-            console.error('❌ Error analyzing quests:', error);
+            console.error('❌ Error analyzing quests with Gemini:', error);
             return [];
         }
     }
