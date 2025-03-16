@@ -1,6 +1,7 @@
 import OpenAI from 'openai';
 import { QuestAgent } from './QuestAgent';
 import { journalService } from '../journalService';
+import { eventsService, EVENT_NAMES } from '../eventsService';
 
 export class JournalAgent {
     private openai: OpenAI;
@@ -13,15 +14,30 @@ export class JournalAgent {
         dangerouslyAllowBrowser: true
       });
       this.questAgent = new QuestAgent();
+      // Remove suggestionAgent initialization
+    }
+
+    // Helper method to trigger suggestion analysis via SuggestionContext
+    private emitJournalAnalysisEvent(entry: string, userId: string): void {
+      try {
+        console.log('📣 Emitting analyzeJournalEntry event for SuggestionContext');
+        eventsService.emit(EVENT_NAMES.ANALYZE_JOURNAL_ENTRY, { entry, userId });
+      } catch (error) {
+        console.error('❌ Error emitting journal analysis event:', error);
+      }
     }
 
     async generateResponse(currentEntry: string, userId: string, previousCheckupsContext?: string): Promise<string> {
       console.log('🚀 JournalAgent.generateResponse called with entry:', currentEntry);
-      console.log('🔄 Previous context available:', !!previousCheckupsContext);
       
       try {
-        // Replace direct SQL call with journalService function
-        const recentEntries = await journalService.getRecentEntries(3, userId,);
+        // Start task analysis in parallel - don't await it
+        console.log('🔍 Starting task suggestion analysis in parallel');
+        this.emitJournalAnalysisEvent(currentEntry, userId);
+        
+        // Continue with response generation immediately
+        console.log('🔄 Proceeding with response generation');
+        const recentEntries = await journalService.getRecentEntries(3, userId);
 
         // Format context for OpenAI, now including timestamp information
         const context = recentEntries?.map(entry => ({
@@ -224,8 +240,6 @@ export class JournalAgent {
   
       // Fifth: Current entry (repeated at end for LLM focus)
       prompt += `Here's the user's latest checkup entry that you need to respond to:\n[${currentDate}, ${currentTime}] USER: ${currentEntry}\n`;
-  
-      console.log('📎 Checkup Response prompt:', prompt);
       return prompt;
     }
 

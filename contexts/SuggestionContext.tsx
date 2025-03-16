@@ -4,6 +4,9 @@ import { Quest, Task } from '@/app/types';
 import { globalSuggestionStore } from '@/services/globalSuggestionStore';
 import { useSupabase } from './SupabaseContext';
 import { QuestAgent } from '@/services/agents/QuestAgent';
+import { updateTask } from '@/services/tasksService';
+import { fetchQuests } from '@/services/questsService';
+import { eventsService, EVENT_NAMES } from '@/services/eventsService';
 
 type Suggestion = TaskSuggestion | QuestSuggestion ;
 
@@ -147,22 +150,141 @@ export const SuggestionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     };
   }, [currentTaskIndex, currentQuestIndex]);
   
-  // Add event listener for new suggestions from ChatAgent
-  useEffect(() => {
-    const handleNewSuggestions = (event: CustomEvent<{ suggestions: TaskSuggestion[] }>) => {
-      console.log('📢 [SuggestionContext] Received new suggestions from ChatAgent:', event.detail.suggestions);
-      event.detail.suggestions.forEach(suggestion => {
-        addSuggestionToQueue(suggestion);
-      });
-    };
+  // Event handler type definitions
+  type JournalAnalysisHandler = (data: { entry: string; userId: string }) => void;
+  type SuggestionsHandler = (data: { suggestions: Suggestion[] }) => void;
 
-    // Add event listener with type assertion
-    window.addEventListener('newSuggestions', handleNewSuggestions as EventListener);
-    
-    return () => {
-      window.removeEventListener('newSuggestions', handleNewSuggestions as EventListener);
-    };
+  // Event handler types with proper typing
+  type JournalAnalysisEventData = {
+    entry: string;
+    userId: string;
+  };
+
+  type NewSuggestionsEventData = {
+    suggestions: Suggestion[];
+  };
+
+  // Create stable references to handlers using useCallback with proper types
+  const handleJournalAnalysis = useCallback((data: JournalAnalysisEventData) => {
+    // Only process if we're not already analyzing to prevent recursion
+    if (isAnalyzing) {
+      console.log('🚫 Already analyzing, skipping duplicate event');
+      return;
+    }
+
+    console.log('📢 [SuggestionContext] Processing journal analysis');
+    setIsAnalyzing(true);
+      
+    // Process using async IIFE to handle async operations
+    (async () => {
+      try {
+        // 1. First generate the basic task suggestion
+        console.log('🎯 Generating initial task suggestion');
+        const suggestion = await suggestionAgent.generateTaskSuggestion(data.entry, data.userId, {
+          sourceMessage: data.entry,
+          relatedMessages: [],
+          confidence: 0.7,
+          timing: 'short-term'
+        });
+
+        if (!suggestion) {
+          console.log('No task suggestion generated');
+          return;
+        }
+
+        // 2. Check for similar existing tasks
+        console.log('🔍 Checking for similar existing tasks');
+        const similarityResult = await suggestionAgent.checkForDuplicatesBeforeShowing(suggestion, data.userId);
+
+        // 3. Handle the result based on similarity and continuation
+        if (similarityResult.isMatch && similarityResult.existingTask) {
+          if (similarityResult.isContinuation) {
+            // This is a continuation of an existing task
+            console.log('🔄 Task identified as continuation:', similarityResult.continuationReason);
+            
+            // Mark the previous task as done
+            const updateData = {
+              status: 'Done' as const,
+              updated_at: new Date().toISOString()
+            };
+            await updateTask(similarityResult.existingTask.id, updateData, data.userId);
+            
+            // Get quest context if available
+            const questContext = similarityResult.existingTask.quest_id ? 
+              await fetchQuests(data.userId).then(quests => 
+                quests.find(q => q.id === similarityResult.existingTask?.quest_id)
+              ) : undefined;
+            
+            // Regenerate the suggestion with continuation context
+            const enhancedSuggestion = await suggestionAgent.regenerateTaskWithContinuationContext(
+              suggestion,
+              similarityResult.existingTask,
+              questContext
+            );
+            
+            if (enhancedSuggestion) {
+              // Add the enhanced suggestion to queue
+              console.log('✨ Adding continuation task suggestion to queue');
+              addSuggestionToQueue(enhancedSuggestion);
+            }
+          } else if (similarityResult.matchConfidence > 0.7) {
+            // If we found a very similar task with high confidence, convert to edit suggestion
+            console.log(`Found similar existing task (${similarityResult.matchConfidence.toFixed(2)} confidence). Converting to edit suggestion.`);
+            const editSuggestion = await suggestionAgent.convertToEditSuggestion(suggestion, similarityResult.existingTask);
+            addSuggestionToQueue(editSuggestion);
+          }
+        } else {
+          // 4. If no similar task found, find the best quest for this task
+          console.log('🔄 Finding best quest match for new task');
+          const questId = await suggestionAgent.findBestQuestForTask(suggestion, data.userId);
+          
+          // 5. Update the suggestion with the found quest ID
+          const finalSuggestion = {
+            ...suggestion,
+            quest_id: questId
+          };
+
+          // 6. Add the suggestion to the queue
+          console.log('✨ Adding new task suggestion to queue');
+          addSuggestionToQueue(finalSuggestion);
+        }
+      } catch (error) {
+        console.error('❌ Error in analyzeJournalEntry:', error);
+      } finally {
+        setIsAnalyzing(false);
+      }
+    })();
+  }, [suggestionAgent, addSuggestionToQueue, isAnalyzing]);
+
+  const handleNewSuggestions = useCallback((data: NewSuggestionsEventData) => {
+    console.log('📢 [SuggestionContext] Received new suggestions:', data.suggestions);
+    data.suggestions.forEach((suggestion: Suggestion) => {
+      addSuggestionToQueue(suggestion);
+    });
   }, [addSuggestionToQueue]);
+
+  // Subscribe to events with proper cleanup
+  useEffect(() => {
+    console.log('🔌 [SuggestionContext] Setting up event subscriptions');
+    
+    // Add listeners and store the returned EventEmitter instances
+    const journalListener = eventsService.addListener(
+      EVENT_NAMES.ANALYZE_JOURNAL_ENTRY, 
+      handleJournalAnalysis
+    );
+    
+    const suggestionsListener = eventsService.addListener(
+      EVENT_NAMES.NEW_SUGGESTIONS, 
+      handleNewSuggestions
+    );
+    
+    // Cleanup function uses the stored listeners
+    return () => {
+      console.log('🧹 [SuggestionContext] Cleaning up event subscriptions');
+      eventsService.removeListener(EVENT_NAMES.ANALYZE_JOURNAL_ENTRY, handleJournalAnalysis);
+      eventsService.removeListener(EVENT_NAMES.NEW_SUGGESTIONS, handleNewSuggestions);
+    };
+  }, [handleJournalAnalysis, handleNewSuggestions]);
 
   // Compute current suggestions based on indices
   const currentTaskSuggestion = 
@@ -191,18 +313,12 @@ export const SuggestionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     
     // Analysis methods - these still use SuggestionAgent for LLM operations
     analyzeJournalEntry: async (entry: string, userId: string) => {
-      console.log('📝 [SuggestionContext] Analyzing journal entry');
-      setIsAnalyzing(true);
-      try {
-        const result = await suggestionAgent.analyzeJournalEntry(entry, userId);
-        if (result) {
-          addSuggestionToQueue(result);
-        }
-      } finally {
-        setIsAnalyzing(false);
+      // Only emit event if not already analyzing to prevent recursion
+      if (!isAnalyzing) {
+        eventsService.emit(EVENT_NAMES.ANALYZE_JOURNAL_ENTRY, { entry, userId });
       }
     },
-    
+
     // Navigation methods
     nextTaskSuggestion: () => {
       console.log('⏭️ [SuggestionContext] Moving to next task suggestion');

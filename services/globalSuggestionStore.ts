@@ -76,6 +76,15 @@ class GlobalSuggestionStore {
    */
   addTaskSuggestion(task: TaskSuggestion): void {
     console.log('🌐 [GlobalSuggestionStore] Adding task suggestion:', task.title);
+    
+    // DEBUG: Log the full task object to see quest_id
+    console.log('Task details:', JSON.stringify({
+      id: task.id,
+      title: task.title,
+      quest_id: task.quest_id,
+      sourceType: task.sourceType
+    }, null, 2));
+    
     this.taskSuggestions = [...this.taskSuggestions, task];
     this.notifyHandlers();
   }
@@ -136,10 +145,14 @@ class GlobalSuggestionStore {
    * Add a suggestion (either task or quest)
    */
   addSuggestion(suggestion: TaskSuggestion | QuestSuggestion): void {
+    console.log(`🌐 [GlobalSuggestionStore] addSuggestion called : ${suggestion}`);
+    
     if (suggestion.type === 'task') {
       this.addTaskSuggestion(suggestion as TaskSuggestion);
     } else if (suggestion.type === 'quest') {
       this.addQuestSuggestion(suggestion as QuestSuggestion);
+    } else {
+      console.error('🌐 [GlobalSuggestionStore] Unknown suggestion :', suggestion);
     }
   }
 }

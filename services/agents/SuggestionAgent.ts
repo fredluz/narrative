@@ -1,6 +1,6 @@
 // filepath: c:\Users\ThinkPad\Code\QuestLogMockupsWL\QuestLog\services\agents\SuggestionAgent.ts
 import OpenAI from 'openai';
-import { GoogleGenerativeAI, type GenerativeModel } from "@google/generative-ai";
+import { GoogleGenerativeAI, type GenerativeModel, SchemaType } from "@google/generative-ai";
 import { performanceLogger } from '@/utils/performanceLogger';
 import { Quest, Task } from '@/app/types';
 import { createTask, fetchTasks, updateTask, fetchTasksByQuest } from '@/services/tasksService'; // Import fetchTasksByQuest
@@ -38,6 +38,7 @@ export interface TaskSuggestion {
     location?: string;
     priority?: 'high' | 'medium' | 'low';
   };
+  previousTaskId?: number; // Reference to the previous task for continuation
 }
 
 /**
@@ -89,6 +90,8 @@ interface TaskSimilarityResult {
   isMatch: boolean;
   existingTask: Task | null;
   matchConfidence: number; // 0 to 1
+  isContinuation?: boolean; // New field to indicate if this is a continuation
+  continuationReason?: string; // Explanation of why this is considered a continuation
 }
 
 // Interface for task update field generation
@@ -142,43 +145,6 @@ export class SuggestionAgent {
     return SuggestionAgent.instance;
   }
 
-  /**
-   * Analyzes a journal entry to identify potential task suggestions
-   * @param entry The journal entry content to analyze
-   * @param userId The user's ID
-   * @returns A task suggestion if one is found, null otherwise
-   */
-  async analyzeJournalEntry(entry: string, userId: string): Promise<TaskSuggestion | null> {
-    performanceLogger.startOperation('analyzeJournalEntry');
-    try {
-      if (!userId) {
-        console.error('User ID is required for analyzeJournalEntry');
-        return null;
-      }
-      
-      console.log('🔍 SuggestionAgent: Analyzing checkup entry for potential tasks');
-      
-      // Generate task suggestion directly
-      const suggestion = await this.generateTaskSuggestion(entry, userId, {
-        sourceMessage: entry,
-        relatedMessages: [], // Single entry context
-        confidence: 0.7,
-        timing: 'short-term'
-      });
-      
-      // If we have a task suggestion, check if it's a duplicate before returning
-      if (suggestion) {
-        return await this.checkForDuplicatesBeforeShowing(suggestion, userId);
-      }
-      
-      return null;
-    } catch (error) {
-      console.error('Error in analyzeJournalEntry:', error);
-      return null;
-    } finally {
-      performanceLogger.endOperation('analyzeJournalEntry');
-    }
-  }
 
   /**
    * Generates a task suggestion from content
@@ -186,7 +152,7 @@ export class SuggestionAgent {
    * @param userId The user's ID
    * @returns A task suggestion or null
    */
-  private async generateTaskSuggestion(
+  public async generateTaskSuggestion(
     content: string,
     userId: string,
     context?: TaskContext
@@ -459,7 +425,7 @@ IMPORTANT:
    * @param userId The user's ID
    * @returns Quest ID of the best matching quest, or misc quest if no good match
    */
-  private async findBestQuestForTask(suggestion: TaskSuggestion, userId: string): Promise<number> {
+  public async findBestQuestForTask(suggestion: TaskSuggestion, userId: string): Promise<number> {
     try {
       console.log('🔍 Finding best quest for task:', suggestion.title);
       
@@ -487,200 +453,89 @@ Status: ${quest.status}
 Is Main: ${quest.is_main ? 'Yes' : 'No'}
 `).join('\n---\n');
 
-      const response = await this.openai.responses.create({
-        model: "deepseek-chat",
-        input: [
-          {
-            role: "developer",
-            content: [
-              {
-                type: "input_text",
-                text: `You are analyzing a new task to determine which existing quest it belongs to.
+      // Define the schema for structured output
+      const questMatcherSchema = {
+        type: SchemaType.OBJECT as const,
+        description: "Quest matching analysis result",
+        properties: {
+          questId: {
+            type: SchemaType.INTEGER as const,
+            description: "The ID of the best matching quest, or null if no good match",
+            nullable: true
+          },
+          confidence: {
+            type: SchemaType.NUMBER as const,
+            description: "How confident the model is in this match (0-1)",
+          },
+          reason: {
+            type: SchemaType.STRING as const,
+            description: "Brief explanation of why this quest is the best fit"
+          }
+        },
+        required: ["questId", "confidence", "reason"]
+      };
+
+      // Create a model with the schema for structured output
+      const structuredModel = this.genAI.getGenerativeModel({
+        model: "gemini-2.0-flash",
+        generationConfig: {
+          temperature: 0.4,
+          responseMimeType: "application/json",
+          responseSchema: questMatcherSchema
+        }
+      });
+
+      // Prepare the prompt text
+      const promptText = `You are analyzing a new task to determine which existing quest it belongs to.
 Consider these criteria:
 1. Theme alignment - does the task directly relate to the quest's purpose?
 2. Scope fit - is the task at the right level of detail for the quest?
-3. Timeline alignment - does the task fit within the quest's timeframe?`
-              }
-            ]
-          },
-          {
-            role: "user",
-            content: `Find the best quest for this task:
+3. Timeline alignment - does the task fit within the quest's timeframe?
+
+Find the best quest for this task:
 
 New Task:
 ${taskInfo}
 
 Available Quests:
-${questsInfo}`
-          }
-        ],
-        text: {
-          format: {
-            type: "json_schema",
-            name: "quest_matcher",
-            schema: {
-              type: "object",
-              properties: {
-                questId: { 
-                  type: ["number", "null"],
-                  description: "The ID of the best matching quest, or null if no good match" 
-                },
-                confidence: { 
-                  type: "number", 
-                  minimum: 0,
-                  maximum: 1,
-                  description: "How confident you are in this match (0-1)"
-                },
-                reason: { 
-                  type: "string",
-                  description: "Brief explanation of why this quest is the best fit" 
-                }
-              },
-              required: ["questId", "confidence", "reason"],
-              additionalProperties: false
-            },
-            strict: true
-          }
-        },
-        temperature: 0.4
-      });
+${questsInfo}`;
 
-      // Results are already validated against our schema
-      const parsed = response.output_text ? JSON.parse(response.output_text) : null;
+      // Generate content with structured output
+      const result = await structuredModel.generateContent(promptText);
+      const responseText = result.response.text();
       
-      if (!parsed) {
-        console.log('Empty response from AI for quest matching');
+      if (!responseText) {
+        console.log('⚠️ Empty response from Gemini for quest matching');
         const miscQuest = await getOrCreateMiscQuest(userId);
         return miscQuest.id;
       }
       
-      // If a quest was identified with good confidence, use it
-      if (parsed.questId && parsed.confidence > 0.7) {
-        console.log(`Found matching quest ID ${parsed.questId} with confidence ${parsed.confidence}`);
-        console.log(`Reason: ${parsed.reason}`);
-        return parsed.questId;
-      } else {
-        console.log('No confident quest match found. Using misc quest.');
-        console.log(`Reason: ${parsed.reason}`);
+      // Parse the JSON response - should already be well-structured
+      try {
+        const parsed = JSON.parse(responseText);
+        console.log(`✅ Gemini returned quest match analysis with confidence: ${parsed.confidence}`);
+        
+        // If a quest was identified with good confidence, use it
+        if (parsed.questId && parsed.confidence > 0.7) {
+          console.log(`Found matching quest ID ${parsed.questId} with confidence ${parsed.confidence}`);
+          console.log(`Reason: ${parsed.reason}`);
+          return parsed.questId;
+        } else {
+          console.log('No confident quest match found. Using misc quest.');
+          console.log(`Reason: ${parsed.reason}`);
+          const miscQuest = await getOrCreateMiscQuest(userId);
+          return miscQuest.id;
+        }
+      } catch (parseError) {
+        console.error('❌ Error parsing Gemini response:', parseError);
+        console.error('Raw response:', responseText);
         const miscQuest = await getOrCreateMiscQuest(userId);
         return miscQuest.id;
       }
     } catch (error) {
-      console.error('Error finding best quest for task:', error);
+      console.error('❌ Error finding best quest for task:', error);
       const miscQuest = await getOrCreateMiscQuest(userId);
       return miscQuest.id;
-    }
-  }
-
-  /**
-   * Checks if a task suggestion is similar to any existing tasks
-   * Uses LLM to compare the tasks and determine if they are similar enough
-   * @param suggestion The task suggestion to compare
-   * @param userId The user's ID
-   * @param questId The quest ID to focus on first
-   * @returns Information about the similarity and whether to update
-   */
-  private async findSimilarTask(suggestion: TaskSuggestion, userId: string, questId: number): Promise<TaskSimilarityResult> {
-    performanceLogger.startOperation('findSimilarTask');
-    try {
-      // Default result - no match
-      const defaultResult: TaskSimilarityResult = {
-        isMatch: false,
-        existingTask: null,
-        matchConfidence: 0
-      };
-      
-      // Get tasks only for the specific quest (or misc quest if no match was found)
-      console.log(`Fetching tasks only for quest ID: ${questId}`);
-      const questTasks = await fetchTasksByQuest(questId, userId);
-      
-      if (!questTasks || questTasks.length === 0) {
-        console.log('No existing tasks found in the target quest for comparison');
-        return defaultResult;
-      }
-      
-      console.log(`Comparing new task suggestion against ${questTasks.length} existing tasks in quest ${questId}`);
-      
-      // Use Gemini 2.0 Flash for task comparison - just for finding a match
-      const prompt = `You are analyzing if a new task suggestion is semantically equivalent to any existing tasks.
-
-New Task Suggestion:
-Title: ${suggestion.title}
-Description: ${suggestion.description || 'None'}
-Scheduled for: ${suggestion.scheduled_for}
-Deadline: ${suggestion.deadline || 'None'}
-Priority: ${suggestion.priority}
-${suggestion.location ? `Location: ${suggestion.location}` : ''}
-
-Existing tasks in the same quest:
-${questTasks.map(task => `
-Task ID: ${task.id}
-Title: ${task.title}
-Description: ${task.description || 'None'}
-Status: ${task.status}
-Scheduled for: ${task.scheduled_for}
-Deadline: ${task.deadline || 'None'}
-Priority: ${task.priority || 'None'}
-${task.location ? `Location: ${task.location}` : ''}
-`).join('\n---\n')}
-
-CRITICAL EVALUATION GUIDELINES:
-Look for SEMANTIC EQUIVALENCE, not just literal text matching
-   - "Make dinner" and "Cook pasta for dinner" could refer to the same task
-   - "Bake a cake" and "Bake a chocolate cake for tomorrow's birthday" likely refer to the same task
-   - "Call mom about vacation" and "Call mother to discuss summer trip" are semantically the same task
-
-Determine:
-1. Is the new task SEMANTICALLY THE SAME as any existing task?
-2. If yes, which existing task is it equivalent to?
-
-Reply ONLY with a JSON object in this format:
-{
-  "isMatch": true/false,
-  "matchingTaskId": task id of matching task or null if no match,
-  "matchConfidence": 0.0 to 1.0 (how confident you are that this is the same task)
-}`;
-
-      try {
-        // Use Gemini model instead of OpenAI
-        const result = await this.model.generateContent(prompt);
-        const responseText = this.cleanResponseText(result.response.text().trim());
-        
-        if (!responseText) {
-          console.log('Empty response from AI for task comparison');
-          return defaultResult;
-        }
-
-        const parsed = JSON.parse(responseText);
-        
-        // Find the matching task if one was identified
-        const matchingTask = parsed.isMatch && parsed.matchingTaskId ? 
-          questTasks.find(t => t.id === parsed.matchingTaskId) || 
-          questTasks.find(t => t.id === Number(parsed.matchingTaskId)) :
-          null;
-        
-        if (parsed.isMatch && matchingTask) {
-          console.log(`Found semantic match between "${suggestion.title}" and existing task "${matchingTask.title}" (confidence: ${parsed.matchConfidence})`);
-        }
-        
-        return {
-          isMatch: parsed.isMatch,
-          existingTask: matchingTask || null,
-          matchConfidence: parsed.matchConfidence || 0
-        };
-      } catch (parseError) {
-        console.error('Error parsing task comparison result:', parseError);
-        return defaultResult;
-      }
-    } catch (error) {
-      console.error('Error comparing tasks:', error);
-      return {
-        isMatch: false,
-        existingTask: null,
-        matchConfidence: 0
-      };
-    } finally {
-      performanceLogger.endOperation('findSimilarTask');
     }
   }
 
@@ -691,7 +546,7 @@ Reply ONLY with a JSON object in this format:
    * @param sourceContent The original source content that generated this suggestion
    * @returns Task update field recommendations
    */
-  private async generateTaskUpdateFields(
+  public async generateTaskUpdateFields(
     suggestion: TaskSuggestion, 
     existingTask: Task, 
     sourceContent: string
@@ -797,34 +652,31 @@ Reply ONLY with a JSON object in this format:
 
   /**
    * Checks if a newly generated task suggestion is similar to existing tasks
-   * If it is, converts it into an edit suggestion instead
    * @param suggestion The newly generated task suggestion
    * @param userId The user's ID
-   * @returns The original suggestion, or a modified one if a duplicate is found
+   * @returns TaskSimilarityResult with match information
    */
-  private async checkForDuplicatesBeforeShowing(suggestion: TaskSuggestion, userId: string): Promise<TaskSuggestion> {
+  public async checkForDuplicatesBeforeShowing(suggestion: TaskSuggestion, userId: string): Promise<TaskSimilarityResult> {
     try {
       console.log('🔍 Checking if task suggestion is similar to existing active tasks:', suggestion.title);
       
-      // Get all user's tasks rather than just tasks from one quest
       const allUserTasks = await fetchTasks(userId);
-      
-      // Filter to only active tasks (ToDo or InProgress)
       const activeTasks = allUserTasks.filter(task => 
         task.status === 'ToDo' || task.status === 'InProgress'
       );
       
       if (activeTasks.length === 0) {
         console.log('No active tasks found for comparison');
-        // If there are no tasks to compare against, set quest_id to misc quest
-        suggestion.quest_id = suggestion.quest_id || (await getOrCreateMiscQuest(userId)).id;
-        return suggestion;
+        return {
+          isMatch: false,
+          existingTask: null,
+          matchConfidence: 0
+        };
       }
       
       console.log(`Comparing new task suggestion against ${activeTasks.length} active tasks`);
       
-      // Use the same semantic comparison as findSimilarTask but with all active tasks
-      const prompt = `You are analyzing if a new task suggestion is semantically equivalent to any existing tasks.
+      const prompt = `You are analyzing if a new task suggestion is semantically equivalent to or a continuation of any existing tasks.
 
 New Task Suggestion:
 Title: ${suggestion.title}
@@ -847,65 +699,152 @@ ${task.location ? `Location: ${task.location}` : ''}
 `).join('\n---\n')}
 
 CRITICAL EVALUATION GUIDELINES:
-Look for SEMANTIC EQUIVALENCE, not just literal text matching
-   - "Make dinner" and "Cook pasta for dinner" could refer to the same task
-   - "Bake a cake" and "Bake a chocolate cake for tomorrow's birthday" likely refer to the same task
-   - "Call mom about vacation" and "Call mother to discuss summer trip" are semantically the same task
+1. Look for SEMANTIC EQUIVALENCE (same task):
+   - "Make dinner" and "Cook pasta for dinner" refer to the same task
+   - "Bake a cake" and "Bake chocolate cake for tomorrow" refer to the same task
+
+2. Look for TASK CONTINUATIONS (logical next step):
+   - "Schedule doctor appointment" -> "Go to doctor appointment"
+   - "Buy ingredients for cake" -> "Bake the cake"
+   - "Draft email to client" -> "Send client email"
 
 Determine:
 1. Is the new task SEMANTICALLY THE SAME as any existing task?
-2. If yes, which existing task is it equivalent to?
+2. If not, is it a LOGICAL CONTINUATION of any existing task?
+3. If yes to either, which existing task is it related to?
 
 Reply ONLY with a JSON object in this format:
 {
   "isMatch": true/false,
   "matchingTaskId": task id of matching task or null if no match,
-  "matchConfidence": 0.0 to 1.0 (how confident you are that this is the same task)
+  "matchConfidence": 0.0 to 1.0,
+  "isContinuation": true/false,
+  "continuationReason": "Brief explanation of why this is a continuation, or null if not"
 }`;
 
       try {
-        // Use Gemini model for task comparison
         const result = await this.model.generateContent(prompt);
         const responseText = this.cleanResponseText(result.response.text().trim());
         
         if (!responseText) {
           console.log('Empty response from AI for task comparison');
-          // Fall back to setting quest_id to misc quest
-          suggestion.quest_id = suggestion.quest_id || (await getOrCreateMiscQuest(userId)).id;
-          return suggestion;
+          return {
+            isMatch: false,
+            existingTask: null,
+            matchConfidence: 0
+          };
         }
 
         const parsed = JSON.parse(responseText);
         
-        // Find the matching task if one was identified
         const matchingTask = parsed.isMatch && parsed.matchingTaskId ? 
           activeTasks.find(t => t.id === parsed.matchingTaskId) || 
           activeTasks.find(t => t.id === Number(parsed.matchingTaskId)) :
           null;
         
-        if (parsed.isMatch && matchingTask && parsed.matchConfidence > 0.7) {
-          console.log(`Found similar existing task (${parsed.matchConfidence.toFixed(2)} confidence). Converting to edit suggestion.`);
-          return await this.convertToEditSuggestion(suggestion, matchingTask);
-        } else {
-          // This is a new task suggestion, assign the quest ID
-          // If no specific quest_id is assigned, find the best matching quest
-          if (!suggestion.quest_id) {
-            suggestion.quest_id = await this.findBestQuestForTask(suggestion, userId);
-          }
-        }
+        return {
+          isMatch: !!parsed.isMatch,
+          existingTask: matchingTask || null,
+          matchConfidence: parsed.matchConfidence || 0,
+          isContinuation: !!parsed.isContinuation,
+          continuationReason: parsed.continuationReason || null
+        };
         
-        return suggestion;
       } catch (parseError) {
         console.error('Error parsing task comparison result:', parseError);
-        // Fall back to setting quest_id to misc quest
-        suggestion.quest_id = suggestion.quest_id || (await getOrCreateMiscQuest(userId)).id;
-        return suggestion;
+        return {
+          isMatch: false,
+          existingTask: null,
+          matchConfidence: 0
+        };
       }
     } catch (error) {
       console.error('Error checking for duplicate tasks:', error);
-      // If there's an error, just return the original suggestion with a misc quest
-      suggestion.quest_id = suggestion.quest_id || (await getOrCreateMiscQuest(userId)).id;
-      return suggestion;
+      return {
+        isMatch: false,
+        existingTask: null,
+        matchConfidence: 0
+      };
+    }
+  }
+
+  /**
+   * Regenerates a task suggestion with context from its predecessor
+   * @param suggestion Current task suggestion
+   * @param previousTask The task this one continues from
+   * @param questContext Optional quest context if the task belongs to a quest
+   */
+  public async regenerateTaskWithContinuationContext(
+    suggestion: TaskSuggestion,
+    previousTask: Task,
+    questContext?: Quest
+  ): Promise<TaskSuggestion | null> {
+    try {
+      console.log('♻️ Regenerating task suggestion with continuation context');
+      
+      const prompt = `Generate an improved task description using the context of its predecessor task and quest.
+
+Previous Task:
+Title: ${previousTask.title}
+Description: ${previousTask.description || 'None'}
+Status: ${previousTask.status}
+Priority: ${previousTask.priority || 'None'}
+
+${questContext ? `Related Quest:
+Title: ${questContext.title}
+Description: ${questContext.description || 'None'}
+Status: ${questContext.status}` : ''}
+
+Current Task Suggestion:
+Title: ${suggestion.title}
+Description: ${suggestion.description || 'None'}
+
+This task is a continuation or next step after the previous task.
+Generate a JSON object with these EXACT fields that incorporates this context:
+{
+  "title": "Improved task title that shows continuity",
+  "description": "Enhanced description that references the previous task",
+  "priority": "high/medium/low (based on previous task)",
+  "scheduled_for": "YYYY-MM-DD (should be after previous task's completion)",
+  "tags": ["relevant", "tags", "including", "continuation"]
+}`;
+
+      const response = await this.openai.chat.completions.create({
+        model: "deepseek-chat",
+        messages: [
+          { role: "system", content: prompt }
+        ],
+        temperature: 0.4,
+        response_format: { type: "json_object" }
+      });
+
+      const responseText = response.choices[0].message?.content;
+      if (!responseText) {
+        throw new Error('Empty response from AI');
+      }
+
+      const parsed = JSON.parse(responseText);
+      const timestamp = new Date().toISOString();
+
+      // Create new suggestion with improved context
+      const enhancedSuggestion: TaskSuggestion = {
+        ...suggestion,
+        id: `task-${timestamp}-${Math.random().toString(36).substring(2, 10)}`,
+        title: parsed.title,
+        description: parsed.description,
+        scheduled_for: parsed.scheduled_for,
+        priority: parsed.priority,
+        tags: parsed.tags,
+        timestamp,
+        previousTaskId: previousTask.id // Add reference to previous task
+      };
+
+      console.log('✨ Generated enhanced continuation task:', enhancedSuggestion.title);
+      return enhancedSuggestion;
+
+    } catch (error) {
+      console.error('Error regenerating task with continuation context:', error);
+      return null;
     }
   }
 
@@ -915,7 +854,7 @@ Reply ONLY with a JSON object in this format:
    * @param existingTask The existing task that was found to be similar
    * @returns The modified task suggestion as an edit suggestion
    */
-  private async convertToEditSuggestion(suggestion: TaskSuggestion, existingTask: Task): Promise<TaskSuggestion> {
+  public async convertToEditSuggestion(suggestion: TaskSuggestion, existingTask: Task): Promise<TaskSuggestion> {
     try {
       // Generate update fields based on the source content
       const updateFields = await this.generateTaskUpdateFields(suggestion, existingTask, suggestion.sourceContent);

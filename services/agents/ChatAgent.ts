@@ -339,16 +339,6 @@ CONVERSATION CONTEXT:
         userId
       );
 
-      // For each relevant quest, analyze the conversation for potential updates
-      for (const quest of relevantQuests) {
-        await this.questAgent.analyzeContentForQuest(
-          messages.map(m => m.message).join('\n'),
-          quest.id,
-          userId,
-          'chat'
-        );
-      }
-
       // Continue with existing session storage...
       await this.createCheckupEntryFromSession(
         messages.filter(m => m.user_id === userId), // Extra safety: only include user's messages
