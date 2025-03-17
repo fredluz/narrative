@@ -2,26 +2,53 @@ import React, { createContext, useContext, useEffect, useState, useCallback, use
 import { Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'expo-router';
+import { personalityService } from '@/services/personalityService';
 
 interface SupabaseContextType {
   session: Session | null;
   isLoading: boolean;
   refreshSession: () => Promise<void>;
+  isNewUser: boolean;
+  checkIfNewUser: (userId: string) => Promise<boolean>;
 }
 
 const SupabaseContext = createContext<SupabaseContextType>({
   session: null,
   isLoading: true,
   refreshSession: async () => {},
+  isNewUser: false,
+  checkIfNewUser: async () => false,
 });
 
 export function SupabaseProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isNewUser, setIsNewUser] = useState(false);
   const router = useRouter();
   
   // Use a ref to track if we need to refresh
   const sessionExpiryTimeout = useRef<NodeJS.Timeout | null>(null);
+
+  // Check if user is new (no ai_personality set)
+  const checkIfNewUser = useCallback(async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('ai_personality')
+        .eq('id', userId)
+        .single();
+      
+      if (error) throw error;
+      
+      // User is new if ai_personality is null, undefined or empty string
+      const isNew = !data?.ai_personality;
+      setIsNewUser(isNew);
+      return isNew;
+    } catch (error) {
+      console.error('Error checking if user is new:', error);
+      return false;
+    }
+  }, []);
 
   // Function to refresh the session state
   const refreshSession = useCallback(async () => {
@@ -35,6 +62,9 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
         // Log session expiry time for debugging
         const expiresAt = new Date(currentSession.expires_at! * 1000);
         console.log(`Session will expire at: ${expiresAt.toLocaleString()}`);
+        
+        // Check if this is a new user
+        await checkIfNewUser(currentSession.user.id);
       }
       
       setSession(currentSession);
@@ -46,7 +76,7 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [checkIfNewUser]);
   
   // Schedule a session refresh before the token expires
   const scheduleSessionRefresh = useCallback((currentSession: Session | null) => {
@@ -105,7 +135,7 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
     refreshSession();
 
     // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, newSession) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, newSession) => {
       console.log('Auth state changed:', event, newSession ? 'Session exists' : 'No session');
       
       if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
@@ -115,11 +145,17 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
           const expiresAt = new Date(newSession.expires_at! * 1000).toLocaleString();
           console.log(`User ${newSession.user.id} authenticated until ${expiresAt}`);
           
+          // Check if user is new when they sign in
+          if (event === 'SIGNED_IN') {
+            await checkIfNewUser(newSession.user.id);
+          }
+          
           // Schedule refresh for this new session
           scheduleSessionRefresh(newSession);
         }
       } else if (event === 'SIGNED_OUT') {
         setSession(null);
+        setIsNewUser(false);
         
         // Clear any scheduled refresh
         if (sessionExpiryTimeout.current) {
@@ -139,12 +175,14 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
         sessionExpiryTimeout.current = null;
       }
     };
-  }, [scheduleSessionRefresh]);
+  }, [scheduleSessionRefresh, checkIfNewUser]);
 
   const value = {
     session,
     isLoading,
     refreshSession,
+    isNewUser,
+    checkIfNewUser,
   };
 
   return (

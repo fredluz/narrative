@@ -21,6 +21,8 @@ import CompactTaskSuggestion from '../suggestions/CompactTaskSuggestion';
 import { TaskSuggestion, QuestSuggestion } from '@/services/agents/SuggestionAgent';
 import { CreateTaskModal } from '@/components/modals/CreateTaskModal';
 import { fetchQuests } from '@/services/questsService';
+import { useSupabase } from '@/contexts/SupabaseContext';
+import { personalityService } from '@/services/personalityService';
 
 interface Props {
   recentMessages: ChatMessage[];
@@ -55,6 +57,8 @@ export function ChatInterface({
   const [currentTaskModal, setCurrentTaskModal] = useState<TaskSuggestion | null>(null);
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [quests, setQuests] = useState<Array<{ id: number; title: string }>>([]);
+  const { session } = useSupabase();
+  const [personalityName, setPersonalityName] = useState('SILVERHAND');
 
   // Get task and quest suggestions from context
   const { 
@@ -262,6 +266,31 @@ export function ChatInterface({
       onEndSession();
     }
   };
+
+  useEffect(() => {
+    if (session?.user?.id) {
+      personalityService.getUserPersonality(session.user.id)
+        .then(personality => {
+          switch(personality) {
+            case 'TFRobot':
+              setPersonalityName('BT');
+              break;
+            case 'johnny':
+              setPersonalityName('SILVERHAND');
+              break;
+            case 'batman':
+              setPersonalityName('BATMAN');
+              break;
+            default:
+              setPersonalityName(personality.toUpperCase());
+          }
+        })
+        .catch(error => {
+          console.error('Error getting personality:', error);
+          setPersonalityName('SILVERHAND'); // Fallback to default
+        });
+    }
+  }, [session?.user?.id]);
 
   return (
     <>
@@ -471,7 +500,7 @@ export function ChatInterface({
                         textShadowOffset: { width: 0, height: 0 },
                         textShadowRadius: 3,
                       }}>
-                        {!msg.is_user ? 'SILVERHAND' : 'YOU'}
+                        {!msg.is_user ? personalityName : 'YOU'}
                       </Text>
                       <Text style={{ color: '#777', fontSize: 10 }}>
                         {formatTimestamp(msg.updated_at)}
@@ -524,7 +553,7 @@ export function ChatInterface({
                       textShadowOffset: { width: 0, height: 0 },
                       textShadowRadius: 3,
                     }}>
-                      SILVERHAND
+                      {personalityName}
                     </Text>
                   </View>
                   <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 4 }}>

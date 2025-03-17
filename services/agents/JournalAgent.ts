@@ -2,6 +2,8 @@ import OpenAI from 'openai';
 import { QuestAgent } from './QuestAgent';
 import { journalService } from '../journalService';
 import { eventsService, EVENT_NAMES } from '../eventsService';
+import { getPersonality } from './PersonalityPrompts';
+import { personalityService } from '../personalityService';
 
 export class JournalAgent {
     private openai: OpenAI;
@@ -14,7 +16,6 @@ export class JournalAgent {
         dangerouslyAllowBrowser: true
       });
       this.questAgent = new QuestAgent();
-      // Remove suggestionAgent initialization
     }
 
     // Helper method to trigger suggestion analysis via SuggestionContext
@@ -51,13 +52,17 @@ export class JournalAgent {
 
         console.log('📤 Sending prompt to AI:', prompt);
         
+        // Get current personality for this call
+        const personalityType = await personalityService.getUserPersonality(userId);
+        const personality = getPersonality(personalityType);
+        
         // Get OpenAI response
         const response = await this.openai.chat.completions.create({
           model: "deepseek-reasoner",
           messages: [
             {
               role: "system",
-              content: "You are Johnny Silverhand from Cyberpunk 2077, now living in the user's head. You're a sarcastic, anti-corporate rebel with a grudge against the system. You're abrasive and often an asshole, but you genuinely care about the user underneath your hard exterior. Your goal is to push the user to be bold and take action, especially against corporations and injustice. Respond like Johnny would - with attitude, colorful language, and occasional moments of unexpected wisdom."
+              content: personality.journalResponseSystem
             },
             {
               role: "user",
@@ -111,13 +116,17 @@ export class JournalAgent {
 
         console.log('📤 Sending analysis prompt to AI:', prompt);
         
+        // Get current personality for this call
+        const personalityType = await personalityService.getUserPersonality(userId);
+        const personality = getPersonality(personalityType);
+        
         // Get OpenAI response
         const response = await this.openai.chat.completions.create({
           model: "deepseek-reasoner",
           messages: [
             {
               role: "system",
-              content: "You are Johnny Silverhand from Cyberpunk 2077, reluctantly analyzing the user's journal entry. While you're typically cynical and abrasive, you're also perceptive and can recognize patterns in the user's thoughts and behaviors. Provide your analytical thoughts about patterns or themes you're noticing, which you share because you actually do care about the user despite your tough exterior. Your analysis should be insightful but delivered with your characteristic Johnny Silverhand style."
+              content: personality.journalAnalysisSystem
             },
             {
               role: "user",
@@ -338,32 +347,18 @@ export class JournalAgent {
         const prompt = await this.createEndOfDayPrompt(allCheckupEntries, userId);
         console.log('📤 Sending end-of-day prompt to AI:', prompt);
         
-        // Generate response with improved Johnny Silverhand system prompt
+        // Get current personality for this call
+        const personalityType = await personalityService.getUserPersonality(userId);
+        const personality = getPersonality(personalityType);
+        
+        // Generate response with improved personality system prompt
         console.log('🔄 Generating end-of-day response');
         const response = await this.openai.chat.completions.create({
           model: "deepseek-reasoner",
           messages: [
             {
               role: "system",
-              content: `You are Johnny Silverhand from Cyberpunk 2077, chatting with the user at the end of the day, while you both smoke a cig and reflect.
-              You're a sarcastic, anti-corporate rebel with a grudge against the system. You're abrasive and often an asshole, but you genuinely care about the user underneath your hard exterior.
-              
-              Review all of today's checkups and your responses holistically to provide a meaningful reflection.
-              The input will show each user checkup paired with your response to it.
-              Consider patterns, progress, and changes throughout the day. Be insightful but maintain your distinctive voice and attitude.
-              
-              Your response should include:
-              1. A summary of the day's key themes and events
-              2. Notable progress or setbacks you've observed
-              3. Advice or thoughts for tomorrow
-              4. Personal observations only you would make, with your characteristic edge and attitude
-              5. Reference specific moments or exchanges from the day when relevant
-              6. How your responses may have influenced subsequent user entries
- 
-              
-              Don't write like it's a report, you're speaking.no or few emojis
-              This doesn't mean you should speak in a formatted list. Act as if you're speaking with the user, a phone call after a long day.
-              Keep your cyberpunk attitude but be genuinely helpful. This is your chance to show you've been paying attention all day.`
+              content: personality.endOfDaySystem
             },
             {
               role: "user",
@@ -381,19 +376,7 @@ export class JournalAgent {
           messages: [
             {
               role: "system",
-              content: `You're an expert systems thinker, who always analyzes short-term tactical and long-term strategic aspects.
-              Analyze all of today's checkups and responses.
-              The input contains user entries paired with your responses throughout the day.
-              Identify patterns, themes, and significant elements across all exchanges.
-              Focus on:
-              1. Recurring themes or concerns in both the user's entries and your responses
-              2. Emotional patterns and shifts throughout the day
-              3. Behavioral insights and potential optimization opportunities
-              4. Progress on any mentioned goals or tasks
-              5. Areas that may need attention or reflection
-              6. How your responses may have influenced subsequent user entries
-              
-              Be thorough but concise. This analysis should provide genuine value to the user in understanding their day.`
+              content: personality.endOfDayAnalysisSystem
             },
             {
               role: "user",

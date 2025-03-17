@@ -1,14 +1,31 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Pressable, Text, StyleSheet, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useSupabase } from '@/contexts/SupabaseContext';
 import { ColorPicker } from './ColorPicker';
 import { authService } from '@/services/authService';
+import { personalityService } from '@/services/personalityService';
+import { PersonalityType } from '@/services/agents/PersonalityPrompts';
 
 export function SettingsButton() {
   const [isOpen, setIsOpen] = useState(false);
+  const [currentPersonality, setCurrentPersonality] = useState('TFRobot');
   const { themeColor, secondaryColor, setThemeColor, setSecondaryColor, textColor } = useTheme();
+  const { session } = useSupabase();
+
+  // Fetch current personality on mount
+  useEffect(() => {
+    if (session?.user?.id) {
+      personalityService.getUserPersonality(session.user.id)
+        .then(personality => {
+          setCurrentPersonality(personality);
+        })
+        .catch(error => {
+          console.error('Error getting personality:', error);
+        });
+    }
+  }, [session?.user?.id]);
 
   const handleLogout = async () => {
     try {
@@ -17,6 +34,31 @@ export function SettingsButton() {
       setIsOpen(false);
     } catch (error) {
       console.error('Error signing out:', error);
+    }
+  };
+
+  const handlePersonalityChange = async (personality: PersonalityType) => {
+    console.log('Attempting to change personality to:', personality);
+    if (!session?.user?.id) return;
+    try {
+      await personalityService.setUserPersonality(session.user.id, personality);
+      setCurrentPersonality(personality);
+      console.log('Successfully set personality to:', personality);
+    } catch (error) {
+      console.error('Error updating personality:', error);
+    }
+  };
+
+  const getDisplayName = (personality: string) => {
+    switch (personality) {
+      case 'TFRobot':
+        return 'BT';
+      case 'johnny':
+        return 'Johnny';
+      case 'batman':
+        return 'Batman';
+      default:
+        return personality;
     }
   };
 
@@ -44,8 +86,6 @@ export function SettingsButton() {
         >
           <View 
             style={styles.popup}
-            onStartShouldSetResponder={() => true}
-            onTouchEnd={e => e.stopPropagation()}
           >
             <ColorPicker
               color={themeColor}
@@ -59,8 +99,36 @@ export function SettingsButton() {
               label="Secondary Theme Color"
               textColor={textColor}
             />
+
+            {/* Personality Selector */}
+            <View style={styles.personalityContainer}>
+              <Text style={[styles.label, { color: textColor }]}>AI Personality</Text>
+              <View style={styles.personalityButtons}>
+                {['TFRobot', 'johnny', 'batman'].map((personality) => (
+                  <Pressable
+                    key={personality}
+                    style={[
+                      styles.personalityButton,
+                      { borderColor: themeColor },
+                      personality === currentPersonality && {
+                        backgroundColor: `${themeColor}20`, // 20 is hex for 12% opacity
+                      }
+                    ]}
+                    onPress={() => handlePersonalityChange(personality as PersonalityType)}
+                  >
+                    <Text style={[
+                      styles.personalityText, 
+                      { color: themeColor },
+                      personality === currentPersonality && { fontWeight: '700' }
+                    ]}>
+                      {getDisplayName(personality)}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
             
-            {/* Add logout button */}
+            {/* Logout button */}
             <Pressable 
               style={[styles.logoutButton, { borderColor: themeColor }]}
               onPress={handleLogout}
@@ -155,6 +223,28 @@ const styles = StyleSheet.create({
   logoutText: {
     marginLeft: 8,
     fontSize: 16,
+    fontWeight: '500',
+  },
+  personalityContainer: {
+    marginBottom: 20,
+  },
+  personalityButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  personalityButton: {
+    flex: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  personalityText: {
+    fontSize: 14,
     fontWeight: '500',
   },
 });

@@ -10,11 +10,11 @@ import { useSuggestions } from '@/contexts/SuggestionContext';
 import styles from '@/app/styles/global';
 import { colors } from '@/app/styles/global';
 import { SettingsButton } from '@/components/ui/SettingsButton';
-import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { useChatData } from '@/hooks/useChatData';
 import { useQuestUpdate } from '@/contexts/QuestUpdateContext';
 import { JournalPanel } from '@/components/journal/JournalPanel';
 import { useSupabase } from '@/contexts/SupabaseContext';
+import TriangularSpinner from '../loading/TriangularSpinner';
 
 export function DesktopLayout() {
   const { session } = useSupabase();
@@ -109,7 +109,7 @@ export function DesktopLayout() {
       <View style={styles.column}>
         {loading ? (
           <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-            <LoadingSpinner/>
+            <TriangularSpinner/>
           </View>
         ) : error ? (
             <View style={{ 

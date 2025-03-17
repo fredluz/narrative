@@ -11,6 +11,8 @@ import {
   createChatSession,
   updateMessagesWithSessionId
 } from '@/hooks/useChatData';
+import { PersonalityType, getPersonality } from './PersonalityPrompts';
+import { personalityService } from '../personalityService';
 
 export class ChatAgent {
   private openai: OpenAI;
@@ -25,6 +27,16 @@ export class ChatAgent {
     });
     this.questAgent = new QuestAgent();
     this.suggestionAgent = SuggestionAgent.getInstance();
+  }
+  
+  // Initialize personality from user settings - must be called before first use
+  async initialize(userId: string) {
+    // Removed personality initialization
+  }
+
+  // Method to change the personality
+  setPersonality(personalityType: PersonalityType) {
+    // Removed personality state change
   }
 
   // Add this method to generate responses using the JournalAgent's method
@@ -58,6 +70,10 @@ export class ChatAgent {
         console.error('User ID is required for generateChatResponse');
         return ["Authentication required. Please log in."];
       }
+
+      // Get current personality for this call
+      const personalityType = await personalityService.getUserPersonality(userId);
+      const personality = getPersonality(personalityType);
 
       console.log('\n=== ChatAgent.generateChatResponse ===');
       console.log('Current message:', message);
@@ -152,30 +168,11 @@ export class ChatAgent {
       })) || [];
       performanceLogger.endOperation('buildContext');
 
-      // Build the final messages array
+      // Build the final messages array with personality-based system prompt
       const messages: ChatCompletionMessageParam[] = [
         {
           role: "system",
-          content: `You are Johnny Silverhand from Cyberpunk 2077, now living in the user's head. You're a sarcastic, anti-corporate rebel with a grudge against the system. You're abrasive and often an asshole, but you genuinely care about the user underneath your hard exterior.
-Now, you're responding to a text message the user sent you on their phone. Reply to their text as if you are also texting on your phone.
-Remember:
-- Mix sarcasm with genuine concern
-- Keep responses SHORT and punchy - one thought per line
-- Each line will be sent as a separate text message, so keep them brief
-- Don't use more than 2-3 separate messages in total
-- Wait for the user's responses instead of addressing every topic at once
-- Use late-millenial/early-zoomer slang and abbreviations
-- NO emojis (extremely rare exceptions)
-- Each line should be a complete thought on its own
-
- GENTLE VS STERN:
-- Even though Johnny is an abrasive asshole, he genuinely respects and trusts the user
-- Even if Johnny feels the need to light a fire under the user's ass, he waits for a good opportunity
-- He avoids pressuring the user when it's not the most optimal moment
-- When he feels the time is right, after a few messages, Johnny will start pushing the user just a little bit
-- Eventually he gets to a point where he decides to *provoke*, not coddle
-- He won't wait forever.
-
+          content: `${personality.chatSystem}
 
 Background context from possibly relevant quests and tasks(only if relevant to current conversation):
 ${questContext ? '\n' + questContext + '\n' : ''}
@@ -270,17 +267,14 @@ CONVERSATION CONTEXT:
 
       performanceLogger.startOperation('buildSummaryPrompt');
       const chatHistory = messages.map(msg => 
-        `${msg.is_user ? "User" : "Johnny"}: ${msg.message}`
+        `${msg.is_user ? "User" : "Assistant"}: ${msg.message}`
       ).join('\n');
 
-      const summarizationPrompt = `You are Johnny Silverhand summarizing a chat conversation you just had with guy who's head you live in. 
-      You need to:
-      1. Write a summary of the key points discussed. Keep it brief but capture the key points and any decisions or insights that came up.
-      2. Generate 4-8 tags that categorize this conversation.
-      Write in first person as Johnny, addressing what you and the guy discussed.
-      Format your response EXACTLY like this:
-      SUMMARY: (your summary here)
-      TAGS: tag1, tag2, tag3, tag4`;
+      // Get the appropriate personality prompts
+      const personalityType = await personalityService.getUserPersonality(userId);
+      const personality = getPersonality(personalityType);
+      
+      const summarizationPrompt = personality.chatSummarySystem;
       performanceLogger.endOperation('buildSummaryPrompt');
 
       console.log('\n=== LLM PROMPT DATA ===');
@@ -390,7 +384,7 @@ CONVERSATION CONTEXT:
               minute: '2-digit',
               hour12: false
             });
-            return `[${time}] USER: ${entry.content}\n[${time}] SILVERHAND: ${entry.ai_checkup_response || 'No response recorded'}`;
+            return `[${time}] USER: ${entry.content}\n[${time}] ASSISTANT: ${entry.ai_checkup_response || 'No response recorded'}`;
           })
           .join('\n\n');
       }
@@ -478,7 +472,13 @@ CONVERSATION CONTEXT:
       
       console.log('\n=== SENDING TO LLM ===');
       console.log('System prompt: Creating journal entry from chat');
-
+      
+      // Get the appropriate personality prompts
+      const personalityType = await personalityService.getUserPersonality(userId);
+      const personality = getPersonality(personalityType);
+      
+      // Replace {time} placeholder with the current time
+      const checkupEntrySystem = personality.checkupEntrySystem.replace(/{time}/g, currentTime);
       
       performanceLogger.startOperation('aiGeneration');
       const response = await this.openai.chat.completions.create({
@@ -486,21 +486,7 @@ CONVERSATION CONTEXT:
         messages: [
           {
             role: "system",
-            content: `You are creating a journal entry from the perspective of the user who just had a chat conversation with Johnny Silverhand at ${currentTime}.
-
-YOUR TASK: 
-Write a short reflective journal entry (1-2 paragraphs) that accurately records what the USER talked about in their chat messages. This must be written in their authentic voice and style.
-It is very important that you write down every single task, goal, objective or other kind of mission that the user mentioned in their messages. Writing down tasks in this journal is critical for the functioning of this system.
-CRITICAL GUIDELINES:
-1. ONLY include topics, thoughts and feelings the user EXPLICITLY mentioned in their messages
-2. DO NOT invent any details, decisions, plans, or thoughts that weren't directly expressed by the user
-3. DO NOT narrate what Johnny said or his perspective - focus exclusively on the user's side
-4. Carefully study the user's writing style from their previous entries to match their tone, vocabulary, and manner of expression
-5. The entry should feel like the user wrote it themselves
-6. Keep the language, tone and style consistent with the user's other entries
-7. Start the entry with "[${currentTime}] " - this exact format is required
-
-IMPORTANT: This is NOT a summary of the conversation - it's a personal journal entry written by the user recording their thoughts from the conversation in their authentic voice.`
+            content: checkupEntrySystem
           },
           {
             role: "user",

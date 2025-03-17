@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, ScrollView } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { ThemedText } from '@/components/ui/ThemedText';
 import TriangularSpinner from '@/components/loading/TriangularSpinner';
 import { useSupabase } from '@/contexts/SupabaseContext';
 import { requireOwnership } from '@/utils/auth';
+import { personalityService } from '@/services/personalityService';
 
 interface AIResponseProps {
   response: string | null;
@@ -24,6 +25,33 @@ export const AIResponse: React.FC<AIResponseProps> = ({
   entryUserId
 }) => {
   const { session } = useSupabase();
+  const [personalityName, setPersonalityName] = useState('SILVERHAND');
+  
+  useEffect(() => {
+    if (session?.user?.id) {
+      personalityService.getUserPersonality(session.user.id)
+        .then(personality => {
+          // Convert personality type to display name
+          switch(personality) {
+            case 'TFRobot':
+              setPersonalityName('BT');
+              break;
+            case 'johnny':
+              setPersonalityName('SILVERHAND');
+              break;
+            case 'batman':
+              setPersonalityName('BATMAN');
+              break;
+            default:
+              setPersonalityName(personality.toUpperCase());
+          }
+        })
+        .catch(error => {
+          console.error('Error getting personality:', error);
+          setPersonalityName('SILVERHAND'); // Fallback to default
+        });
+    }
+  }, [session?.user?.id]);
   
   const { allowed, message } = React.useMemo(() => 
     requireOwnership(session, entryUserId),
@@ -77,7 +105,7 @@ export const AIResponse: React.FC<AIResponseProps> = ({
             fontWeight: 'bold',
             color: secondaryColor,
           }}>
-            SILVERHAND
+            {personalityName}
           </ThemedText>
         </View>
         {aiGenerating && <TriangularSpinner size={20} color={secondaryColor} />}

@@ -22,17 +22,29 @@ export function verifyOwnership(ownerId: string | undefined, sessionUserId: stri
   return ownerId === sessionUserId;
 }
 
-export function requireAuth(session: Session | null, inAuthGroup: boolean): { redirect: string } | null {
+export function requireAuth(
+  session: Session | null, 
+  inAuthGroup: boolean,
+  isNewUser?: boolean
+): { redirect: string } | null {
   const currentUserId = session?.user?.id;
   
+  // Handle unauthenticated users
   if (!currentUserId && !inAuthGroup) {
     // Redirect to auth index when not authenticated and not already in auth group
     return { redirect: '/auth/' };
   }
   
+  // Handle authenticated users in auth screens
   if (currentUserId && inAuthGroup) {
     // Redirect to landing page when authenticated but in auth group
     return { redirect: '/landing' };
+  }
+
+  // Handle new users who need onboarding (only when authenticated and not in auth or onboarding)
+  const inOnboarding = window.location.pathname.includes('/onboarding');
+  if (currentUserId && isNewUser && !inAuthGroup && !inOnboarding) {
+    return { redirect: '/onboarding' };
   }
 
   return null;
