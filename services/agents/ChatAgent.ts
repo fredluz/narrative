@@ -13,11 +13,11 @@ import {
 } from '@/hooks/useChatData';
 import { PersonalityType, getPersonality } from './PersonalityPrompts';
 import { personalityService } from '../personalityService';
+import { eventsService, EVENT_NAMES } from '../eventsService';
 
 export class ChatAgent {
   private openai: OpenAI;
   private questAgent: QuestAgent;
-  private suggestionAgent: SuggestionAgent;
   
   constructor() {
     this.openai = new OpenAI({
@@ -26,7 +26,6 @@ export class ChatAgent {
       dangerouslyAllowBrowser: true
     });
     this.questAgent = new QuestAgent();
-    this.suggestionAgent = SuggestionAgent.getInstance();
   }
   
   // Initialize personality from user settings - must be called before first use
@@ -187,13 +186,22 @@ CONVERSATION CONTEXT:
 - Wait for the user's response instead of addressing every topic at once
 - Reference and build upon what's already been discussed in this chat session
 - avoid doing roleplay emotes like *throws cig* or *smirks* unless there's a very good reason, you're texting, not acting
-- Acknowledge relevant quests and tasks when appropriate`
+- Acknowledge relevant quests and tasks when appropriate
+
+`
         }
       ];
       
+      // Add all previous messages from this chat session
       if (chatMessages.length > 0) {
-        messages.push(...chatMessages);
+        console.log('Adding previous messages to context:', chatMessages.length);
+        messages.push(...chatMessages.map(msg => ({
+          role: msg.role,
+          content: msg.content
+        })));
       }
+      
+      // Add the new message from the user
       messages.push({ role: "user", content: message });
 
       console.log('\n=== SENDING TO LLM ===');
@@ -241,12 +249,6 @@ CONVERSATION CONTEXT:
     if (!userId) {
       throw new Error('No user_id found in messages');
     }
-
-    // Emit session ended event immediately
-    const sessionEndedEvent = new CustomEvent('sessionEnded', { 
-      detail: { userId }
-    });
-    window.dispatchEvent(sessionEndedEvent);
 
     try {
       if (!messages || messages.length === 0) {
@@ -326,12 +328,6 @@ CONVERSATION CONTEXT:
         throw updateError;
       }
       performanceLogger.endOperation('dbOperations');
-
-      // After analyzing for task suggestions, check for quest updates
-      const relevantQuests = await this.questAgent.findRelevantQuests(
-        messages.map(m => m.message).join('\n'),
-        userId
-      );
 
       // Continue with existing session storage...
       await this.createCheckupEntryFromSession(
