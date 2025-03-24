@@ -28,15 +28,7 @@ export class ChatAgent {
     this.questAgent = new QuestAgent();
   }
   
-  // Initialize personality from user settings - must be called before first use
-  async initialize(userId: string) {
-    // Removed personality initialization
-  }
 
-  // Method to change the personality
-  setPersonality(personalityType: PersonalityType) {
-    // Removed personality state change
-  }
 
   // Add this method to generate responses using the JournalAgent's method
   async generateResponse(content: string, previousCheckupsContext?: string, userId?: string): Promise<string> {
@@ -76,6 +68,7 @@ export class ChatAgent {
 
       console.log('\n=== ChatAgent.generateChatResponse ===');
       console.log('Current message:', message);
+      console.log('Using personality:', personalityType);
       
       // Replace direct SQL call with function from useChatData
       performanceLogger.startOperation('fetchCurrentMessages');
@@ -171,24 +164,14 @@ export class ChatAgent {
       const messages: ChatCompletionMessageParam[] = [
         {
           role: "system",
-          content: `${personality.chatSystem}
+          content: personality.prompts.chat.system + `
 
 Background context from possibly relevant quests and tasks(only if relevant to current conversation):
 ${questContext ? '\n' + questContext + '\n' : ''}
 Background context from recent journal entries (use this sparingly, only when relevant to current conversation):
 ${journalContext}
 Additional background context from today's checkups (use this sparingly, only if relevant):
-${checkupContext}
-CONVERSATION CONTEXT:
-- You're in the middle of a text conversation with the user
-- Your response will be split at each line break and sent as separate messages
-- Keep each line under 160 characters ideally
-- Wait for the user's response instead of addressing every topic at once
-- Reference and build upon what's already been discussed in this chat session
-- avoid doing roleplay emotes like *throws cig* or *smirks* unless there's a very good reason, you're texting, not acting
-- Acknowledge relevant quests and tasks when appropriate
-
-`
+${checkupContext}`
         }
       ];
       
@@ -276,7 +259,20 @@ CONVERSATION CONTEXT:
       const personalityType = await personalityService.getUserPersonality(userId);
       const personality = getPersonality(personalityType);
       
-      const summarizationPrompt = personality.chatSummarySystem;
+      const summarizationPrompt = `You are ${personality.name}. ${personality.description}
+Now you need to summarize a conversation you just had with the user.
+
+INSTRUCTIONS:
+1. Review the conversation history carefully
+2. Create a concise summary capturing the key points discussed
+3. Extract relevant tags that categorize the conversation
+4. Format your response as:
+
+SUMMARY:
+(Write a concise summary here)
+
+TAGS:
+(List relevant tags, comma-separated)`;
       performanceLogger.endOperation('buildSummaryPrompt');
 
       console.log('\n=== LLM PROMPT DATA ===');
@@ -474,7 +470,17 @@ CONVERSATION CONTEXT:
       const personality = getPersonality(personalityType);
       
       // Replace {time} placeholder with the current time
-      const checkupEntrySystem = personality.checkupEntrySystem.replace(/{time}/g, currentTime);
+      const checkupEntrySystem = `You are helping to create a journal entry based on the user's chat with ${personality.name}.
+
+INSTRUCTIONS:
+1. Current time is {time}
+2. Write from the user's perspective
+3. Focus only on what the user said/discussed
+4. Match the user's writing style from previous entries
+5. Start with [{time}] timestamp
+6. Be concise but capture key thoughts/feelings
+7. Do not mention this being an AI-generated entry
+8. Only reference the user's messages, not ${personality.name}'s responses`.replace(/{time}/g, currentTime);
       
       performanceLogger.startOperation('aiGeneration');
       const response = await this.openai.chat.completions.create({

@@ -58,11 +58,11 @@ export class JournalAgent {
         
         // Get OpenAI response
         const response = await this.openai.chat.completions.create({
-          model: "deepseek-reasoner",
+          model: "deepseek-chat",
           messages: [
             {
               role: "system",
-              content: personality.journalResponseSystem
+              content: personality.prompts.journal.system
             },
             {
               role: "user",
@@ -73,7 +73,7 @@ export class JournalAgent {
           max_tokens: 8000
         });
 
-        const aiResponse = response.choices[0].message?.content || "Listen up, got nothing to say right now. Come back when you've got something interesting.";
+        const aiResponse = response.choices[0].message?.content || `Hey choom, looks like my neural circuits are fried. Try again in a bit.`;
         console.log('📥 Received AI response:', aiResponse);
         
         // After generating response, check for quest updates
@@ -102,7 +102,7 @@ export class JournalAgent {
       
       try {
         // Replace direct SQL call with journalService function
-        const recentEntries = await journalService.getRecentEntries(3, userId,);
+        const recentEntries = await journalService.getRecentEntries(3, userId);
 
         // Format context for OpenAI with timestamp info
         const context = recentEntries?.map(entry => ({
@@ -120,13 +120,13 @@ export class JournalAgent {
         const personalityType = await personalityService.getUserPersonality(userId);
         const personality = getPersonality(personalityType);
         
-        // Get OpenAI response
+        // Get OpenAI response with analysis prompt
         const response = await this.openai.chat.completions.create({
-          model: "deepseek-reasoner",
+          model: "deepseek-chat",
           messages: [
             {
               role: "system",
-              content: personality.journalAnalysisSystem
+              content: personality.prompts.analysis.system
             },
             {
               role: "user",
@@ -354,11 +354,11 @@ export class JournalAgent {
         // Generate response with improved personality system prompt
         console.log('🔄 Generating end-of-day response');
         const response = await this.openai.chat.completions.create({
-          model: "deepseek-reasoner",
+          model: "deepseek-chat",
           messages: [
             {
               role: "system",
-              content: personality.endOfDaySystem
+              content: personality.prompts.endOfDay.system
             },
             {
               role: "user",
@@ -372,11 +372,11 @@ export class JournalAgent {
         // Analysis prompt updated to also consider the paired responses
         console.log('🔄 Generating end-of-day analysis');
         const analysis = await this.openai.chat.completions.create({
-          model: "deepseek-reasoner",
+          model: "deepseek-chat",
           messages: [
             {
               role: "system",
-              content: personality.endOfDayAnalysisSystem
+              content: personality.prompts.endOfDay.system
             },
             {
               role: "user",

@@ -5,6 +5,8 @@ import { performanceLogger } from '@/utils/performanceLogger';
 import { Quest, Task } from '@/app/types';
 import { createTask, fetchTasks, updateTask, fetchTasksByQuest } from '@/services/tasksService'; // Import fetchTasksByQuest
 import { createQuest, fetchQuests, getOrCreateMiscQuest } from '@/services/questsService';
+import { personalityService } from '@/services/personalityService';
+import { getPersonality } from '@/services/agents/PersonalityPrompts';
 
 /**
  * Represents a task suggestion generated from user content
@@ -162,7 +164,13 @@ export class SuggestionAgent {
     performanceLogger.startOperation('generateTaskSuggestion');
     try {
       const currentDate = new Date().toISOString().split('T')[0];
-      const prompt = `Current date is: ${currentDate}
+      
+      // Get current personality for task generation
+      const personalityType = await personalityService.getUserPersonality(userId);
+      const personality = getPersonality(personalityType);
+
+      const prompt = `You are ${personality.name}. ${personality.description}
+Current date is: ${currentDate}
 
 Analyze this content and generate ONE OR MORE separate tasks. If multiple distinct tasks are mentioned, create a separate task for each one.
 
@@ -190,6 +198,7 @@ Generate a JSON object with this EXACT format:
 }
 
 IMPORTANT:
+- Write descriptions in your characteristic voice and style
 - Create SEPARATE tasks for distinct activities
 - Each task should be focused and specific
 - Do not combine unrelated tasks into one
@@ -272,15 +281,21 @@ IMPORTANT:
    * @param task The task suggestion to upgrade
    * @returns A quest suggestion if successful, null otherwise
    */
-  async upgradeTaskToQuest(task: TaskSuggestion): Promise<QuestSuggestion | null> {
+  async upgradeTaskToQuest(task: TaskSuggestion, userId: string): Promise<QuestSuggestion | null> {
     performanceLogger.startOperation('upgradeTaskToQuest');
     try {
       const currentDate = new Date().toISOString().split('T')[0];
+      
+      // Get current personality for quest generation
+      const personalityType = await personalityService.getUserPersonality(userId);
+      const personality = getPersonality(personalityType);
+      
       console.log('⬆️ Upgrading task to quest:', task.title);
       
-      const prompt = `Current date is: ${currentDate}
+      const prompt = `You are ${personality.name}. ${personality.description}
+Current date is: ${currentDate}
 
-Upgrade this task to a quest (a larger goal that might require multiple tasks):
+Upgrade this task to a quest (a larger goal that might require multiple tasks). Use your unique personality to frame these objectives.
 
 Task Title: ${task.title}
 Task Description: ${task.description}
@@ -291,7 +306,7 @@ Priority: ${task.priority}
 ${task.tags && task.tags.length > 0 ? `Tags: ${task.tags.join(', ')}` : ''}
 ${task.subtasks ? `Subtasks: ${task.subtasks}` : ''}
 
-Generate a JSON object with these EXACT fields:
+Generate a JSON object with these EXACT fields, using your characteristic voice and perspective:
 {
   "title": "Quest title - can be based on the original task or expanded",
   "tagline": "Short, one-line description of the quest",
@@ -303,16 +318,12 @@ Generate a JSON object with these EXACT fields:
       "title": "First related task - include the original task here",
       "description": "Description of first task",
       "scheduled_for": "YYYY-MM-DD"
-    },
-    {
-      "title": "Second related task that would help complete this quest",
-      "description": "Description of second task",
-      "scheduled_for": "YYYY-MM-DD"
     }
   ]
 }
 
 IMPORTANT:
+- Write in your unique voice and perspective
 - Make the original task the first related task
 - Add 2-3 more related tasks that would help achieve this quest
 - Make the quest a meaningful expansion of the original task
@@ -408,7 +419,7 @@ IMPORTANT:
         let updateData: Record<string, any> = {};
         
         if (!suggestion.updateValues) {
-          const updateFields = await this.generateTaskUpdateFields(suggestion, existingTask, suggestion.sourceContent);
+          const updateFields = await this.generateTaskUpdateFields(suggestion, existingTask, suggestion.sourceContent, userId);
           if (updateFields.updateValues) {
             updateData = { ...updateFields.updateValues };
           }
@@ -586,10 +597,15 @@ ${questsInfo}`;
   public async generateTaskUpdateFields(
     suggestion: TaskSuggestion, 
     existingTask: Task, 
-    sourceContent: string
+    sourceContent: string,
+    userId: string
   ): Promise<TaskUpdateFields> {
     performanceLogger.startOperation('generateTaskUpdateFields');
     try {
+      // Get current personality for update analysis
+      const personalityType = await personalityService.getUserPersonality(userId);
+      const personality = getPersonality(personalityType);
+
       // Default result
       const defaultResult: TaskUpdateFields = {
         shouldUpdate: false,
@@ -606,7 +622,9 @@ ${questsInfo}`;
       console.log(`Analyzing source content to generate updates for task: "${existingTask.title}"`);
       
       // Use Gemini 2.0 Flash to analyze the source content and suggest updates
-      const prompt = `You are analyzing a user message to determine how to update an existing task.
+      const prompt = `You are ${personality.name}. ${personality.description}
+
+Analyze user message to determine how to update an existing task. Use your unique perspective to evaluate these changes.
 
 Existing Task:
 Title: ${existingTask.title}
@@ -631,10 +649,11 @@ ${suggestion.location ? `Location: ${suggestion.location}` : ''}
 Based on the user message and the new suggestion, determine which fields should be updated in the existing task.
 
 IMPORTANT GUIDELINES:
-1. Only suggest updates for fields that have meaningful new information
-2. Use the user message and context to determine what should be updated
-3. Only include fields in updateValues that should actually change
-4. For status, only use one of these exact values: "ToDo", "InProgress", or "Done"
+1. Use your characteristic perspective to evaluate changes
+2. Only suggest updates for fields that have meaningful new information
+3. Use the user message and context to determine what should be updated
+4. Only include fields in updateValues that should actually change
+5. For status, only use one of these exact values: "ToDo", "InProgress", or "Done"
 
 Reply ONLY with a JSON object in this format:
 {
@@ -902,7 +921,7 @@ IMPORTANT:
   public async convertToEditSuggestion(suggestion: TaskSuggestion, existingTask: Task): Promise<TaskSuggestion> {
     try {
       // Generate update fields based on the source content
-      const updateFields = await this.generateTaskUpdateFields(suggestion, existingTask, suggestion.sourceContent);
+      const updateFields = await this.generateTaskUpdateFields(suggestion, existingTask, suggestion.sourceContent, existingTask.user_id);
       
       // Modify the suggestion to indicate it's an edit suggestion and preserve quest context
       suggestion.isEditSuggestion = true;

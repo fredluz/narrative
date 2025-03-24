@@ -1,31 +1,38 @@
-import React, { useState, useEffect } from 'react';
-import { View, Pressable, Text, StyleSheet, Modal } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import React, { useState } from 'react';
+import { View, Pressable, Text, StyleSheet, Modal, TouchableOpacity } from 'react-native';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useSupabase } from '@/contexts/SupabaseContext';
 import { ColorPicker } from './ColorPicker';
 import { authService } from '@/services/authService';
+import { PersonalityType, personalities } from '@/services/agents/PersonalityPrompts';
 import { personalityService } from '@/services/personalityService';
-import { PersonalityType } from '@/services/agents/PersonalityPrompts';
 
 export function SettingsButton() {
   const [isOpen, setIsOpen] = useState(false);
-  const [currentPersonality, setCurrentPersonality] = useState('TFRobot');
   const { themeColor, secondaryColor, setThemeColor, setSecondaryColor, textColor } = useTheme();
   const { session } = useSupabase();
+  const [selectedPersonality, setSelectedPersonality] = useState<PersonalityType>('johnny');
 
-  // Fetch current personality on mount
-  useEffect(() => {
+  React.useEffect(() => {
     if (session?.user?.id) {
-      personalityService.getUserPersonality(session.user.id)
-        .then(personality => {
-          setCurrentPersonality(personality);
-        })
-        .catch(error => {
-          console.error('Error getting personality:', error);
-        });
+      // Load current personality on mount
+      personalityService.getUserPersonality(session.user.id).then(personality => {
+        setSelectedPersonality(personality);
+      });
     }
   }, [session?.user?.id]);
+
+  const handlePersonalityChange = async (personality: PersonalityType) => {
+    if (!session?.user?.id) return;
+    
+    try {
+      await personalityService.setUserPersonality(session.user.id, personality);
+      setSelectedPersonality(personality);
+    } catch (error) {
+      console.error('Error updating personality:', error);
+    }
+  };
 
   const handleLogout = async () => {
     try {
@@ -34,31 +41,6 @@ export function SettingsButton() {
       setIsOpen(false);
     } catch (error) {
       console.error('Error signing out:', error);
-    }
-  };
-
-  const handlePersonalityChange = async (personality: PersonalityType) => {
-    console.log('Attempting to change personality to:', personality);
-    if (!session?.user?.id) return;
-    try {
-      await personalityService.setUserPersonality(session.user.id, personality);
-      setCurrentPersonality(personality);
-      console.log('Successfully set personality to:', personality);
-    } catch (error) {
-      console.error('Error updating personality:', error);
-    }
-  };
-
-  const getDisplayName = (personality: string) => {
-    switch (personality) {
-      case 'TFRobot':
-        return 'BT';
-      case 'johnny':
-        return 'Johnny';
-      case 'batman':
-        return 'Batman';
-      default:
-        return personality;
     }
   };
 
@@ -86,7 +68,10 @@ export function SettingsButton() {
         >
           <View 
             style={styles.popup}
+            onStartShouldSetResponder={() => true}
+            onTouchEnd={e => e.stopPropagation()}
           >
+            {/* Theme Color Settings */}
             <ColorPicker
               color={themeColor}
               onColorChange={setThemeColor}
@@ -99,36 +84,48 @@ export function SettingsButton() {
               label="Secondary Theme Color"
               textColor={textColor}
             />
-
-            {/* Personality Selector */}
+            
+            {/* AI Personality Selection */}
+            <Text style={[styles.label, { color: textColor }]}>AI Personality</Text>
             <View style={styles.personalityContainer}>
-              <Text style={[styles.label, { color: textColor }]}>AI Personality</Text>
-              <View style={styles.personalityButtons}>
-                {['TFRobot', 'johnny', 'batman'].map((personality) => (
-                  <Pressable
-                    key={personality}
-                    style={[
-                      styles.personalityButton,
-                      { borderColor: themeColor },
-                      personality === currentPersonality && {
-                        backgroundColor: `${themeColor}20`, // 20 is hex for 12% opacity
-                      }
-                    ]}
-                    onPress={() => handlePersonalityChange(personality as PersonalityType)}
-                  >
+              {(Object.keys(personalities) as PersonalityType[]).map((personality) => (
+                <TouchableOpacity
+                  key={personality}
+                  style={[
+                    styles.personalityButton,
+                    selectedPersonality === personality && {
+                      backgroundColor: themeColor,
+                      borderColor: secondaryColor,
+                    }
+                  ]}
+                  onPress={() => handlePersonalityChange(personality)}
+                >
+                  <MaterialIcons 
+                    name={
+                      personality === 'johnny' ? 'person' :
+                      personality === 'bt7274' ? 'smart-toy' :
+                      'security'
+                    }
+                    size={20} 
+                    color={selectedPersonality === personality ? secondaryColor : '#777'}
+                    style={styles.personalityIcon}
+                  />
+                  <View>
                     <Text style={[
-                      styles.personalityText, 
-                      { color: themeColor },
-                      personality === currentPersonality && { fontWeight: '700' }
+                      styles.personalityName,
+                      selectedPersonality === personality && { color: '#FFF' }
                     ]}>
-                      {getDisplayName(personality)}
+                      {personalities[personality].name}
                     </Text>
-                  </Pressable>
-                ))}
-              </View>
+                    <Text style={styles.personalityDescription} numberOfLines={2}>
+                      {personalities[personality].description}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
             </View>
             
-            {/* Logout button */}
+            {/* Logout Button */}
             <Pressable 
               style={[styles.logoutButton, { borderColor: themeColor }]}
               onPress={handleLogout}
@@ -190,25 +187,32 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
   },
-  pickerContainer: {
-    height: 300,
-    marginBottom: 16,
+  personalityContainer: {
+    marginBottom: 20,
+    gap: 8,
   },
-  currentColor: {
+  personalityButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  colorText: {
-    color: '#fff',
-    fontSize: 14,
-  },
-  colorPreview: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    borderWidth: 2,
+    padding: 12,
+    backgroundColor: 'rgba(40, 40, 40, 0.8)',
+    borderRadius: 8,
+    borderWidth: 1,
     borderColor: '#444',
+  },
+  personalityIcon: {
+    marginRight: 12,
+  },
+  personalityName: {
+    color: '#AAA',
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  personalityDescription: {
+    color: '#666',
+    fontSize: 12,
+    lineHeight: 16,
   },
   logoutButton: {
     flexDirection: 'row',
@@ -223,28 +227,6 @@ const styles = StyleSheet.create({
   logoutText: {
     marginLeft: 8,
     fontSize: 16,
-    fontWeight: '500',
-  },
-  personalityContainer: {
-    marginBottom: 20,
-  },
-  personalityButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  personalityButton: {
-    flex: 1,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  personalityText: {
-    fontSize: 14,
     fontWeight: '500',
   },
 });
