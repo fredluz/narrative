@@ -68,15 +68,17 @@ export class ChatAgent {
 
       console.log('\n=== ChatAgent.generateChatResponse ===');
       console.log('Current message:', message);
-      console.log('Using personality:', personalityType);
-      
-      // Replace direct SQL call with function from useChatData
+      console.log ('Current Personality:', personality.name);
+      // Get messages from localStorage instead of DB
       performanceLogger.startOperation('fetchCurrentMessages');
-      let currentMessages;
+      let currentMessages: ChatMessage[] = [];
       try {
-        currentMessages = await getCurrentMessagesFromDB(userId);
+        const storedMessages = localStorage.getItem(`chat_messages_local_${userId}`);
+        if (storedMessages) {
+          currentMessages = JSON.parse(storedMessages);
+        }
       } catch (currentError) {
-        console.error('Error fetching chat messages:', currentError);
+        console.error('Error fetching chat messages from localStorage:', currentError);
         throw currentError;
       }
       performanceLogger.endOperation('fetchCurrentMessages');
@@ -184,9 +186,6 @@ ${checkupContext}`
         })));
       }
       
-      // Add the new message from the user
-      messages.push({ role: "user", content: message });
-
       console.log('\n=== SENDING TO LLM ===');
       console.log('Full prompt data:', messages);
       
