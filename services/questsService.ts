@@ -37,36 +37,60 @@ type QuestRealtimePayload = RealtimePostgresChangesPayload<QuestUpdate>;
 
 // Database operations
 export async function fetchQuests(userId: string): Promise<Quest[]> {
-  const { data, error } = await supabase
-    .from('quests')
-    .select(`
-      id,
-      created_at,
-      updated_at,
-      tags,
-      title,
-      tagline,
-      description,
-      description_sugg,
-      is_main,
-      status,
-      start_date,
-      end_date,
-      analysis,
-      analysis_sugg,
-      parent_quest_id,
-      user_id,
-      tasks (*)
-    `)
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false });
-
-  if (error) {
-    console.error('Error fetching quests:', error);
-    throw error;
+  if (!userId) {
+    console.error('fetchQuests called without userId');
+    return [];
   }
 
-  return data || [];
+  console.log(`[questsService] Fetching quests for user: ${userId}`);
+  
+  try {
+    // Verify supabase client is initialized
+    if (!supabase) {
+      console.error('[questsService] Supabase client not initialized');
+      return [];
+    }
+
+    const { data, error } = await supabase
+      .from('quests')
+      .select(`
+        id,
+        created_at,
+        updated_at,
+        tags,
+        title,
+        tagline,
+        description,
+        description_sugg,
+        is_main,
+        status,
+        start_date,
+        end_date,
+        analysis,
+        analysis_sugg,
+        parent_quest_id,
+        user_id,
+        tasks (*)
+      `)
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('[questsService] Error fetching quests:', error);
+      throw error;
+    }
+
+    console.log(`[questsService] Successfully fetched ${data?.length || 0} quests`);
+    return data || [];
+  } catch (error) {
+    console.error('[questsService] Unexpected error in fetchQuests:', error);
+    
+    // In production, return empty array instead of throwing to prevent UI crashes
+    if (process.env.NODE_ENV === 'production') {
+      return [];
+    }
+    throw error;
+  }
 }
 
 // Renamed function to be more descriptive of what it returns

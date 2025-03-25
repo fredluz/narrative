@@ -41,12 +41,6 @@ export function requireAuth(
     return { redirect: '/landing' };
   }
 
-  // Handle new users who need onboarding (only when authenticated and not in auth or onboarding)
-  const inOnboarding = window.location.pathname.includes('/onboarding');
-  if (currentUserId && isNewUser && !inAuthGroup && !inOnboarding) {
-    return { redirect: '/onboarding' };
-  }
-
   return null;
 }
 

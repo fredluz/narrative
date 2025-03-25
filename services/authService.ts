@@ -10,10 +10,29 @@ WebBrowser.maybeCompleteAuthSession();
 
 // Create a redirect URI based on the platform and environment
 const createRedirectURL = () => {
-  // For web development, use the current URL
+  // For web platform
   if (Platform.OS === 'web') {
-    const origin = window.location.origin;
-    return `${origin}/auth/callback`;
+    const hostname = window.location.hostname;
+    const protocol = window.location.protocol;
+    
+    // For production environments (not localhost)
+    if (hostname !== 'localhost' && !hostname.includes('192.168.') && !hostname.includes('127.0.0.1')) {
+      // If it's the preview URL with the unique ID
+      if (hostname.includes('--dq4rj9xk2v.expo.app')) {
+        return `${protocol}//narrative--dq4rj9xk2v.expo.app/auth/callback`;
+      }
+      
+      // For the production URL
+      if (hostname.includes('narrative.expo.app')) {
+        return `${protocol}//narrative.expo.app/auth/callback`;
+      }
+      
+      // Fallback to using current origin if it's another production URL
+      return `${protocol}//${hostname}/auth/callback`;
+    }
+    
+    // For local development
+    return `${window.location.origin}/auth/callback`;
   }
 
   // For mobile, use the app scheme

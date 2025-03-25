@@ -224,7 +224,7 @@ ${checkupContext}`
   }
 
   async summarizeAndStoreSession(messages: ChatMessage[]): Promise<string> {
-    performanceLogger.startOperation('summarizeAndStoreSession');
+    performanceLogger.startOperation('storeSession');
 
     // Get the user_id right away for the event
     const userId = messages[0]?.user_id;
@@ -234,7 +234,7 @@ ${checkupContext}`
 
     try {
       if (!messages || messages.length === 0) {
-        throw new Error('No messages to summarize');
+        throw new Error('No messages to store');
       }
 
       // Verify all messages belong to the same user
@@ -243,75 +243,29 @@ ${checkupContext}`
         throw new Error('Session contains messages from multiple users');
       }
 
-      console.log('\n=== ChatAgent.summarizeAndStoreSession ===');
-      console.log('Messages to summarize:', messages.map(m => ({
-        role: m.is_user ? 'user' : 'assistant',
-        content: m.message
-      })));
-
-      performanceLogger.startOperation('buildSummaryPrompt');
-      const chatHistory = messages.map(msg => 
-        `${msg.is_user ? "User" : "Assistant"}: ${msg.message}`
-      ).join('\n');
-
-      // Get the appropriate personality prompts
-      const personalityType = await personalityService.getUserPersonality(userId);
-      const personality = getPersonality(personalityType);
+      console.log('\n=== ChatAgent.storeSession ===');
       
-      const summarizationPrompt = `You are ${personality.name}. ${personality.description}
-Now you need to summarize a conversation you just had with the user.
-
-INSTRUCTIONS:
-1. Review the conversation history carefully
-2. Create a concise summary capturing the key points discussed
-3. Extract relevant tags that categorize the conversation
-4. Format your response as:
-
-SUMMARY:
-(Write a concise summary here)
-
-TAGS:
-(List relevant tags, comma-separated)`;
-      performanceLogger.endOperation('buildSummaryPrompt');
-
-      console.log('\n=== LLM PROMPT DATA ===');
-      console.log('System prompt:', summarizationPrompt);
-      console.log('Chat history:', chatHistory);
-
-      performanceLogger.startOperation('aiSummarization');
-      const response = await this.openai.chat.completions.create({
-        model: "deepseek-chat",
-        messages: [
-          {
-            role: "system",
-            content: summarizationPrompt
-          },
-          {
-            role: "user",
-            content: `Here's our conversation:\n${chatHistory}\n\nSummarize our chat and suggest relevant tags.`
-          }
-        ],
-        temperature: 0.7,
-        max_tokens: 2000
-      });
-      performanceLogger.endOperation('aiSummarization');
-
-      const responseText = response.choices[0].message?.content || "Had a chat with the user but nothing worth noting.";
+      // Generate simple timestamp-based summary instead of using LLM
+      const messageCount = messages.length;
+      const timestamp = new Date().toLocaleString();
+      const summary = `Chat session with ${messageCount} messages on ${timestamp}`;
       
-      performanceLogger.startOperation('parseSummaryResponse');
-      // Parse the response to separate summary and tags
-      const summaryMatch = responseText.match(/SUMMARY:\s*(.*?)(?=\nTAGS:|$)/s);
-      const tagsMatch = responseText.match(/TAGS:\s*(.*?)$/s);
-      
-      const summary = summaryMatch ? summaryMatch[1].trim() : responseText;
-      const tags = tagsMatch ? tagsMatch[1].split(',').map(tag => tag.trim()) : [];
-      performanceLogger.endOperation('parseSummaryResponse');
+      // Use basic message content keywords as tags instead of LLM-generated ones
+      const userMessages = messages.filter(m => m.is_user).map(m => m.message).join(' ');
+      const commonWords = ['the', 'and', 'to', 'a', 'of', 'I', 'you', 'is', 'in', 'it', 'that', 'for', 'was'];
+      const potentialTags = userMessages
+        .toLowerCase()
+        .replace(/[^\w\s]/g, '')
+        .split(/\s+/)
+        .filter(word => word.length > 3 && !commonWords.includes(word))
+        .filter((word, i, arr) => arr.indexOf(word) === i) // Unique only
+        .slice(0, 5); // Limit to 5 tags
 
       performanceLogger.startOperation('dbOperations');
-      // Replace direct SQL calls with functions from useChatData
+      // Create session in database
       let sessionData;
       try {
-        sessionData = await createChatSession(summary, tags, userId);
+        sessionData = await createChatSession(summary, potentialTags, userId);
       } catch (sessionError) {
         throw sessionError;
       }
@@ -324,19 +278,19 @@ TAGS:
       }
       performanceLogger.endOperation('dbOperations');
 
-      // Continue with existing session storage...
+      // Generate checkup entry from the session
       await this.createCheckupEntryFromSession(
-        messages.filter(m => m.user_id === userId), // Extra safety: only include user's messages
+        messages.filter(m => m.user_id === userId),
         summary,
-        tags
+        potentialTags
       );
 
       return sessionData.id;
     } catch (error) {
-      console.error('Error in summarizeAndStoreSession:', error);
+      console.error('Error in storeSession:', error);
       throw error;
     } finally {
-      performanceLogger.endOperation('summarizeAndStoreSession');
+      performanceLogger.endOperation('storeSession');
     }
   }
 

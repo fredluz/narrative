@@ -404,7 +404,7 @@ export const SuggestionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
     upgradeTaskToQuest: async (task: TaskSuggestion) => {
       console.log('⬆️ [SuggestionContext] Upgrading task to quest:', task.title);
-      const quest = await suggestionAgent.upgradeTaskToQuest(task);
+      const quest = await suggestionAgent.upgradeTaskToQuest(task, userId);
       if (quest) {
         addSuggestionToQueue(quest);
         removeTaskSuggestion(task.id);

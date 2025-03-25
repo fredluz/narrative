@@ -48,6 +48,7 @@ export function EditTaskModal({
   const [quests, setQuests] = useState<Array<{ id: number; title: string }>>([]);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showQuestDropdown, setShowQuestDropdown] = useState(false);
+  const [isLoadingQuests, setIsLoadingQuests] = useState(false);
   const [formData, setFormData] = React.useState<TaskFormData>({
     title: '',
     description: '',
@@ -60,22 +61,32 @@ export function EditTaskModal({
     user_id: userId // Initialize with userId
   });
 
-  // Load quests when the modal opens
+  // Improved quest loading logic
   useEffect(() => {
     const loadQuests = async () => {
-      if (!session?.user?.id) return;
+      if (!visible) return;
+      
+      // Use provided userId instead of relying on session
+      if (!userId) {
+        console.error('No userId available for loading quests');
+        return;
+      }
+      
       try {
-        const loadedQuests = await fetchQuests(session.user.id);
+        setIsLoadingQuests(true);
+        console.log('Loading quests for userId:', userId);
+        const loadedQuests = await fetchQuests(userId);
+        console.log(`Loaded ${loadedQuests.length} quests`);
         setQuests(loadedQuests);
       } catch (err) {
         console.error('Error loading quests:', err);
+      } finally {
+        setIsLoadingQuests(false);
       }
     };
     
-    if (visible) {
-      loadQuests();
-    }
-  }, [visible, session?.user?.id]);
+    loadQuests();
+  }, [visible, userId]);
 
   React.useEffect(() => {
     if (task) {
@@ -197,15 +208,21 @@ export function EditTaskModal({
                 onPress={() => setShowQuestDropdown(!showQuestDropdown)}
               >
                 <Text style={{ color: '#FFF' }}>
-                  {formData.quest_id 
-                    ? quests.find(q => q.id === formData.quest_id)?.title || 'Select Quest'
-                    : 'Select Quest'}
+                  {isLoadingQuests 
+                    ? 'Loading quests...' 
+                    : formData.quest_id 
+                      ? quests.find(q => q.id === formData.quest_id)?.title || 'Select Quest'
+                      : 'Select Quest'}
                 </Text>
-                <MaterialIcons 
-                  name={showQuestDropdown ? 'expand-less' : 'expand-more'} 
-                  size={24} 
-                  color="#AAA"
-                />
+                {isLoadingQuests ? (
+                  <ActivityIndicator size="small" color="#AAA" />
+                ) : (
+                  <MaterialIcons 
+                    name={showQuestDropdown ? 'expand-less' : 'expand-more'} 
+                    size={24} 
+                    color="#AAA"
+                  />
+                )}
               </TouchableOpacity>
 
               {/* Dropdown options */}
