@@ -296,19 +296,26 @@ export async function deleteTask(taskId: number, userId: string): Promise<void> 
 }
 
 // React Hook
-export function useTasks() {
+export function useTasks(providedUserId?: string) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [taskListVisible, setTaskListVisible] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { session } = useSupabase();
 
+  // Use provided userId if available, otherwise fall back to session user
+  const userId = providedUserId || session?.user?.id;
+
   // Load tasks
   const loadTasks = async () => {
-    if (!session?.user?.id) return;
+    if (!userId) {
+      console.warn("useTasks: No userId provided, skipping task load");
+      return;
+    }
+    
     try {
       setLoading(true);
-      const data = await fetchTasks(session.user.id);
+      const data = await fetchTasks(userId);
       setTasks(data);
     } catch (err) {
       console.error('Error loading tasks:', err);
@@ -320,7 +327,7 @@ export function useTasks() {
 
   // Initial load and subscription setup
   useEffect(() => {
-    if (!session?.user?.id) return;
+    if (!userId) return;
     
     loadTasks();
 
@@ -332,7 +339,7 @@ export function useTasks() {
           event: '*', 
           schema: 'public', 
           table: 'tasks',
-          filter: `user_id=eq.${session.user.id}`
+          filter: `user_id=eq.${userId}`
         },
         (payload) => {
           console.log('Task change received:', payload);
@@ -344,7 +351,7 @@ export function useTasks() {
     return () => {
       subscription.unsubscribe();
     };
-  }, [session?.user?.id]);
+  }, [userId]);
 
   return {
     tasks,

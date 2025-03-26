@@ -272,7 +272,7 @@ export function ChatInterface({
       personalityService.getUserPersonality(session.user.id)
         .then(personality => {
           switch(personality) {
-            case 'TFRobot':
+            case 'bt7274':
               setPersonalityName('BT');
               break;
             case 'johnny':
@@ -281,8 +281,7 @@ export function ChatInterface({
             case 'batman':
               setPersonalityName('BATMAN');
               break;
-            default:
-              setPersonalityName(personality.toUpperCase());
+            
           }
         })
         .catch(error => {

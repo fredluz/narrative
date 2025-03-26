@@ -1,188 +1,176 @@
-import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
-import { useRouter } from 'expo-router';
-import { personalityService } from '@/services/personalityService';
+import { useRouter } from 'expo-router'; // Keep if needed for error redirects
+import { personalityService } from '@/services/personalityService'; // Keep if checkIfNewUser uses it
 
 interface SupabaseContextType {
   session: Session | null;
+  /** ONLY true during the initial session check on app startup. */
   isLoading: boolean;
-  refreshSession: () => Promise<void>;
   isNewUser: boolean;
   checkIfNewUser: (userId: string) => Promise<boolean>;
+  /** Manually triggers a session refresh attempt. */
+  refreshSession: () => Promise<Session | null>;
 }
 
 const SupabaseContext = createContext<SupabaseContextType>({
   session: null,
-  isLoading: true,
-  refreshSession: async () => {},
+  isLoading: true, // Start loading initially
   isNewUser: false,
   checkIfNewUser: async () => false,
+  refreshSession: async () => null,
 });
 
 export function SupabaseProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true); // Tracks INITIAL load only
   const [isNewUser, setIsNewUser] = useState(false);
-  const router = useRouter();
-  
-  // Use a ref to track if we need to refresh
-  const sessionExpiryTimeout = useRef<NodeJS.Timeout | null>(null);
+  const router = useRouter(); // Keep for potential error redirects
 
-  // Check if user is new (no ai_personality set)
   const checkIfNewUser = useCallback(async (userId: string) => {
+    console.log(`[SupabaseContext] Checking if user ${userId} is new...`);
     try {
       const { data, error } = await supabase
         .from('profiles')
         .select('ai_personality')
         .eq('id', userId)
         .single();
-      
-      if (error) throw error;
-      
-      // User is new if ai_personality is null, undefined or empty string
+
+      // PGRST116 = No rows found, which is expected for a new user profile fetch
+      if (error && error.code !== 'PGRST116') {
+          console.error('[SupabaseContext] Error fetching profile for new user check:', error);
+          throw error; // Re-throw other errors
+      }
+
       const isNew = !data?.ai_personality;
+      console.log(`[SupabaseContext] User ${userId} isNew: ${isNew}`);
       setIsNewUser(isNew);
       return isNew;
     } catch (error) {
-      console.error('Error checking if user is new:', error);
+      console.error('[SupabaseContext] Unexpected error in checkIfNewUser:', error);
+      setIsNewUser(false); // Default to not new on error
       return false;
     }
-  }, []);
+  }, []); // Empty dependency array - this function doesn't depend on component state
 
-  // Function to refresh the session state
-  const refreshSession = useCallback(async () => {
+  // Function to manually refresh session state if needed (e.g., button click)
+  // It attempts refreshSession first, then falls back to getSession.
+  // It does NOT affect the initial isLoading state.
+  const refreshSession = useCallback(async (): Promise<Session | null> => {
+    console.log('[SupabaseContext] Attempting manual session refresh...');
+    let refreshedSession: Session | null = null;
     try {
-      setIsLoading(true);
-      const { data: { session: currentSession } } = await supabase.auth.getSession();
-      
-      console.log('Session refresh:', currentSession ? 'Session exists' : 'No session');
-      
-      if (currentSession) {
-        // Log session expiry time for debugging
-        const expiresAt = new Date(currentSession.expires_at! * 1000);
-        console.log(`Session will expire at: ${expiresAt.toLocaleString()}`);
-        
-        // Check if this is a new user
-        await checkIfNewUser(currentSession.user.id);
-      }
-      
-      setSession(currentSession);
-      
-      // Schedule session refresh before expiry if we have a session
-      scheduleSessionRefresh(currentSession);
-    } catch (error) {
-      console.error('Error refreshing session:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [checkIfNewUser]);
-  
-  // Schedule a session refresh before the token expires
-  const scheduleSessionRefresh = useCallback((currentSession: Session | null) => {
-    // Clear any existing timeout
-    if (sessionExpiryTimeout.current) {
-      clearTimeout(sessionExpiryTimeout.current);
-      sessionExpiryTimeout.current = null;
-    }
-    
-    // If no session, nothing to schedule
-    if (!currentSession) return;
-    
-    try {
-      // Get expiry time from the session (in seconds)
-      const expiresAt = currentSession.expires_at;
-      if (!expiresAt) return;
-      
-      // Calculate when to refresh (60 seconds before expiry)
-      const expiryDate = new Date(expiresAt * 1000);
-      const now = new Date();
-      const timeUntilExpiry = expiryDate.getTime() - now.getTime();
-      const refreshTime = Math.max(timeUntilExpiry - 60000, 0); // 60 seconds before expiry, minimum 0
-      
-      if (refreshTime <= 0) {
-        // Token is already expired or about to expire, refresh now
-        refreshSession();
-        return;
-      }
-      
-      console.log(`Scheduling session refresh in ${Math.round(refreshTime / 1000)} seconds`);
-      
-      // Set timeout to refresh session before it expires
-      sessionExpiryTimeout.current = setTimeout(() => {
-        console.log('Executing scheduled session refresh');
-        supabase.auth.refreshSession().then(({ data, error }) => {
-          if (error) {
-            console.error('Error refreshing session:', error);
-            return;
-          }
-          
-          if (data.session) {
-            console.log('Session refreshed successfully');
-            setSession(data.session);
-            // Schedule the next refresh
-            scheduleSessionRefresh(data.session);
-          }
-        });
-      }, refreshTime);
-    } catch (e) {
-      console.error('Error scheduling session refresh:', e);
-    }
-  }, [refreshSession]);
+      // Prefer refreshSession as it uses the refresh token
+      const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
 
-  useEffect(() => {
-    // Initialize session
-    refreshSession();
-
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, newSession) => {
-      console.log('Auth state changed:', event, newSession ? 'Session exists' : 'No session');
-      
-      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-        setSession(newSession);
-        
-        if (newSession) {
-          const expiresAt = new Date(newSession.expires_at! * 1000).toLocaleString();
-          console.log(`User ${newSession.user.id} authenticated until ${expiresAt}`);
-          
-          // Check if user is new when they sign in
-          if (event === 'SIGNED_IN') {
-            await checkIfNewUser(newSession.user.id);
-          }
-          
-          // Schedule refresh for this new session
-          scheduleSessionRefresh(newSession);
+      if (refreshError) {
+        console.warn('[SupabaseContext] Manual refreshSession failed, trying getSession:', refreshError.message);
+        // Fallback to getSession if refresh fails (e.g., invalid refresh token)
+        const { data: getData, error: getError } = await supabase.auth.getSession();
+        if (getError) {
+          console.error('[SupabaseContext] Manual getSession failed after refresh failure:', getError);
+          throw getError; // Throw if both fail
         }
-      } else if (event === 'SIGNED_OUT') {
+        refreshedSession = getData.session;
+      } else {
+        refreshedSession = refreshData.session;
+      }
+
+      console.log('[SupabaseContext] Manual refresh check result:', refreshedSession ? 'Session active' : 'No session');
+      setSession(refreshedSession); // Update state immediately
+
+      if (refreshedSession) {
+        await checkIfNewUser(refreshedSession.user.id);
+      } else {
+        setIsNewUser(false);
+      }
+      return refreshedSession;
+
+    } catch (error) {
+      console.error('[SupabaseContext] Error during manual session refresh:', error);
+      setSession(null); // Clear session on critical error
+      setIsNewUser(false);
+      // Consider redirecting on specific auth errors if needed
+      // if (error?.status === 401 || error?.message?.includes('invalid refresh token')) {
+      //    router.replace('/auth');
+      // }
+      return null; // Indicate failure
+    }
+  }, [checkIfNewUser, router]); // Add router if used
+
+  // Initial session fetch logic, runs only once on mount
+  const initialSessionFetch = useCallback(async () => {
+    console.log('[SupabaseContext] Performing initial session fetch...');
+    // No need to set isLoading=true here, it starts as true
+    try {
+      // getSession is sufficient and lighter for initial check
+      const { data: { session: currentSession }, error } = await supabase.auth.getSession();
+      if (error) {
+        console.error('[SupabaseContext] Initial getSession error:', error);
         setSession(null);
         setIsNewUser(false);
-        
-        // Clear any scheduled refresh
-        if (sessionExpiryTimeout.current) {
-          clearTimeout(sessionExpiryTimeout.current);
-          sessionExpiryTimeout.current = null;
+      } else {
+        console.log('[SupabaseContext] Initial getSession result:', currentSession ? `Session found for ${currentSession.user.id}` : 'No session');
+        setSession(currentSession);
+        if (currentSession) {
+          await checkIfNewUser(currentSession.user.id);
+        } else {
+          setIsNewUser(false);
         }
       }
+    } catch (e) {
+      console.error('[SupabaseContext] Unexpected error during initial session fetch:', e);
+      setSession(null);
+      setIsNewUser(false);
+    } finally {
+      console.log('[SupabaseContext] Initial session fetch complete.');
+      setIsLoading(false); // Mark initial loading as finished
+    }
+  }, [checkIfNewUser]); // Depends on checkIfNewUser
+
+  // Effect to run initial fetch and set up listener
+  useEffect(() => {
+    initialSessionFetch(); // Run the initial check
+
+    // Set up the listener for subsequent auth events
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, newSession) => {
+      console.log(`[SupabaseContext] Auth state changed: ${event}`, newSession ? `User: ${newSession.user.id}` : 'No session');
+
+      // Update session state directly from the event
+      setSession(newSession);
+
+      // Update isNewUser status based on the new session state
+      if (newSession) {
+        // Avoid redundant checks if the user ID hasn't actually changed (e.g., on TOKEN_REFRESHED)
+        // Only check if it's a SIGNED_IN event or if the user ID is different from the previous session state
+        // Note: Comparing session objects directly might be unreliable due to object references. Use IDs.
+        // We need access to the *previous* session state here. Let's simplify for now:
+        // Check if new on SIGNED_IN. For TOKEN_REFRESHED, assume user status (new/existing) is unchanged.
+        if (event === 'SIGNED_IN') {
+            await checkIfNewUser(newSession.user.id);
+        }
+      } else {
+        // Clear isNewUser if session becomes null (SIGNED_OUT or error)
+        setIsNewUser(false);
+      }
+       // *** Crucially, DO NOT set isLoading here. ***
     });
 
+    // Cleanup listener on unmount
     return () => {
-      // Clean up the auth subscription
+      console.log('[SupabaseContext] Unsubscribing from auth state changes.');
       subscription.unsubscribe();
-      
-      // Clear any scheduled refresh
-      if (sessionExpiryTimeout.current) {
-        clearTimeout(sessionExpiryTimeout.current);
-        sessionExpiryTimeout.current = null;
-      }
     };
-  }, [scheduleSessionRefresh, checkIfNewUser]);
+  }, [initialSessionFetch, checkIfNewUser]); // Dependencies for setting up the effect
 
+  // Provide the context value
   const value = {
     session,
-    isLoading,
-    refreshSession,
+    isLoading, // Now accurately reflects ONLY the initial load state
     isNewUser,
     checkIfNewUser,
+    refreshSession, // Provide the manual refresh function
   };
 
   return (

@@ -33,7 +33,7 @@ export const AIResponse: React.FC<AIResponseProps> = ({
         .then(personality => {
           // Convert personality type to display name
           switch(personality) {
-            case 'TFRobot':
+            case 'bt7274':
               setPersonalityName('BT');
               break;
             case 'johnny':
@@ -42,8 +42,7 @@ export const AIResponse: React.FC<AIResponseProps> = ({
             case 'batman':
               setPersonalityName('BATMAN');
               break;
-            default:
-              setPersonalityName(personality.toUpperCase());
+            
           }
         })
         .catch(error => {

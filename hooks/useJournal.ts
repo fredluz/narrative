@@ -2,8 +2,11 @@ import { useState, useEffect, useCallback } from 'react';
 import { journalService, JournalEntry } from '@/services/journalService';
 import { useQuestUpdate } from '@/contexts/QuestUpdateContext';
 import { useSupabase } from '@/contexts/SupabaseContext';
+import { useRouter } from 'expo-router';
 
 export function useJournal() {
+    const router = useRouter();
+
   const { session } = useSupabase();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [entries, setEntries] = useState<Record<string, JournalEntry[]>>({});
@@ -21,8 +24,7 @@ export function useJournal() {
   // Fetch entries for the last 7 days
   const fetchRecentEntries = useCallback(async () => {
     if (!session?.user?.id) {
-      console.warn("Cannot fetch entries: User not logged in");
-      setError("Please log in to view journal entries");
+      setError("User not authenticated");
       return;
     }
 

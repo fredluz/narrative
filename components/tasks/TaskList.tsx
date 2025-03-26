@@ -21,28 +21,39 @@ import { useSupabase } from '@/contexts/SupabaseContext';
 
 interface TaskListProps {
   compactMode?: boolean;
+  userId?: string; // Add userId as a prop
 }
 
-export function TaskList({ compactMode = false }: TaskListProps) {
+export function TaskList({ compactMode = false, userId }: TaskListProps) {
   const { session } = useSupabase();
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const { shouldUpdate, resetUpdate } = useQuestUpdate();
   const { themeColor, secondaryColor } = useTheme();
   const [containerHeight, setContainerHeight] = useState<number>(0);
   const [availableSpace, setAvailableSpace] = useState<number>(0);
+  const [localError, setLocalError] = useState<string | null>(null);
   
-  // Get tasks from the hook
-  const { tasks: hookTasks, loading: hookLoading, error: hookError, reload: loadTasks } = useTasks();
-
-  // Keep our local tasks state in sync with the hook
+  // Pass userId to useTasks hook and ensure it's not undefined
+  const { tasks, loading, error, reload: loadTasks } = useTasks(userId || '');
+  
+  // Clear local error when tasks reload
   useEffect(() => {
-    setTasks(hookTasks);
-    setLoading(hookLoading);
-    if (hookError) setError(hookError);
-  }, [hookTasks, hookLoading, hookError]);
-  
+    setLocalError(null);
+  }, [tasks]);
+
+  // Verify current user has permission to update tasks
+  const verifyCurrentUser = React.useMemo(() => {
+    if (!session?.user?.id || !userId) return false;
+    return session.user.id === userId;
+  }, [session?.user?.id, userId]);
+
+  // Reload tasks when quest updates occur
+  useEffect(() => {
+    if (shouldUpdate && userId) {
+      loadTasks();
+      resetUpdate();
+    }
+  }, [shouldUpdate, userId, loadTasks, resetUpdate]);
+
   // Make text more visible against dark backgrounds
   const getBrightAccent = (baseColor: string) => {
     const hex = baseColor.replace('#', '');
@@ -67,44 +78,25 @@ export function TaskList({ compactMode = false }: TaskListProps) {
   
   const brightAccent = getBrightAccent(themeColor);
 
-  useEffect(() => {
-    loadTasks();
-  }, []);
-
-  useEffect(() => {
-    if (shouldUpdate) {
-      loadTasks();
-      resetUpdate();
-    }
-  }, [shouldUpdate]);
-
   const toggleTaskCompletion = async (taskId: number, currentStatus: string, taskUserId: string) => {
-    if (!session?.user?.id) {
-      console.warn("User not logged in. Cannot update task.");
-      setError("Please log in to update tasks.");
+    if (!userId || !verifyCurrentUser) {
+      setLocalError("Please log in to update tasks.");
       return;
     }
 
     // Verify task ownership
-    if (taskUserId !== session.user.id) {
-      console.error("Cannot update task: User does not own this task");
-      setError("You don't have permission to update this task.");
+    if (taskUserId !== userId) {
+      setLocalError("You don't have permission to update this task.");
       return;
     }
     
     try {
       const newStatus = getNextStatus(currentStatus);
-      await updateTaskStatus(taskId, newStatus, session.user.id);
-      
-      // Update the local state
-      const updatedTasks = tasks.map(task => 
-        task.id === taskId ? { ...task, status: newStatus } : task
-      );
-      
-      setTasks(updatedTasks);
+      await updateTaskStatus(taskId, newStatus, userId);
+      await loadTasks(); // Added await to ensure tasks are reloaded after update
     } catch (err) {
-      console.error("Failed to update task status:", { error: err, userId: session.user.id });
-      setError("Failed to update task status");
+      console.error("Failed to update task status:", { error: err, userId: userId });
+      setLocalError("Failed to update task status");
     }
   };
 
@@ -257,7 +249,7 @@ export function TaskList({ compactMode = false }: TaskListProps) {
                       <TouchableOpacity
                         onPress={() => toggleTaskCompletion(task.id, task.status, task.user_id)}
                         style={{ padding: compactMode ? 4 : 8 }}
-                        disabled={!session?.user?.id || task.user_id !== session.user.id}
+                        disabled={!verifyCurrentUser || task.user_id !== userId}
                       >
                         <MaterialIcons 
                           name={
@@ -267,7 +259,7 @@ export function TaskList({ compactMode = false }: TaskListProps) {
                           }
                           size={compactMode ? 18 : 24}
                           color={
-                            !session?.user?.id || task.user_id !== session.user.id ? '#444' :
+                            !verifyCurrentUser || task.user_id !== userId ? '#444' :
                             task.status === 'Done' ? secondaryColor :
                             task.status === 'InProgress' ? themeColor :
                             '#666'
