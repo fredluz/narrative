@@ -12,33 +12,27 @@ WebBrowser.maybeCompleteAuthSession();
 const createRedirectURL = () => {
   // For web platform
   if (Platform.OS === 'web') {
-    const hostname = window.location.hostname;
-    const protocol = window.location.protocol;
+    const currentUrl = window.location.href;
+    const prodUrl = 'narrative.expo.app';
     
-    // For production environments (not localhost)
-    if (hostname !== 'localhost' && !hostname.includes('192.168.') && !hostname.includes('127.0.0.1')) {
-      // If it's the preview URL with the unique ID
-      if (hostname.includes('--dq4rj9xk2v.expo.app')) {
-        return `${protocol}//narrative--dq4rj9xk2v.expo.app/auth/callback`;
-      }
-      
-      // For the production URL
-      if (hostname.includes('narrative.expo.app')) {
-        return `${protocol}//narrative.expo.app/auth/callback`;
-      }
-      
-      // Fallback to using current origin if it's another production URL
-      return `${protocol}//${hostname}/auth/callback`;
+    // For localhost development
+    if (currentUrl.includes('localhost')) {
+      return `${window.location.origin}/auth/callback`;
     }
     
-    // For local development
+    // For production environment
+    if (currentUrl.includes(prodUrl)) {
+      return `https://${prodUrl}/auth/callback`;
+    }
+    
+    // For any other web environment, use current origin
     return `${window.location.origin}/auth/callback`;
   }
 
   // For mobile, use the app scheme
   return makeRedirectUri({
     scheme: 'questlog',
-    path: 'auth/callback',
+    path: 'auth/callback'
   });
 };
 

@@ -14,6 +14,7 @@ import {
 import { PersonalityType, getPersonality } from './PersonalityPrompts';
 import { personalityService } from '../personalityService';
 import { eventsService, EVENT_NAMES } from '../eventsService';
+import { fetchActiveTasks } from '../tasksService';
 
 export class ChatAgent {
   private openai: OpenAI;
@@ -90,6 +91,13 @@ export class ChatAgent {
       performanceLogger.endOperation('findRelevantQuests');
       console.log('Found relevant quests:', relevantQuests.map(q => q.title));
 
+      // Get active tasks alongside quests
+      console.log('Fetching active tasks');
+      performanceLogger.startOperation('fetchActiveTasks');
+      const activeTasks = await fetchActiveTasks(userId);
+      performanceLogger.endOperation('fetchActiveTasks');
+      console.log('Found active tasks:', activeTasks.length);
+
       // Get today's checkups first
       const today = new Date().toISOString().split('T')[0];
       console.log('Fetching today\'s checkups');
@@ -121,6 +129,22 @@ export class ChatAgent {
           }
           return questInfo;
         }).join('\n---\n');
+      }
+
+      // Add tasks context
+      let tasksContext = '';
+      if (activeTasks.length > 0) {
+        tasksContext = '\nACTIVE / CURRENT TASKS (this is what the user is working on right now):\n' + activeTasks.map(task => {
+          let taskInfo = `- ${task.title}\n`;
+          if (task.description) {
+            taskInfo += `  Description: ${task.description}\n`;
+          }
+          taskInfo += `  Status: ${task.status}\n`;
+          if (task.quest?.title) {
+            taskInfo += `  Part of Quest: ${task.quest.title}\n`;
+          }
+          return taskInfo;
+        }).join('\n');
       }
 
       // Format today's checkups with responses as additional context
@@ -168,10 +192,14 @@ export class ChatAgent {
           role: "system",
           content: personality.prompts.chat.system + `
 
-Background context from possibly relevant quests and tasks(only if relevant to current conversation):
+Background context from possibly relevant quests (only if relevant to current conversation):
 ${questContext ? '\n' + questContext + '\n' : ''}
+Background context from today's checkups (use this sparingly, only when relevant to current conversation):
+${tasksContext ? '\n' + tasksContext + '\n' : ''}
 Background context from recent journal entries (use this sparingly, only when relevant to current conversation):
 ${journalContext}
+Background context from possibly relevant tasks (only if relevant to current conversation):
+${tasksContext ? '\n' + tasksContext + '\n' : ''}
 Additional background context from today's checkups (use this sparingly, only if relevant):
 ${checkupContext}`
         }

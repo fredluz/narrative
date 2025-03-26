@@ -295,6 +295,41 @@ export async function deleteTask(taskId: number, userId: string): Promise<void> 
   return Promise.resolve();
 }
 
+// New function to fetch tasks by status
+export async function fetchTasksByStatus(userId: string, statuses: TaskStatus[]): Promise<Task[]> {
+  console.log('Fetching tasks with statuses:', statuses);
+  
+  const { data, error } = await supabase
+    .from('tasks')
+    .select(`
+      *,
+      quest:quests!quest_id (
+        id,
+        title,
+        tagline,
+        is_main,
+        status,
+        start_date,
+        end_date
+      )
+    `)
+    .eq('user_id', userId)
+    .in('status', statuses)
+    .order('scheduled_for', { ascending: true });
+
+  if (error) {
+    console.error('Error fetching tasks by status:', error);
+    throw error;
+  }
+
+  return data || [];
+}
+
+// Helper function to get only active tasks (ToDo and InProgress)
+export async function fetchActiveTasks(userId: string): Promise<Task[]> {
+  return fetchTasksByStatus(userId, ['ToDo', 'InProgress']);
+}
+
 // React Hook
 export function useTasks(providedUserId?: string) {
   const [tasks, setTasks] = useState<Task[]>([]);
