@@ -46,10 +46,13 @@ export function SettingsButton() {
           style={styles.modalOverlay}
           onPress={() => setIsOpen(false)}
         >
-          <View 
+          <TouchableOpacity 
             style={styles.popup}
-            onStartShouldSetResponder={() => true}
-            onTouchEnd={e => e.stopPropagation()}
+            activeOpacity={1}
+            onPress={(e) => {
+              // Prevent click from propagating to overlay
+              e.stopPropagation();
+            }}
           >
             <ColorPicker
               color={themeColor}
@@ -64,14 +67,15 @@ export function SettingsButton() {
               textColor={textColor}
             />
             
-            <Pressable 
+            <TouchableOpacity 
               style={[styles.logoutButton, { borderColor: themeColor }]}
               onPress={handleLogout}
+              activeOpacity={0.7}
             >
               <Ionicons name="log-out-outline" size={20} color={themeColor} />
               <Text style={[styles.logoutText, { color: themeColor }]}>Logout</Text>
-            </Pressable>
-          </View>
+            </TouchableOpacity>
+          </TouchableOpacity>
         </Pressable>
       </Modal>
     </View>

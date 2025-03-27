@@ -14,7 +14,7 @@ import { colors } from '@/app/styles/global';
 import { SettingsButton } from '@/components/ui/SettingsButton';
 import { useChatData } from '@/hooks/useChatData';
 import { useQuestUpdate } from '@/contexts/QuestUpdateContext';
-import { JournalPanel } from '@/components/journal/JournalPanel';
+import { SprintBoard } from '@/components/sprint/SprintBoard';
 import { useSupabase } from '@/contexts/SupabaseContext'; // Use refined context
 import TriangularSpinner from '../loading/TriangularSpinner';
 import { useTasks } from '@/services/tasksService'; // Import useTasks
@@ -174,14 +174,13 @@ export function DesktopLayout() {
         />
       </View>
 
-      {/* Column 3: Journal */}
+      {/* Column 3: Sprint Board (replaced JournalPanel) */}
       <View style={[styles.column, { position: 'relative' }]}>
-        <JournalPanel
+        <SprintBoard
           themeColor={themeColor}
           textColor={textColor}
           fullColumnMode={true}
           userId={userId} // Pass confirmed userId
-          // showAnalysis might be needed
         />
       </View>
       <PersonalityButton />

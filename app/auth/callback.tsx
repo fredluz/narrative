@@ -16,59 +16,60 @@ export default function AuthCallback() {
   useEffect(() => {
     const handleOAuthCallback = async () => {
       try {
-        // Check if there's a code in the URL (PKCE flow)
-        const url = new URL(window.location.href);
-        const code = url.searchParams.get('code');
+        setStatusMessage('Processing authentication...');
         
-        if (code) {
-          setStatusMessage('Processing authentication...');
-          console.log('Callback: found authorization code, exchanging...');
-          const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+        // Get the hash from the URL if present
+        const hashParams = window.location.hash;
+        if (hashParams) {
+          // Remove the '#' from the beginning
+          const cleanHash = hashParams.substring(1);
+          // Parse the hash parameters
+          const params = new URLSearchParams(cleanHash);
+          const access_token = params.get('access_token');
+          const refresh_token = params.get('refresh_token');
           
-          if (error) {
-            console.error('Code exchange error:', error);
-            setError(`Authentication failed: ${error.message}`);
-            setStatusMessage('Authentication failed. Redirecting...');
-            setTimeout(() => router.replace('/auth'), 2000);
-            return;
-          }
-          
-          if (data.session) {
-            console.log('Session established via code exchange');
-            setStatusMessage('Authentication successful!');
+          if (access_token && refresh_token) {
+            const { data, error } = await supabase.auth.setSession({
+              access_token,
+              refresh_token
+            });
             
-            // Explicitly refresh the session in context
-            await refreshSession();
-            
-            // Short delay to show success message
-            setTimeout(() => router.replace('/landing'), 500);
-            return;
+            if (error) throw error;
+            if (data.session) {
+              console.log('Session established from hash');
+              await refreshSession();
+              setTimeout(() => router.replace('/landing'), 500);
+              return;
+            }
           }
         }
-        
-        // Fallback: Check for existing session
-        setStatusMessage('Checking session...');
-        await refreshSession();
-        
-        // Double-check for existing session using local query to avoid potential state timing issues
+
+        // If no hash parameters, try getting the current session
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
         
         if (sessionError) {
           console.error('Session error:', sessionError);
-          setError(`Session error: ${sessionError.message}`);
-          setStatusMessage('Session verification failed. Redirecting...');
-          setTimeout(() => router.replace('/auth'), 2000);
-          return;
+          throw sessionError;
         }
         
         if (session) {
-          console.log('Existing session found');
-          setStatusMessage('Session found! Redirecting...');
+          console.log('Session established');
+          setStatusMessage('Authentication successful!');
+          await refreshSession();
           setTimeout(() => router.replace('/landing'), 500);
           return;
         }
+
+        // Check for error in query parameters
+        const url = new URL(window.location.href);
+        const errorDescription = url.searchParams.get('error_description');
         
-        console.error('No session or authorization code found');
+        if (errorDescription) {
+          throw new Error(errorDescription);
+        }
+        
+        // No session and no error means we need to redirect back to auth
+        console.error('No session found');
         setError('No valid session found');
         setStatusMessage('No valid session found. Redirecting...');
         setTimeout(() => router.replace('/auth'), 2000);
