@@ -306,7 +306,7 @@ IMPORTANT:
       const prompt = `You are ${personality.name}. ${personality.description}
 Current date is: ${currentDate}
 
-Upgrade this task to a quest (a larger goal that might require multiple tasks). Use your unique personality to frame these objectives.
+Upgrade this task to a project (a larger goal that might require multiple tasks). 
 
 Task Title: ${task.title}
 Task Description: ${task.description}
@@ -319,8 +319,8 @@ ${task.subtasks ? `Subtasks: ${task.subtasks}` : ''}
 
 Generate a JSON object with these EXACT fields, using your characteristic voice and perspective:
 {
-  "title": "Quest title - can be based on the original task or expanded",
-  "tagline": "Short, one-line description of the quest",
+  "title": "Project title - can be based on the original task or expanded",
+  "tagline": "Short, one-line description of the Project",
   "description": "Detailed description of the overall goal/objective",
   "start_date": "YYYY-MM-DD - must be ${currentDate} or later",
   "end_date": "YYYY-MM-DD - must be after start_date",
@@ -335,9 +335,9 @@ Generate a JSON object with these EXACT fields, using your characteristic voice 
 
 IMPORTANT:
 - Write in your unique voice and perspective
-- Make the original task the first related task
-- Add 2-3 more related tasks that would help achieve this quest
-- Make the quest a meaningful expansion of the original task
+- Add subtasks of the original task to the related tasks
+- Add 2-3 more related tasks that would help achieve this project
+- Make the project a meaningful expansion of the original task
 - All dates must be ${currentDate} or later
 - Never use dates from the past`;
 
@@ -554,7 +554,7 @@ Find the best quest for this task:
 New Task:
 ${taskInfo}
 
-Available Quests:
+Available Projects:
 ${questsInfo}`;
 
       // Generate content with structured output
@@ -850,7 +850,7 @@ Reply ONLY with a JSON object in this format:
       
       const prompt = `Current date is: ${currentDate}
 
-Generate an improved task description using the context of its predecessor task and quest.
+Generate an improved task description using the context of its predecessor task and Project.
 
 Previous Task:
 Title: ${previousTask.title}
@@ -858,7 +858,7 @@ Description: ${previousTask.description || 'None'}
 Status: ${previousTask.status}
 Priority: ${previousTask.priority || 'None'}
 
-${questContext ? `Related Quest:
+${questContext ? `Related Project:
 Title: ${questContext.title}
 Description: ${questContext.description || 'None'}
 Status: ${questContext.status}` : ''}

@@ -89,8 +89,8 @@ export class ChatAgent {
       performanceLogger.startOperation('buildContext');
       let questContext = '';
       if (relevantQuests.length > 0) {
-        questContext = '\nRELEVANT QUEST AND TASK DETAILS:\n' + relevantQuests.map(quest => {
-          let questInfo = `\nQuest: ${quest.title}\n`;
+        questContext = '\nRELEVANT PROJECT AND TASK DETAILS:\n' + relevantQuests.map(quest => {
+          let questInfo = `\nProject: ${quest.title}\n`;
           questInfo += `Description: ${quest.description || 'No description available'}\n`;
           questInfo += `Current Status: ${quest.status || 'Unknown'}\n`;
           

@@ -60,6 +60,14 @@ export function ChatInterface({
   const { session } = useSupabase();
   const [personalityName, setPersonalityName] = useState('ASSISTANT');
 
+  // Define message status colors
+  const messageColors = {
+    user: themeColor,
+    assistant: secondaryColor,
+    error: '#FF6B6B',
+    info: '#64B5F6'
+  };
+
   // Get task and quest suggestions from context
   const { 
     taskSuggestions, 
@@ -272,15 +280,6 @@ export function ChatInterface({
       personalityService.getUserPersonality(session.user.id)
         .then(personality => {
           switch(personality) {
-            case 'bt7274':
-              setPersonalityName('BT');
-              break;
-            case 'johnny':
-              setPersonalityName('SILVERHAND');
-              break;
-            case 'batman':
-              setPersonalityName('BATMAN');
-              break;
             case 'genericAssistant':
               setPersonalityName('ASSISTANT');
               break;
@@ -344,7 +343,7 @@ export function ChatInterface({
             <TouchableOpacity 
               style={{
                 marginLeft: 15,
-                backgroundColor: '#333333',
+                backgroundColor: 'rgba(33, 150, 243, 0.1)',
                 borderWidth: 1,
                 borderColor: secondaryColor,
                 borderRadius: 4,
@@ -375,7 +374,7 @@ export function ChatInterface({
             <TouchableOpacity 
               style={{
                 marginLeft: 15,
-                backgroundColor: '#333333',
+                backgroundColor: 'rgba(255, 107, 107, 0.1)',
                 borderWidth: 1,
                 borderColor: '#FF6B6B',
                 borderRadius: 4,
@@ -422,10 +421,12 @@ export function ChatInterface({
                   padding: 12,
                   marginVertical: 5,
                   borderRadius: 5,
-                  backgroundColor: '#3A2222',
+                  backgroundColor: 'rgba(255, 107, 107, 0.1)',
                   borderWidth: 1,
                   borderColor: '#FF6B6B',
                   marginBottom: 16,
+                  borderLeftWidth: 3,
+                  borderLeftColor: '#FF6B6B',
                 }}>
                   <Text style={{
                     color: '#FF6B6B',
@@ -467,12 +468,14 @@ export function ChatInterface({
                             borderLeftWidth: 3,
                             borderColor: secondaryColor,
                             marginRight: '15%',
+                            backgroundColor: 'rgba(33, 150, 243, 0.05)',
                           }
                         : {
                             alignSelf: 'flex-end',
                             borderLeftWidth: 3,
                             borderColor: themeColor,
                             marginLeft: '15%',
+                            backgroundColor: 'rgba(76, 175, 80, 0.05)',
                           }
                     ]}
                   >
@@ -509,7 +512,7 @@ export function ChatInterface({
                       marginVertical: 5,
                       borderRadius: 5,
                       maxWidth: '85%',
-                      backgroundColor: '#2C2C2C',
+                      backgroundColor: 'rgba(33, 150, 243, 0.05)',
                       shadowColor: '#000',
                       shadowOffset: { width: 0, height: 1 },
                       shadowOpacity: 0.2,
@@ -554,6 +557,8 @@ export function ChatInterface({
                   backgroundColor: '#282828',
                   borderWidth: 1,
                   borderColor: '#444444',
+                  borderLeftWidth: 3,
+                  borderLeftColor: messageColors.info,
                 }}>
                   <Text style={{
                     color: '#BBBBBB',
@@ -566,7 +571,7 @@ export function ChatInterface({
                   
                   {isProcessingSession ? (
                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 8 }}>
-                      <TriangularSpinner size={16} color={secondaryColor} />
+                      <TriangularSpinner size={16} color={messageColors.info} />
                       <Text style={{
                         color: '#999999',
                         fontSize: 14,
@@ -611,7 +616,7 @@ export function ChatInterface({
                   borderBottomColor: '#333333',
                 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <MaterialIcons name="lightbulb" size={16} color={secondaryColor} />
+                    <MaterialIcons name="lightbulb" size={16} color="#FFD700" />
                     <Text style={{ 
                       marginLeft: 6,
                       color: '#EEEEEE',
@@ -637,14 +642,27 @@ export function ChatInterface({
                   {/* Task Suggestions */}
                   {taskSuggestions.length > 0 && (
                     <View style={{ marginBottom: 12 }}>
-                      <Text style={{ 
-                        color: '#AAAAAA', 
-                        fontSize: 12, 
+                      <View style={{ 
+                        flexDirection: 'row', 
+                        alignItems: 'center', 
                         marginBottom: 8,
                         paddingHorizontal: 4,
                       }}>
-                        TASKS
-                      </Text>
+                        <Text style={{ 
+                          color: '#AAAAAA', 
+                          fontSize: 12, 
+                          fontWeight: 'bold',
+                        }}>
+                          TASKS
+                        </Text>
+                        <View style={{
+                          height: 2,
+                          width: 16,
+                          backgroundColor: '#2196F3',
+                          marginLeft: 6,
+                          borderRadius: 1,
+                        }} />
+                      </View>
                       
                       {taskSuggestions.map((task) => (
                         <View key={task.id} style={{ marginBottom: 8 }}>
@@ -663,22 +681,35 @@ export function ChatInterface({
                   {/* Quest Suggestions */}
                   {questSuggestions.length > 0 && (
                     <View>
-                      <Text style={{ 
-                        color: '#AAAAAA', 
-                        fontSize: 12, 
+                      <View style={{ 
+                        flexDirection: 'row', 
+                        alignItems: 'center', 
                         marginBottom: 8,
                         paddingHorizontal: 4,
                       }}>
-                        QUESTS
-                      </Text>
+                        <Text style={{ 
+                          color: '#AAAAAA', 
+                          fontSize: 12, 
+                          fontWeight: 'bold',
+                        }}>
+                          QUESTS
+                        </Text>
+                        <View style={{
+                          height: 2,
+                          width: 16,
+                          backgroundColor: '#FF9800',
+                          marginLeft: 6,
+                          borderRadius: 1,
+                        }} />
+                      </View>
                       
                       {questSuggestions.map((quest) => (
                         <View key={quest.id} style={{ marginBottom: 8 }}>
                           <View style={{
-                            backgroundColor: '#252525',
+                            backgroundColor: 'rgba(255, 152, 0, 0.05)',
                             borderRadius: 6,
                             borderLeftWidth: 3,
-                            borderColor: secondaryColor,
+                            borderColor: '#FF9800',
                             shadowColor: '#000',
                             shadowOffset: { width: 0, height: 1 },
                             shadowOpacity: 0.2,
@@ -694,7 +725,7 @@ export function ChatInterface({
                               borderBottomWidth: 1,
                               borderBottomColor: '#333333',
                             }}>
-                              <MaterialIcons name="emoji-events" size={16} color={secondaryColor} />
+                              <MaterialIcons name="emoji-events" size={16} color="#FF9800" />
                               <Text style={{
                                 fontSize: 12,
                                 fontWeight: 'bold',
@@ -730,16 +761,17 @@ export function ChatInterface({
                                   alignItems: 'center',
                                   justifyContent: 'center',
                                   padding: 8,
-                                  backgroundColor: secondaryColor,
+                                  backgroundColor: 'rgba(255, 152, 0, 0.2)',
                                   flex: 1
                                 }}
                                 onPress={() => handleAcceptQuest(quest)}
                               >
-                                <MaterialIcons name="check" size={14} color="#fff" />
+                                <MaterialIcons name="check" size={14} color="#FF9800" />
                                 <Text style={{
-                                  color: '#FFFFFF',
+                                  color: '#FF9800',
                                   fontSize: 12,
-                                  marginLeft: 4
+                                  marginLeft: 4,
+                                  fontWeight: 'bold'
                                 }}>
                                   Accept
                                 </Text>

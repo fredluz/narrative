@@ -26,6 +26,13 @@ export function KanbanBoard({ mainQuest, onViewAllQuests, userId }: KanbanProps)
   const [activeColumn, setActiveColumn] = useState<TaskStatus | 'all' | 'active'>('active');
   const [updatingTaskId, setUpdatingTaskId] = useState<number | null>(null);
 
+  // Define status colors
+  const statusColors = {
+    ToDo: '#9E9E9E',
+    InProgress: '#2196F3',
+    Done: '#4CAF50'
+  };
+
   // Verify current user
   const verifyCurrentUser = React.useMemo(() => {
     if (!session?.user?.id || !userId) return false;
@@ -162,6 +169,13 @@ export function KanbanBoard({ mainQuest, onViewAllQuests, userId }: KanbanProps)
               color: '#EEEEEE',
               fontWeight: 'bold',
             }}>MAIN PROJECT</Text>
+            <View style={{
+              height: 3,
+              width: 24,
+              backgroundColor: themeColor,
+              marginLeft: 8,
+              borderRadius: 2,
+            }} />
           </View>
         </View>
         <View style={{ padding: 15 }}>
@@ -260,6 +274,13 @@ export function KanbanBoard({ mainQuest, onViewAllQuests, userId }: KanbanProps)
           >
             MAIN PROJECT
           </Text>
+          <View style={{
+            height: 3,
+            width: 24,
+            backgroundColor: themeColor,
+            marginLeft: 8,
+            borderRadius: 2,
+          }} />
         </View>
       </View>
       <View style={{ padding: 15 }}>
@@ -306,6 +327,68 @@ export function KanbanBoard({ mainQuest, onViewAllQuests, userId }: KanbanProps)
           </Text>
         </TouchableOpacity>
 
+        {/* Status Filters */}
+        <View style={{ 
+          flexDirection: 'row', 
+          marginBottom: 15, 
+          justifyContent: 'space-between',
+          backgroundColor: '#1A1A1A',
+          borderRadius: 8,
+          padding: 5
+        }}>
+          {[
+            { key: 'active', label: 'Active', icon: 'bolt' },
+            { key: 'ToDo', label: 'To Do', icon: 'radio-button-unchecked' },
+            { key: 'InProgress', label: 'In Progress', icon: 'timelapse' },
+            { key: 'Done', label: 'Done', icon: 'check-circle' },
+            { key: 'all', label: 'All', icon: 'dashboard' }
+          ].map((item) => (
+            <TouchableOpacity
+              key={item.key}
+              style={{
+                paddingVertical: 6,
+                paddingHorizontal: 10,
+                borderRadius: 6,
+                backgroundColor: activeColumn === item.key ? '#333333' : 'transparent',
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+              onPress={() => setActiveColumn(item.key as TaskStatus | 'all' | 'active')}
+            >
+              <MaterialIcons 
+                name={item.icon as any} 
+                size={14} 
+                color={activeColumn === item.key 
+                  ? (item.key === 'ToDo' 
+                    ? statusColors.ToDo 
+                    : item.key === 'InProgress' 
+                    ? statusColors.InProgress 
+                    : item.key === 'Done' 
+                    ? statusColors.Done 
+                    : secondaryColor)
+                  : '#888888'} 
+                style={{ marginRight: 4 }} 
+              />
+              <Text style={{ 
+                color: activeColumn === item.key 
+                  ? (item.key === 'ToDo' 
+                    ? statusColors.ToDo 
+                    : item.key === 'InProgress' 
+                    ? statusColors.InProgress 
+                    : item.key === 'Done' 
+                    ? statusColors.Done 
+                    : '#DDDDDD')
+                  : '#888888',
+                fontSize: 12,
+                fontWeight: activeColumn === item.key ? '500' : 'normal'
+              }}>
+                {item.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
         <ScrollView style={{ maxHeight: 300 }}>
           {(['InProgress', 'ToDo', 'Done'] as TaskStatus[]).map(statusGroup => {
             const tasksInGroup = filteredTasks.filter(t => t.status === statusGroup);
@@ -330,16 +413,16 @@ export function KanbanBoard({ mainQuest, onViewAllQuests, userId }: KanbanProps)
                       task.status === 'Done'
                         ? {
                             borderLeftWidth: 3,
-                            borderLeftColor: '#4CAF50',
+                            borderLeftColor: statusColors.Done,
                           }
                         : task.status === 'InProgress'
                         ? {
                             borderLeftWidth: 3,
-                            borderLeftColor: '#2196F3',
+                            borderLeftColor: statusColors.InProgress,
                           }
                         : {
                             borderLeftWidth: 3,
-                            borderLeftColor: '#9E9E9E',
+                            borderLeftColor: statusColors.ToDo,
                           },
                     ]}
                   >
@@ -392,12 +475,14 @@ export function KanbanBoard({ mainQuest, onViewAllQuests, userId }: KanbanProps)
                               paddingVertical: 3, 
                               borderRadius: 4,
                               marginRight: 8,
-                              marginBottom: 4
+                              marginBottom: 4,
+                              borderLeftWidth: 2,
+                              borderLeftColor: '#64B5F6',
                             }}>
                               <MaterialIcons
                                 name="schedule"
                                 size={12}
-                                color="#AAAAAA"
+                                color="#64B5F6"
                                 style={{ marginRight: 4 }}
                               />
                               <Text style={{ fontSize: 12, color: '#AAAAAA' }}>
@@ -415,12 +500,14 @@ export function KanbanBoard({ mainQuest, onViewAllQuests, userId }: KanbanProps)
                               paddingVertical: 3, 
                               borderRadius: 4,
                               marginRight: 8,
-                              marginBottom: 4
+                              marginBottom: 4,
+                              borderLeftWidth: 2,
+                              borderLeftColor: '#BA68C8',
                             }}>
                               <MaterialIcons
                                 name="place"
                                 size={12}
-                                color="#AAAAAA"
+                                color="#BA68C8"
                                 style={{ marginRight: 4 }}
                               />
                               <Text style={{ fontSize: 12, color: '#AAAAAA' }}>
@@ -437,7 +524,9 @@ export function KanbanBoard({ mainQuest, onViewAllQuests, userId }: KanbanProps)
                               paddingHorizontal: 6, 
                               paddingVertical: 3, 
                               borderRadius: 4,
-                              marginBottom: 4
+                              marginBottom: 4,
+                              borderLeftWidth: 2,
+                              borderLeftColor: '#FF6B6B',
                             }}>
                               <MaterialIcons
                                 name="warning"
@@ -454,18 +543,28 @@ export function KanbanBoard({ mainQuest, onViewAllQuests, userId }: KanbanProps)
                       </View>
 
                       <TouchableOpacity 
-                        style={{ padding: 4 }}
+                        style={{ 
+                          padding: 6, 
+                          backgroundColor: task.status === 'Done' ? 'rgba(76, 175, 80, 0.1)' : 
+                                          task.status === 'InProgress' ? 'rgba(33, 150, 243, 0.1)' : 
+                                          'rgba(158, 158, 158, 0.1)',
+                          borderRadius: 20
+                        }}
                         onPress={() => toggleTaskCompletion(task)}
                         disabled={updatingTaskId === task.id}
                       >
                         {updatingTaskId === task.id ? (
-                          <ActivityIndicator size="small" color={task.status === 'Done' ? '#4CAF50' : '#2196F3'} />
+                          <ActivityIndicator size="small" color={
+                            task.status === 'Done' ? statusColors.Done : 
+                            task.status === 'InProgress' ? statusColors.InProgress : 
+                            statusColors.ToDo
+                          } />
                         ) : task.status === 'Done' ? (
-                          <MaterialIcons name="check-circle" size={20} color="#4CAF50" />
+                          <MaterialIcons name="check-circle" size={20} color={statusColors.Done} />
                         ) : task.status === 'InProgress' ? (
-                          <MaterialIcons name="timelapse" size={20} color="#2196F3" />
+                          <MaterialIcons name="timelapse" size={20} color={statusColors.InProgress} />
                         ) : (
-                          <MaterialIcons name="radio-button-unchecked" size={20} color="#9E9E9E" />
+                          <MaterialIcons name="radio-button-unchecked" size={20} color={statusColors.ToDo} />
                         )}
                       </TouchableOpacity>
                     </View>
