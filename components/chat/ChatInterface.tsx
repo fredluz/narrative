@@ -283,8 +283,13 @@ export function ChatInterface({
       personalityService.getUserPersonality(session.user.id)
         .then(personality => {
           switch(personality) {
-            case 'genericAssistant':
-              setPersonalityName('ASSISTANT');
+            case 'johnny':
+              setPersonalityName('SILVERHAND');
+              break;
+            case 'batman':
+              setPersonalityName('BRUCE');
+            case 'bt7274':
+              setPersonalityName('TITAN');
               break;
             default:
               setPersonalityName('ASSISTANT');
