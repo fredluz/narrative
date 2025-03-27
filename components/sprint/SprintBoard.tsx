@@ -5,7 +5,6 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { useQuests } from '@/services/questsService';
 import { colors } from '@/app/styles/global';
 import { format, startOfWeek, addDays } from 'date-fns';
-
 interface SprintBoardProps {
   themeColor: string;
   textColor: string;

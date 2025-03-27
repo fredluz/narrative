@@ -54,30 +54,6 @@ export function TaskList({ compactMode = false, userId }: TaskListProps) {
     }
   }, [shouldUpdate, userId, loadTasks, resetUpdate]);
 
-  // Make text more visible against dark backgrounds
-  const getBrightAccent = (baseColor: string) => {
-    const hex = baseColor.replace('#', '');
-    const r = parseInt(hex.substring(0, 2), 16);
-    const g = parseInt(hex.substring(2, 4), 16);
-    const b = parseInt(hex.substring(4, 6), 16);
-    
-    // If already bright, make it even brighter
-    if (r + g + b > 500) {
-      return '#FFFFFF';
-    }
-    
-    // Otherwise create a bright neon version
-    const brightR = Math.min(255, r + 100);
-    const brightG = Math.min(255, g + 100);
-    const brightB = Math.min(255, b + 100);
-    
-    return `#${brightR.toString(16).padStart(2, '0')}${
-      brightG.toString(16).padStart(2, '0')}${
-      brightB.toString(16).padStart(2, '0')}`;
-  };
-  
-  const brightAccent = getBrightAccent(themeColor);
-
   const toggleTaskCompletion = async (taskId: number, currentStatus: string, taskUserId: string) => {
     if (!userId || !verifyCurrentUser) {
       setLocalError("Please log in to update tasks.");
@@ -118,75 +94,51 @@ export function TaskList({ compactMode = false, userId }: TaskListProps) {
       style={[
         compactMode ? { flex: 1 } : styles.column, 
         { 
-          borderLeftWidth: 3, 
-          borderLeftColor: themeColor, 
+          backgroundColor: '#1E1E1E',
+          borderRadius: 8,
           overflow: 'hidden',
+          borderWidth: 1,
+          borderColor: '#333333',
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.2,
+          shadowRadius: 3,
+          elevation: 2,
           marginTop: compactMode ? 10 : 0,
         }
       ]}
       onLayout={onContainerLayout}
     >
-      {/* Background with cyberpunk elements */}
-      <View style={{ 
-        position: 'absolute', 
-        width: '100%', 
-        height: '100%',
-        backgroundColor: '#151515',
-      }} />
-      
-      {/* Digital noise effect */}
-      <View style={{
-        position: 'absolute',
-        top: 0,
-        height: '100%',
-        width: 40,
-        right: 20,
-        opacity: 0.05,
-        backgroundColor: themeColor,
-      }} />
-
-      
       <View style={{ 
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
         marginBottom: compactMode ? 5 : 10,
-        paddingHorizontal: compactMode ? 10 : 15,
-        paddingVertical: compactMode ? 10 : 15,
+        paddingHorizontal: compactMode ? 15 : 15,
+        paddingVertical: compactMode ? 15 : 15,
         borderBottomWidth: 1,
-        borderBottomColor: 'rgba(255, 255, 255, 0.1)'
+        borderBottomColor: '#333333',
+        backgroundColor: '#252525',
       }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <Text style={{ 
-            fontSize: compactMode ? 16 : 18,
-            fontWeight: 'bold',
-            color: '#FFFFFF',
-            textShadowColor: themeColor,
-            textShadowOffset: { width: 1, height: 1 },
-            textShadowRadius: 4
-          }}>
-            ACTIVE TASKS
-          </Text>
-          <View style={{
-            height: 3,
-            width: 20,
-            backgroundColor: themeColor,
-            marginLeft: 8,
-            borderRadius: 2,
-          }} />
-        </View>
+        <Text style={{ 
+          fontSize: compactMode ? 16 : 20,
+          fontWeight: 'bold',
+          color: '#EEEEEE',
+        }}>
+          Active Tasks
+        </Text>
         
         <TouchableOpacity 
           onPress={loadTasks}
           style={{
             padding: compactMode ? 6 : 8,
-            borderRadius: 4,
-            backgroundColor: 'rgba(30, 30, 30, 0.9)',
+            borderRadius: 6,
+            backgroundColor: '#333333',
             borderWidth: 1,
-            borderColor: themeColor,
+            borderColor: '#444444',
           }}
         >
-          <MaterialIcons name="refresh" size={compactMode ? 18 : 20} color={brightAccent} />
+          <MaterialIcons name="refresh" size={compactMode ? 18 : 20} color="#AAAAAA" />
         </TouchableOpacity>
       </View>
 
@@ -198,32 +150,33 @@ export function TaskList({ compactMode = false, userId }: TaskListProps) {
         <View style={{ 
           margin: compactMode ? 10 : 15,
           padding: compactMode ? 8 : 10, 
-          backgroundColor: 'rgba(200, 0, 0, 0.1)', 
+          backgroundColor: '#3A2222', 
           borderRadius: 5,
           borderLeftWidth: 2,
-          borderLeftColor: colors.error,
+          borderLeftColor: '#FF6B6B',
         }}>
-          <Text style={{ color: colors.error, fontSize: compactMode ? 14 : 16 }}>{error}</Text>
+          <Text style={{ color: '#FF6B6B', fontSize: compactMode ? 14 : 16 }}>{error}</Text>
           <TouchableOpacity onPress={loadTasks}>
-            <Text style={{ color: colors.error, textDecorationLine: 'underline', marginTop: compactMode ? 3 : 5, fontSize: compactMode ? 13 : 14 }}>
+            <Text style={{ color: '#FF6B6B', textDecorationLine: 'underline', marginTop: compactMode ? 3 : 5, fontSize: compactMode ? 13 : 14 }}>
               Try again
             </Text>
           </TouchableOpacity>
         </View>
       ) : tasks.length === 0 ? (
         <View style={{ padding: compactMode ? 10 : 20, alignItems: 'center' }}>
-          <MaterialIcons name="check-circle-outline" size={compactMode ? 30 : 40} color="rgba(255,255,255,0.1)" />
-          <Text style={{ fontSize: compactMode ? 14 : 16, color: '#999', textAlign: 'center' }}>No active tasks</Text>
+          <MaterialIcons name="check-circle-outline" size={compactMode ? 30 : 40} color="#444444" />
+          <Text style={{ fontSize: compactMode ? 14 : 16, color: '#AAAAAA', textAlign: 'center' }}>No active tasks</Text>
         </View>
       ) : (
         <ScrollView 
           style={{ 
-            padding: compactMode ? 5 : 10,
+            padding: compactMode ? 10 : 15,
+            backgroundColor: '#1A1A1A',
             height: availableSpace > 0 ? availableSpace : undefined,
             flexGrow: 1
           }}
           contentContainerStyle={{
-            paddingBottom: 5
+            paddingBottom: 10
           }}
         >
           {(['InProgress', 'ToDo', 'Done'] as TaskStatus[]).map(statusGroup => {
@@ -236,13 +189,18 @@ export function TaskList({ compactMode = false, userId }: TaskListProps) {
                   <View 
                     key={task.id} 
                     style={{ 
-                      backgroundColor: 'rgba(25, 25, 25, 0.7)',
-                      borderLeftWidth: 2,
-                      borderLeftColor: task.status === 'Done' ? secondaryColor : 
-                                    task.status === 'InProgress' ? themeColor : '#666',
-                      marginBottom: compactMode ? 5 : 8,
-                      padding: compactMode ? 8 : 10,
-                      borderRadius: 4,
+                      backgroundColor: '#252525',
+                      borderRadius: 6,
+                      marginBottom: compactMode ? 8 : 10,
+                      padding: compactMode ? 12 : 14,
+                      borderLeftWidth: 3,
+                      borderLeftColor: task.status === 'Done' ? '#4CAF50' :
+                                    task.status === 'InProgress' ? '#2196F3' : '#9E9E9E',
+                      shadowColor: '#000',
+                      shadowOffset: { width: 0, height: 1 },
+                      shadowOpacity: 0.2,
+                      shadowRadius: 2,
+                      elevation: 1,
                     }}
                   >
                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -257,31 +215,31 @@ export function TaskList({ compactMode = false, userId }: TaskListProps) {
                             task.status === 'InProgress' ? 'timelapse' :
                             'radio-button-unchecked'
                           }
-                          size={compactMode ? 18 : 24}
+                          size={compactMode ? 18 : 22}
                           color={
-                            !verifyCurrentUser || task.user_id !== userId ? '#444' :
-                            task.status === 'Done' ? secondaryColor :
-                            task.status === 'InProgress' ? themeColor :
-                            '#666'
+                            !verifyCurrentUser || task.user_id !== userId ? '#444444' :
+                            task.status === 'Done' ? '#4CAF50' :
+                            task.status === 'InProgress' ? '#2196F3' :
+                            '#9E9E9E'
                           }
                         />
                       </TouchableOpacity>
-                      <View style={{ marginLeft: compactMode ? 4 : 8, flex: 1 }}>
+                      <View style={{ marginLeft: compactMode ? 8 : 10, flex: 1 }}>
                         <Text style={{ 
-                          fontSize: compactMode ? 16 : 18,  // Increased from 14/16
-                          color: task.status === 'Done' ? '#AAA' : '#FFF',
+                          fontSize: compactMode ? 15 : 16,
+                          color: task.status === 'Done' ? '#AAAAAA' : '#DDDDDD',
                           textDecorationLine: task.status === 'Done' ? 'line-through' : 'none',
                           opacity: task.status === 'Done' ? 0.7 : 1,
-                          fontWeight: '600',  // Added to match KanbanBoard style
+                          fontWeight: '500',
                         }}>
                           {task.title}
                         </Text>
                         {!compactMode && task.description ? (
                           <Text style={{ 
-                            fontSize: 15, // Increased from 14
-                            color: '#999',
+                            fontSize: 14,
+                            color: task.status === 'Done' ? '#888888' : '#AAAAAA',
                             marginTop: 4,
-                            opacity: task.status === 'Done' ? 0.5 : 0.8, 
+                            opacity: task.status === 'Done' ? 0.6 : 0.9, 
                           }}>
                             {task.description}
                           </Text>
@@ -290,17 +248,22 @@ export function TaskList({ compactMode = false, userId }: TaskListProps) {
                           <View style={{ 
                             flexDirection: 'row', 
                             alignItems: 'center', 
-                            marginTop: compactMode ? 2 : 3 
+                            marginTop: compactMode ? 4 : 6,
+                            backgroundColor: '#333333',
+                            paddingHorizontal: 6,
+                            paddingVertical: 2,
+                            borderRadius: 4,
+                            alignSelf: 'flex-start',
                           }}>
                             <MaterialIcons 
-                              name="assignment" 
-                              size={compactMode ? 12 : 14} // Increased from 10/12
-                              color={task.status === 'Done' ? '#888' : secondaryColor} 
+                              name="folder" 
+                              size={compactMode ? 12 : 14}
+                              color={task.status === 'Done' ? '#888888' : '#BBBBBB'} 
                               style={{ marginRight: 4 }} 
                             />
                             <Text style={{ 
-                              fontSize: compactMode ? 12 : 14, // Increased from 10/12
-                              color: task.status === 'Done' ? '#888' : secondaryColor,
+                              fontSize: compactMode ? 12 : 13,
+                              color: task.status === 'Done' ? '#888888' : '#BBBBBB',
                             }}>
                               {task.quest.title}
                             </Text>

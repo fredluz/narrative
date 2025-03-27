@@ -390,45 +390,44 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background, height: windowHeight }]}>
+    <View style={[styles.container, { backgroundColor: '#121212', height: windowHeight }]}>
       <View style={styles.column}>
         <Card style={[{ 
-          borderColor: themeColor, 
+          borderColor: '#333333', 
           borderWidth: 1,
           borderLeftWidth: 3,
           height: windowHeight * 0.95,
-          backgroundColor: colors.backgroundSecondary,
+          backgroundColor: '#1E1E1E',
           overflow: 'hidden'
         }]}>
-          {/* Background with cyberpunk elements */}
+          {/* Background with dark theme elements */}
           <View style={{ 
             position: 'absolute', 
             width: '100%', 
             height: '100%',
-            backgroundColor: '#151515',
+            backgroundColor: '#1A1A1A',
           }} />
           
-          {/* Digital noise effect */}
+          {/* Subtle accent line */}
           <View style={{
             position: 'absolute',
             top: 0,
             height: '100%',
-            width: 40,
-            right: 20,
+            width: 3,
+            right: 30,
             opacity: 0.05,
             backgroundColor: themeColor,
           }} />
 
-          {/* Glitch lines */}
+          {/* Subtle divider lines */}
           <View style={{
             position: 'absolute',
             top: '30%',
             left: -10,
             width: '120%',
             height: 1,
-            backgroundColor: secondaryColor,
-            opacity: 0.15,
-            transform: [{ rotate: '0.3deg' }],
+            backgroundColor: '#333333',
+            opacity: 0.2,
           }} />
           
           <View style={{
@@ -437,9 +436,8 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
             left: -10,
             width: '120%',
             height: 1,
-            backgroundColor: themeColor,
-            opacity: 0.1,
-            transform: [{ rotate: '-0.2deg' }],
+            backgroundColor: '#333333',
+            opacity: 0.15,
           }} />
 
           <View style={{ padding: 20, zIndex: 1 }}>
@@ -450,24 +448,20 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
               justifyContent: 'space-between',
               marginBottom: 20,
               borderBottomWidth: 1,
-              borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+              borderBottomColor: '#333333',
               paddingBottom: 15
             }}>
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                 <Text style={{ 
-                  fontSize: 28,
+                  fontSize: 24,
                   fontWeight: 'bold',
-                  color: '#FFFFFF',
-                  textTransform: 'uppercase',
-                  textShadowColor: themeColor,
-                  textShadowOffset: { width: 1, height: 1 },
-                  textShadowRadius: 4
+                  color: '#EEEEEE',
                 }}>
-                  QUESTS
+                  Projects
                 </Text>
                 <View style={{
-                  height: 4,
-                  width: 40,
+                  height: 3,
+                  width: 30,
                   backgroundColor: themeColor,
                   marginLeft: 10,
                   borderRadius: 2,
@@ -478,12 +472,12 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
               <TouchableOpacity 
                 onPress={openCreateQuestModal}
                 style={{
-                  backgroundColor: 'rgba(30, 30, 30, 0.9)',
+                  backgroundColor: '#333333',
                   paddingHorizontal: 12,
-                  paddingVertical: 6,
+                  paddingVertical: 8,
                   borderRadius: 6,
                   borderWidth: 1,
-                  borderColor: themeColor,
+                  borderColor: '#444444',
                   flexDirection: 'row',
                   alignItems: 'center',
                 }}
@@ -491,15 +485,15 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
                 <MaterialIcons 
                   name="add" 
                   size={16} 
-                  color={brightAccent}
-                  style={{ marginRight: 4 }}
+                  color="#EEEEEE"
+                  style={{ marginRight: 6 }}
                 />
                 <Text style={{ 
-                  color: brightAccent,
+                  color: '#EEEEEE',
                   fontWeight: '600',
-                  fontSize: 13,
+                  fontSize: 14,
                 }}>
-                  NEW QUEST
+                  New Project
                 </Text>
               </TouchableOpacity>
             </View>
@@ -520,9 +514,9 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
                       flexDirection: 'row',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      backgroundColor: activeTab === tab ? 'rgba(30, 30, 30, 0.9)' : 'rgba(20, 20, 20, 0.7)',
+                      backgroundColor: activeTab === tab ? '#252525' : '#1E1E1E',
                       borderWidth: 1,
-                      borderColor: activeTab === tab ? themeColor : 'rgba(255, 255, 255, 0.1)',
+                      borderColor: activeTab === tab ? themeColor : '#333333',
                     }
                   ]}
                 >
@@ -531,18 +525,18 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
                       tab === 'Active' ? 'play-arrow' :
                       tab === 'On-Hold' ? 'pause' : 'check-circle'
                     }
-                    size={18}
-                    color={activeTab === tab ? brightAccent : '#777'}
+                    size={16}
+                    color={activeTab === tab ? themeColor : '#777777'}
                     style={{ marginRight: 5 }}
                   />
                   <Text style={[
                     { 
-                      color: activeTab === tab ? brightAccent : '#777',
+                      color: activeTab === tab ? '#EEEEEE' : '#777777',
                       fontWeight: '600',
                       fontSize: 14,
                     }
                   ]}>
-                    {tab.toUpperCase()}
+                    {tab}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -562,22 +556,21 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
                     >
                       <Card style={[
                         {
-                          backgroundColor: 'rgba(25, 25, 25, 0.7)',
+                          backgroundColor: '#252525',
                           padding: 15,
                           borderRadius: 6,
-                          borderLeftWidth: 2,
+                          borderLeftWidth: 3,
                           borderLeftColor: item.is_main ? secondaryColor : themeColor,
-                          ...(item.is_main && {
-                            shadowColor: secondaryColor,
-                            shadowOffset: { width: 0, height: 0 },
-                            shadowOpacity: 0.5,
-                            shadowRadius: 8,
-                            elevation: 6,
-                          })
+                          shadowColor: '#000',
+                          shadowOffset: { width: 0, height: 1 },
+                          shadowOpacity: 0.2,
+                          shadowRadius: 2,
+                          elevation: 1,
                         },
                         selectedQuest?.id === item.id && {
-                          backgroundColor: 'rgba(35, 35, 35, 0.9)',
-                          borderLeftWidth: 3,
+                          backgroundColor: '#2C2C2C',
+                          borderWidth: 1,
+                          borderColor: '#444444',
                         }
                       ]}>
                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -591,11 +584,8 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
                           )}
                           <Text style={{ 
                             fontSize: 16, 
-                            color: item.is_main ? '#FFF' : '#DDD',
+                            color: item.is_main ? '#EEEEEE' : '#DDDDDD',
                             fontWeight: item.is_main ? 'bold' : 'normal',
-                            textShadowColor: item.is_main ? secondaryColor : 'transparent',
-                            textShadowOffset: { width: 0, height: 0 },
-                            textShadowRadius: item.is_main ? 4 : 0,
                           }}>
                             {item.title}
                           </Text>
@@ -603,7 +593,7 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
                         {item.tagline && (
                           <Text style={{
                             fontSize: 13,
-                            color: '#999',
+                            color: '#AAAAAA',
                             marginTop: 4,
                             marginLeft: item.is_main ? 24 : 0
                           }}>
@@ -621,26 +611,28 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
                 {selectedQuest ? (
                   <ScrollView style={{ flex: 1 }} bounces={false}>
                     <Card style={[{ 
-                      backgroundColor: 'rgba(25, 25, 25, 0.8)',
+                      backgroundColor: '#252525',
                       borderRadius: 8,
                       borderLeftWidth: 3,
                       borderLeftColor: selectedQuest.is_main ? secondaryColor : themeColor,
-                      overflow: 'hidden'
+                      overflow: 'hidden',
+                      shadowColor: '#000',
+                      shadowOffset: { width: 0, height: 1 },
+                      shadowOpacity: 0.2,
+                      shadowRadius: 2,
+                      elevation: 1,
                     }]}>
                       {/* Quest Details Header */}
                       <View style={{ 
                         padding: 20,
                         borderBottomWidth: 1,
-                        borderBottomColor: 'rgba(255, 255, 255, 0.1)'
+                        borderBottomColor: '#333333'
                       }}>
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                           <Text style={{ 
-                            fontSize: 22,
-                            color: '#FFF',
+                            fontSize: 20,
+                            color: '#EEEEEE',
                             fontWeight: 'bold',
-                            textShadowColor: secondaryColor,
-                            textShadowOffset: { width: 0, height: 0 },
-                            textShadowRadius: 3
                           }}>
                             {selectedQuest.title}
                           </Text>
@@ -649,12 +641,12 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
                             <TouchableOpacity 
                               onPress={() => openEditQuestModal(selectedQuest)}
                               style={{
-                                backgroundColor: 'rgba(30, 30, 30, 0.9)',
-                                paddingHorizontal: 12,
+                                backgroundColor: '#333333',
+                                paddingHorizontal: 10,
                                 paddingVertical: 6,
                                 borderRadius: 6,
                                 borderWidth: 1,
-                                borderColor: themeColor,
+                                borderColor: '#444444',
                                 flexDirection: 'row',
                                 alignItems: 'center',
                                 marginRight: 10,
@@ -662,16 +654,16 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
                             >
                               <MaterialIcons 
                                 name="edit" 
-                                size={16} 
-                                color={brightAccent}
+                                size={14} 
+                                color="#BBBBBB"
                                 style={{ marginRight: 4 }}
                               />
                               <Text style={{ 
-                                color: brightAccent,
+                                color: '#BBBBBB',
                                 fontWeight: '600',
-                                fontSize: 13,
+                                fontSize: 12,
                               }}>
-                                EDIT
+                                Edit
                               </Text>
                             </TouchableOpacity>
                             
@@ -683,28 +675,29 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
                               }}
                               style={{
                                 backgroundColor: selectedQuest.id === currentMainQuest?.id ? 
-                                  'rgba(30, 30, 30, 0.9)' : 'rgba(25, 25, 25, 0.9)',
-                                paddingHorizontal: 15,
-                                paddingVertical: 8,
+                                  '#2C2C2C' : '#333333',
+                                paddingHorizontal: 10,
+                                paddingVertical: 6,
                                 borderRadius: 6,
                                 borderWidth: 1,
                                 borderColor: selectedQuest.id === currentMainQuest?.id ? 
-                                  secondaryColor : themeColor,
+                                  secondaryColor : '#444444',
                                 flexDirection: 'row',
                                 alignItems: 'center',
                               }}
                             >
                               <MaterialIcons 
                                 name={selectedQuest.id === currentMainQuest?.id ? "star" : "star-outline"} 
-                                size={18} 
-                                color={selectedQuest.id === currentMainQuest?.id ? secondaryColor : brightAccent}
-                                style={{ marginRight: 6 }}
+                                size={14} 
+                                color={selectedQuest.id === currentMainQuest?.id ? secondaryColor : '#BBBBBB'}
+                                style={{ marginRight: 4 }}
                               />
                               <Text style={{ 
-                                color: selectedQuest.id === currentMainQuest?.id ? secondaryColor : brightAccent,
+                                color: selectedQuest.id === currentMainQuest?.id ? secondaryColor : '#BBBBBB',
                                 fontWeight: '600',
+                                fontSize: 12,
                               }}>
-                                {selectedQuest.id === currentMainQuest?.id ? 'MAIN QUEST' : 'SET AS MAIN'}
+                                {selectedQuest.id === currentMainQuest?.id ? 'Main Project' : 'Set as Main'}
                               </Text>
                             </TouchableOpacity>
                           </View>
@@ -712,13 +705,9 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
                         
                         {selectedQuest.tagline && (
                           <Text style={{ 
-                            fontSize: 18,
-                            color: '#BBB',
-                            marginBottom: 15,
-                            fontStyle: 'italic',
-                            textShadowColor: secondaryColor,
-                            textShadowOffset: { width: 0, height: 0 },
-                            textShadowRadius: 3
+                            fontSize: 15,
+                            color: '#AAAAAA',
+                            marginBottom: 8,
                           }}>
                             {selectedQuest.tagline}
                           </Text>
@@ -729,20 +718,16 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
                         {/* Display the quest description */}
                         {selectedQuest.description && (
                           <View style={{
-                            backgroundColor: 'rgba(20, 20, 20, 0.7)',
+                            backgroundColor: '#2A2A2A',
                             borderRadius: 6,
                             padding: 15,
                             marginBottom: 15,
                             borderLeftWidth: 2,
-                            borderLeftColor: themeColor,
+                            borderLeftColor: '#444444',
                           }}>
                             <Text style={{ 
-                              fontSize: 15,
-                              color: '#BBB',
-                              fontStyle: 'italic',
-                              textShadowColor: secondaryColor,
-                              textShadowOffset: { width: 0, height: 0 },
-                              textShadowRadius: 3,
+                              fontSize: 14,
+                              color: '#BBBBBB',
                               lineHeight: 20
                             }}>
                               {selectedQuest.description}
@@ -759,10 +744,10 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
                             marginBottom: 10
                           }}>
                             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                              <MaterialIcons name="assignment" size={20} color={brightAccent} style={{ marginRight: 8 }} />
+                              <MaterialIcons name="assignment" size={18} color="#DDDDDD" style={{ marginRight: 8 }} />
                               <Text style={{ 
-                                fontSize: 18,
-                                color: '#FFF',
+                                fontSize: 16,
+                                color: '#DDDDDD',
                                 fontWeight: '600'
                               }}>
                                 Tasks ({selectedQuest.tasks?.length || 0})
@@ -773,28 +758,28 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
                             <TouchableOpacity 
                               onPress={openCreateTaskModal}
                               style={{
-                                backgroundColor: 'rgba(30, 30, 30, 0.9)',
-                                paddingHorizontal: 12,
+                                backgroundColor: '#333333',
+                                paddingHorizontal: 10,
                                 paddingVertical: 6,
                                 borderRadius: 6,
                                 borderWidth: 1,
-                                borderColor: themeColor,
+                                borderColor: '#444444',
                                 flexDirection: 'row',
                                 alignItems: 'center',
                               }}
                             >
                               <MaterialIcons 
                                 name="add" 
-                                size={16} 
-                                color={brightAccent}
+                                size={14} 
+                                color="#BBBBBB"
                                 style={{ marginRight: 4 }}
                               />
                               <Text style={{ 
-                                color: brightAccent,
+                                color: '#BBBBBB',
                                 fontWeight: '600',
-                                fontSize: 13,
+                                fontSize: 12,
                               }}>
-                                NEW TASK
+                                New Task
                               </Text>
                             </TouchableOpacity>
                           </View>
@@ -810,20 +795,26 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
                                   <View 
                                     key={task.id}
                                     style={{
-                                      backgroundColor: 'rgba(30, 30, 30, 0.7)',
+                                      backgroundColor: '#2A2A2A',
                                       borderRadius: 6,
-                                      padding: 15,
+                                      padding: 12,
                                       marginBottom: 10,
-                                      borderLeftWidth: 2,
-                                      borderLeftColor: task.status === 'Done' ? secondaryColor : 
-                                                    task.status === 'InProgress' ? themeColor : '#666',
+                                      borderLeftWidth: 3,
+                                      borderLeftColor: task.status === 'Done' ? '#4CAF50' : 
+                                                    task.status === 'InProgress' ? '#2196F3' : '#9E9E9E',
+                                      shadowColor: '#000',
+                                      shadowOffset: { width: 0, height: 1 },
+                                      shadowOpacity: 0.1,
+                                      shadowRadius: 1,
+                                      elevation: 1,
                                     }}
                                   >
                                     <Text style={{ 
-                                      fontSize: 16,
-                                      color: task.status === 'Done' ? '#AAA' : '#FFF',
+                                      fontSize: 15,
+                                      color: task.status === 'Done' ? '#AAAAAA' : '#DDDDDD',
                                       textDecorationLine: task.status === 'Done' ? 'line-through' : 'none',
                                       marginBottom: 5,
+                                      fontWeight: '500',
                                     }}>
                                       {task.title}
                                     </Text>
@@ -831,11 +822,11 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
                                     <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}>
                                       <MaterialIcons 
                                         name="schedule" 
-                                        size={14} 
-                                        color="#888"
+                                        size={12} 
+                                        color="#888888"
                                         style={{ marginRight: 4 }}
                                       />
-                                      <Text style={{ fontSize: 13, color: '#888' }}>
+                                      <Text style={{ fontSize: 12, color: '#888888' }}>
                                         Start: {task.scheduled_for}
                                       </Text>
                                       
@@ -843,11 +834,11 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
                                         <>
                                           <MaterialIcons 
                                             name="place" 
-                                            size={14} 
-                                            color="#888"
+                                            size={12} 
+                                            color="#888888"
                                             style={{ marginLeft: 12, marginRight: 4 }}
                                           />
-                                          <Text style={{ fontSize: 13, color: "#888" }}>
+                                          <Text style={{ fontSize: 12, color: "#888888" }}>
                                             {task.location}
                                           </Text>
                                         </>
@@ -865,16 +856,20 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
                                           <View style={{ 
                                             flexDirection: 'row', 
                                             alignItems: 'center',
-                                            marginRight: 10
+                                            marginRight: 10,
+                                            backgroundColor: '#3A2222',
+                                            paddingHorizontal: 6,
+                                            paddingVertical: 2,
+                                            borderRadius: 4,
                                           }}>
                                             <MaterialIcons 
                                               name="warning" 
-                                              size={14} 
-                                              color={colors.error}
+                                              size={12} 
+                                              color="#FF6B6B"
                                               style={{ marginRight: 4 }}
                                             />
-                                            <Text style={{ fontSize: 13, color: colors.error }}>
-                                              Deadline: {task.deadline}
+                                            <Text style={{ fontSize: 12, color: "#FF6B6B" }}>
+                                              {task.deadline}
                                             </Text>
                                           </View>
                                         )}
@@ -883,9 +878,9 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
                                         <TouchableOpacity 
                                           onPress={() => openEditTaskModal(task)}
                                           style={{
-                                            backgroundColor: 'rgba(40, 40, 40, 0.7)',
-                                            paddingHorizontal: 8,
-                                            paddingVertical: 4,
+                                            backgroundColor: '#333333',
+                                            paddingHorizontal: 6,
+                                            paddingVertical: 3,
                                             borderRadius: 4,
                                             flexDirection: 'row',
                                             alignItems: 'center',
@@ -893,15 +888,15 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
                                         >
                                           <MaterialIcons 
                                             name="edit" 
-                                            size={14} 
-                                            color="#AAA"
+                                            size={12} 
+                                            color="#AAAAAA"
                                           />
                                           <Text style={{ 
-                                            color: '#AAA',
-                                            fontSize: 12,
+                                            color: '#AAAAAA',
+                                            fontSize: 11,
                                             marginLeft: 2
                                           }}>
-                                            EDIT
+                                            Edit
                                           </Text>
                                         </TouchableOpacity>
                                       </View>
@@ -910,16 +905,16 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
                                       <TouchableOpacity 
                                         onPress={() => toggleTaskCompletion(task)}
                                         disabled={updatingTaskId === task.id}
-                                        style={{ padding: 8 }}
+                                        style={{ padding: 4 }}
                                       >
                                         {updatingTaskId === task.id ? (
-                                          <ActivityIndicator size="small" color={task.status === 'Done' ? secondaryColor : themeColor} />
+                                          <ActivityIndicator size="small" color={task.status === 'Done' ? '#4CAF50' : '#2196F3'} />
                                         ) : task.status === 'Done' ? (
-                                          <MaterialIcons name="check-circle" size={20} color={secondaryColor} />
+                                          <MaterialIcons name="check-circle" size={20} color="#4CAF50" />
                                         ) : task.status === 'InProgress' ? (
-                                          <MaterialIcons name="timelapse" size={20} color={themeColor} />
+                                          <MaterialIcons name="timelapse" size={20} color="#2196F3" />
                                         ) : (
-                                          <MaterialIcons name="radio-button-unchecked" size={20} color="#666" />
+                                          <MaterialIcons name="radio-button-unchecked" size={20} color="#9E9E9E" />
                                         )}
                                       </TouchableOpacity>
                                     </View>
@@ -935,20 +930,22 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
                 ) : (
                   <View style={{ 
                     flex: 1,
-                    backgroundColor: 'rgba(25, 25, 25, 0.8)',
+                    backgroundColor: '#252525',
                     borderRadius: 8,
                     padding: 20,
                     alignItems: 'center',
-                    justifyContent: 'center'
+                    justifyContent: 'center',
+                    borderWidth: 1,
+                    borderColor: '#333333',
                   }}>
-                    <MaterialIcons name="assignment" size={40} color="rgba(255,255,255,0.1)" />
+                    <MaterialIcons name="assignment" size={40} color="#444444" />
                     <Text style={{ 
-                      color: '#777',
+                      color: '#AAAAAA',
                       marginTop: 10,
                       fontSize: 16,
                       textAlign: 'center'
                     }}>
-                      Select a quest to view details
+                      Select a project to view details
                     </Text>
                   </View>
                 )}

@@ -82,7 +82,6 @@ class GlobalSuggestionStore {
       id: task.id,
       title: task.title,
       quest_id: task.quest_id,
-      sourceType: task.sourceType
     }, null, 2));
     
     this.taskSuggestions = [...this.taskSuggestions, task];

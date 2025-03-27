@@ -18,7 +18,6 @@ import { SprintBoard } from '@/components/sprint/SprintBoard';
 import { useSupabase } from '@/contexts/SupabaseContext'; // Use refined context
 import TriangularSpinner from '../loading/TriangularSpinner';
 import { useTasks } from '@/services/tasksService'; // Import useTasks
-import { useJournal } from '@/hooks/useJournal'; // Import useJournal
 
 export function DesktopLayout() {
   // 1. Get Auth state FIRST (using the renamed isLoading from context)
@@ -33,16 +32,13 @@ export function DesktopLayout() {
       messages, sendMessage, handleTyping, endSession, isTyping, deleteCurrentMessages,
       sessionEnded, checkupCreated, error: chatError, authenticated // Get authenticated state from hook
   } = useChatData();
-  const {
-      currentDate, // Get necessary state
-      loading: journalLoading, error: journalError, refreshEntries: reloadJournal
-  } = useJournal();
+
 
   // 3. Combine Feature Data Loading States (exclude isAuthLoading here)
-  const isDataLoading = questsLoading || tasksLoading || journalLoading;
+  const isDataLoading = questsLoading || tasksLoading ;
 
   // 4. Combine Feature Errors
-  const combinedError = questsError || tasksError || chatError || journalError;
+  const combinedError = questsError || tasksError || chatError ;
 
   // Other context hooks
   const { shouldUpdate, resetUpdate } = useQuestUpdate();
@@ -70,12 +66,11 @@ export function DesktopLayout() {
           console.log("[DesktopLayout] Reloading all feature data...");
           reloadQuests();
           reloadTasks();
-          reloadJournal();
           // Chat data might auto-reload via its hook or subscriptions
       } else {
           console.log("[DesktopLayout] Skipping reload - auth not ready or no session.");
       }
-  }, [isAuthLoading, session?.user?.id, reloadQuests, reloadTasks, reloadJournal]);
+  }, [isAuthLoading, session?.user?.id, reloadQuests, reloadTasks, ]);
 
   // --- Effects ---
   // Effect for Quest Updates - GUARDED
@@ -183,7 +178,6 @@ export function DesktopLayout() {
           userId={userId} // Pass confirmed userId
         />
       </View>
-      <PersonalityButton />
       <SettingsButton />
     </View>
   );

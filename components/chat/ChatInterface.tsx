@@ -50,7 +50,7 @@ export function ChatInterface({
   const [message, setMessage] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isProcessingSession, setIsProcessingSession] = useState(false);
-  const [isEndingSession, setIsEndingSession] = useState(false);  // Add this line
+  const [isEndingSession, setIsEndingSession] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
   const { themeColor, secondaryColor } = useTheme();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -58,7 +58,7 @@ export function ChatInterface({
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [quests, setQuests] = useState<Array<{ id: number; title: string }>>([]);
   const { session } = useSupabase();
-  const [personalityName, setPersonalityName] = useState('SILVERHAND');
+  const [personalityName, setPersonalityName] = useState('ASSISTANT');
 
   // Get task and quest suggestions from context
   const { 
@@ -281,12 +281,16 @@ export function ChatInterface({
             case 'batman':
               setPersonalityName('BATMAN');
               break;
-            
+            case 'genericAssistant':
+              setPersonalityName('ASSISTANT');
+              break;
+            default:
+              setPersonalityName('ASSISTANT');
           }
         })
         .catch(error => {
           console.error('Error getting personality:', error);
-          setPersonalityName('SILVERHAND'); // Fallback to default
+          setPersonalityName('ASSISTANT'); // Fallback to default
         });
     }
   }, [session?.user?.id]);
@@ -295,29 +299,20 @@ export function ChatInterface({
     <>
       <Card style={{
         flex: 1,
-        backgroundColor: colors.backgroundSecondary,
+        backgroundColor: '#1E1E1E',
         borderRadius: 8,
         borderWidth: 1, 
-        borderColor: themeColor, 
-        borderLeftWidth: 3,
+        borderColor: '#333333', 
         overflow: 'hidden',
         shadowColor: '#000',
         shadowOffset: {
           width: 0,
           height: 3,
         },
-        shadowOpacity: 0.5,
-        shadowRadius: 5,
-        elevation: 8,
+        shadowOpacity: 0.2,
+        shadowRadius: 3,
+        elevation: 2,
       }}>
-        {/* Background with cyberpunk elements */}
-        <View style={{ 
-          position: 'absolute', 
-          width: '100%', 
-          height: '100%',
-          backgroundColor: '#151515',
-        }} />
-
         {/* Chat header */}
         <View style={{ 
           flexDirection: 'row',
@@ -326,22 +321,17 @@ export function ChatInterface({
           paddingHorizontal: 15,
           paddingVertical: 15,
           borderBottomWidth: 1,
-          borderBottomColor: 'rgba(255, 255, 255, 0.1)',
-          backgroundColor: 'rgba(20, 20, 20, 0.7)',
+          borderBottomColor: '#333333',
+          backgroundColor: '#252525',
         }}>
-          {/* ...existing code... */}
           <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
             <Text style={{ 
               fontSize: 18,
               fontWeight: 'bold',
-              color: '#FFFFFF',
-              textTransform: 'uppercase',
-              letterSpacing: 1,
-              textShadowColor: themeColor,
-              textShadowOffset: { width: 1, height: 1 },
-              textShadowRadius: 4
+              color: '#EEEEEE',
+              letterSpacing: 0.5,
             }}>
-              Interface
+              Chat Assistant
             </Text>
             <View style={{
               height: 3,
@@ -354,7 +344,7 @@ export function ChatInterface({
             <TouchableOpacity 
               style={{
                 marginLeft: 15,
-                backgroundColor: 'rgba(30, 30, 30, 0.9)',
+                backgroundColor: '#333333',
                 borderWidth: 1,
                 borderColor: secondaryColor,
                 borderRadius: 4,
@@ -377,7 +367,6 @@ export function ChatInterface({
                 color: secondaryColor,
                 fontSize: 12,
                 fontWeight: 'bold',
-                textTransform: 'uppercase',
               }}>
                 End Session
               </Text>
@@ -386,9 +375,9 @@ export function ChatInterface({
             <TouchableOpacity 
               style={{
                 marginLeft: 15,
-                backgroundColor: 'rgba(30, 30, 30, 0.9)',
+                backgroundColor: '#333333',
                 borderWidth: 1,
-                borderColor: '#ff4c4c',
+                borderColor: '#FF6B6B',
                 borderRadius: 4,
                 paddingVertical: 4,
                 paddingHorizontal: 8,
@@ -401,14 +390,13 @@ export function ChatInterface({
               <MaterialIcons 
                 name="delete" 
                 size={16} 
-                color="#ff4c4c"
+                color="#FF6B6B"
                 style={{ marginRight: 4 }} 
               />
               <Text style={{
-                color: '#ff4c4c',
+                color: '#FF6B6B',
                 fontSize: 12,
                 fontWeight: 'bold',
-                textTransform: 'uppercase',
               }}>
                 Delete Chat
               </Text>
@@ -424,7 +412,7 @@ export function ChatInterface({
           <View style={{ flex: 1, flexDirection: 'column' }}>
             {/* Chat messages area - takes up most of the space */}
             <ScrollView 
-              style={{ padding: 10, flex: 1 }} 
+              style={{ padding: 10, flex: 1, backgroundColor: '#1A1A1A' }} 
               contentContainerStyle={{ paddingBottom: 20 }}
               ref={scrollViewRef}
             >
@@ -434,13 +422,13 @@ export function ChatInterface({
                   padding: 12,
                   marginVertical: 5,
                   borderRadius: 5,
-                  backgroundColor: 'rgba(255, 50, 50, 0.2)',
+                  backgroundColor: '#3A2222',
                   borderWidth: 1,
-                  borderColor: 'rgba(255, 50, 50, 0.5)',
+                  borderColor: '#FF6B6B',
                   marginBottom: 16,
                 }}>
                   <Text style={{
-                    color: '#FFA0A0',
+                    color: '#FF6B6B',
                     fontSize: 14,
                     textAlign: 'center',
                   }}>
@@ -466,12 +454,12 @@ export function ChatInterface({
                         marginVertical: 5,
                         borderRadius: 5,
                         maxWidth: '85%',
-                        backgroundColor: 'rgba(15, 15, 15, 0.8)',
+                        backgroundColor: msg.is_user ? '#252525' : '#2C2C2C',
                         shadowColor: '#000',
-                        shadowOffset: { width: 0, height: 3 },
+                        shadowOffset: { width: 0, height: 1 },
                         shadowOpacity: 0.2,
-                        shadowRadius: 4,
-                        elevation: 3,
+                        shadowRadius: 2,
+                        elevation: 1,
                       },
                       !msg.is_user 
                         ? {
@@ -493,25 +481,18 @@ export function ChatInterface({
                         color: !msg.is_user ? secondaryColor : themeColor,
                         fontWeight: 'bold',
                         fontSize: 12,
-                        textTransform: 'uppercase',
                         letterSpacing: 0.5,
-                        textShadowColor: !msg.is_user ? secondaryColor : themeColor,
-                        textShadowOffset: { width: 0, height: 0 },
-                        textShadowRadius: 3,
                       }}>
                         {!msg.is_user ? personalityName : 'YOU'}
                       </Text>
-                      <Text style={{ color: '#777', fontSize: 10 }}>
+                      <Text style={{ color: '#888888', fontSize: 10 }}>
                         {formatTimestamp(msg.updated_at)}
                       </Text>
                     </View>
                     <Text style={{ 
-                      fontSize: 18,
-                      color: '#BBB',
-                      lineHeight: 22,
-                      textShadowColor: !msg.is_user ? secondaryColor : themeColor,
-                      textShadowOffset: { width: 0, height: 0 },
-                      textShadowRadius: 3,
+                      fontSize: 15,
+                      color: '#DDDDDD',
+                      lineHeight: 20,
                     }}>
                       {messageText}
                     </Text>
@@ -528,12 +509,12 @@ export function ChatInterface({
                       marginVertical: 5,
                       borderRadius: 5,
                       maxWidth: '85%',
-                      backgroundColor: 'rgba(15, 15, 15, 0.8)',
+                      backgroundColor: '#2C2C2C',
                       shadowColor: '#000',
-                      shadowOffset: { width: 0, height: 3 },
+                      shadowOffset: { width: 0, height: 1 },
                       shadowOpacity: 0.2,
-                      shadowRadius: 4,
-                      elevation: 3,
+                      shadowRadius: 2,
+                      elevation: 1,
                       alignSelf: 'flex-start',
                       borderLeftWidth: 3,
                       borderColor: secondaryColor,
@@ -546,11 +527,7 @@ export function ChatInterface({
                       color: secondaryColor,
                       fontWeight: 'bold',
                       fontSize: 12,
-                      textTransform: 'uppercase',
                       letterSpacing: 0.5,
-                      textShadowColor: secondaryColor,
-                      textShadowOffset: { width: 0, height: 0 },
-                      textShadowRadius: 3,
                     }}>
                       {personalityName}
                     </Text>
@@ -558,13 +535,9 @@ export function ChatInterface({
                   <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 4 }}>
                     <TriangularSpinner size={24} color={secondaryColor} />
                     <Text style={{ 
-                      fontSize: 18,
-                      color: '#BBB',
+                      fontSize: 15,
+                      color: '#BBBBBB',
                       marginLeft: 8,
-                      lineHeight: 22,
-                      textShadowColor: secondaryColor,
-                      textShadowOffset: { width: 0, height: 0 },
-                      textShadowRadius: 3,
                     }}>
                       typing
                     </Text>
@@ -578,12 +551,12 @@ export function ChatInterface({
                   marginTop: 20,
                   padding: 12,
                   borderRadius: 5,
-                  backgroundColor: 'rgba(20, 20, 20, 0.8)',
+                  backgroundColor: '#282828',
                   borderWidth: 1,
-                  borderColor: secondaryColor,
+                  borderColor: '#444444',
                 }}>
                   <Text style={{
-                    color: '#BBB',
+                    color: '#BBBBBB',
                     fontSize: 16,
                     textAlign: 'center',
                     marginBottom: 8,
@@ -595,7 +568,7 @@ export function ChatInterface({
                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 8 }}>
                       <TriangularSpinner size={16} color={secondaryColor} />
                       <Text style={{
-                        color: '#999',
+                        color: '#999999',
                         fontSize: 14,
                         textAlign: 'center',
                         marginLeft: 8,
@@ -606,7 +579,7 @@ export function ChatInterface({
                   ) : checkupCreated && (
                     <View style={{ marginTop: 8 }}>
                       <Text style={{
-                        color: '#BBB',
+                        color: '#BBBBBB',
                         fontSize: 14,
                         textAlign: 'center',
                         marginBottom: 8,
@@ -624,8 +597,8 @@ export function ChatInterface({
               <View style={{
                 maxHeight: 220,
                 borderTopWidth: 1,
-                borderTopColor: 'rgba(255, 255, 255, 0.1)',
-                backgroundColor: 'rgba(15, 15, 15, 0.95)',
+                borderTopColor: '#333333',
+                backgroundColor: '#232323',
               }}>
                 <View style={{ 
                   flexDirection: 'row',
@@ -633,16 +606,17 @@ export function ChatInterface({
                   alignItems: 'center',
                   paddingHorizontal: 15,
                   paddingVertical: 8,
-                  backgroundColor: 'rgba(20, 20, 20, 0.8)',
+                  backgroundColor: '#252525',
+                  borderBottomWidth: 1,
+                  borderBottomColor: '#333333',
                 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                     <MaterialIcons name="lightbulb" size={16} color={secondaryColor} />
                     <Text style={{ 
                       marginLeft: 6,
-                      color: secondaryColor,
+                      color: '#EEEEEE',
                       fontWeight: 'bold',
                       fontSize: 14,
-                      textTransform: 'uppercase',
                     }}>
                       Suggestions ({taskSuggestions.length + questSuggestions.length})
                     </Text>
@@ -653,6 +627,7 @@ export function ChatInterface({
                   horizontal={false}
                   style={{ 
                     maxHeight: 180,
+                    backgroundColor: '#1A1A1A',
                   }}
                   contentContainerStyle={{
                     padding: 10,
@@ -663,7 +638,7 @@ export function ChatInterface({
                   {taskSuggestions.length > 0 && (
                     <View style={{ marginBottom: 12 }}>
                       <Text style={{ 
-                        color: '#AAA', 
+                        color: '#AAAAAA', 
                         fontSize: 12, 
                         marginBottom: 8,
                         paddingHorizontal: 4,
@@ -689,7 +664,7 @@ export function ChatInterface({
                   {questSuggestions.length > 0 && (
                     <View>
                       <Text style={{ 
-                        color: '#AAA', 
+                        color: '#AAAAAA', 
                         fontSize: 12, 
                         marginBottom: 8,
                         paddingHorizontal: 4,
@@ -700,15 +675,15 @@ export function ChatInterface({
                       {questSuggestions.map((quest) => (
                         <View key={quest.id} style={{ marginBottom: 8 }}>
                           <View style={{
-                            backgroundColor: 'rgba(20, 20, 20, 0.95)',
+                            backgroundColor: '#252525',
                             borderRadius: 6,
                             borderLeftWidth: 3,
                             borderColor: secondaryColor,
                             shadowColor: '#000',
-                            shadowOffset: { width: 0, height: 3 },
-                            shadowOpacity: 0.3,
-                            shadowRadius: 4,
-                            elevation: 6,
+                            shadowOffset: { width: 0, height: 1 },
+                            shadowOpacity: 0.2,
+                            shadowRadius: 2,
+                            elevation: 1,
                             overflow: 'hidden',
                           }}>
                             <View style={{
@@ -717,7 +692,7 @@ export function ChatInterface({
                               padding: 10,
                               paddingHorizontal: 12,
                               borderBottomWidth: 1,
-                              borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+                              borderBottomColor: '#333333',
                             }}>
                               <MaterialIcons name="emoji-events" size={16} color={secondaryColor} />
                               <Text style={{
@@ -725,18 +700,18 @@ export function ChatInterface({
                                 fontWeight: 'bold',
                                 marginLeft: 6,
                                 flex: 1,
-                                color: secondaryColor,
+                                color: '#DDDDDD',
                               }}>
                                 {quest.title}
                               </Text>
                               <TouchableOpacity style={{ padding: 2 }} onPress={() => handleRejectQuest(quest.id)}>
-                                <MaterialIcons name="close" size={16} color="#999" />
+                                <MaterialIcons name="close" size={16} color="#999999" />
                               </TouchableOpacity>
                             </View>
                             
                             <View style={{ padding: 12 }}>
                               <Text style={{
-                                color: '#AAA',
+                                color: '#AAAAAA',
                                 fontSize: 12,
                                 marginBottom: 8
                               }}>
@@ -747,7 +722,7 @@ export function ChatInterface({
                             <View style={{
                               flexDirection: 'row',
                               borderTopWidth: 1,
-                              borderTopColor: 'rgba(255, 255, 255, 0.1)',
+                              borderTopColor: '#333333',
                             }}>
                               <TouchableOpacity
                                 style={{
@@ -762,7 +737,7 @@ export function ChatInterface({
                               >
                                 <MaterialIcons name="check" size={14} color="#fff" />
                                 <Text style={{
-                                  color: '#FFF',
+                                  color: '#FFFFFF',
                                   fontSize: 12,
                                   marginLeft: 4
                                 }}>
@@ -783,20 +758,20 @@ export function ChatInterface({
               flexDirection: 'row',
               padding: 10,
               borderTopWidth: 1,
-              borderTopColor: 'rgba(255, 255, 255, 0.1)',
-              backgroundColor: 'rgba(20, 20, 20, 0.9)'
+              borderTopColor: '#333333',
+              backgroundColor: '#252525'
             }}>
-                            <TextInput
+              <TextInput
                 style={{
                   flex: 1,
                   padding: 12,
-                  backgroundColor: 'rgba(25, 25, 25, 0.7)',
-                  color: colors.text,
+                  backgroundColor: '#1E1E1E',
+                  color: '#DDDDDD',
                   borderRadius: 4,
                   fontSize: 15,
                   marginRight: 10,
-                  borderLeftWidth: 2, 
-                  borderLeftColor: themeColor,
+                  borderWidth: 1,
+                  borderColor: '#444444',
                   textAlignVertical: 'center',
                   maxHeight: 100,
                 }}
@@ -804,7 +779,7 @@ export function ChatInterface({
                 onChangeText={handleMessageChange}
                 onKeyPress={handleKeyPress}
                 placeholder={!userId ? "Please log in to chat" : "Type your message..."}
-                placeholderTextColor="#666"
+                placeholderTextColor="#666666"
                 blurOnSubmit={false}
                 multiline={false}
                 editable={!sessionEnded && !!userId}
@@ -816,19 +791,17 @@ export function ChatInterface({
                   backgroundColor: themeColor,
                   borderRadius: 4,
                   paddingHorizontal: 15,
-                  borderWidth: 1,
-                  borderColor: brightAccent,
-                  shadowColor: themeColor,
-                  shadowOffset: { width: 0, height: 0 },
-                  shadowOpacity: 0.5,
-                  shadowRadius: 5,
-                  elevation: 5,
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 1 },
+                  shadowOpacity: 0.2,
+                  shadowRadius: 2,
+                  elevation: 1,
                   opacity: sessionEnded || !userId ? 0.5 : 1,
                 }} 
                 onPress={handleSend}
                 disabled={sessionEnded || !userId}
               >
-                <MaterialIcons name="send" size={24} color="#FFF" />
+                <MaterialIcons name="send" size={24} color="#FFFFFF" />
               </TouchableOpacity>
             </View>
           </View>

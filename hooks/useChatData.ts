@@ -31,24 +31,6 @@ export async function getCurrentMessagesFromDB(userId: string) {
   return data || [];
 }
 
-export async function getRecentJournalEntries(userId: string, limit: number = 2) {
-  if (!userId) {
-    throw new Error('User ID is required to fetch journal entries');
-  }
-  
-  const { data, error } = await supabase
-    .from('journal_entries')
-    .select('user_entry, ai_response, user_id')
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false })
-    .limit(limit);
-  
-  if (error) {
-    throw error;
-  }
-  
-  return data || [];
-}
 
 export async function createChatSession(summary: string, tags: string[], userId: string) {
   if (!userId) {

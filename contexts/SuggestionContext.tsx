@@ -93,7 +93,6 @@ export const SuggestionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       title: suggestion.type === 'task' ? suggestion.title : 
         suggestion.type === 'quest' ? (suggestion as QuestSuggestion).title : 
         null,
-      sourceType: suggestion.sourceType,
       timestamp: suggestion.timestamp
     });
     

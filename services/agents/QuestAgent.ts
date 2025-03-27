@@ -254,125 +254,6 @@ Be SELECTIVE - only include tasks that have a CLEAR and STRONG connection to the
         }
     }
 
-    private async validateAndRepairJson(rawResponse: string | object, questId: number): Promise<QuestRelevanceItem | null> {
-        // If rawResponse is already an object, validate its structure directly
-        if (typeof rawResponse === 'object') {
-            console.log('🔍 Validating JavaScript object');
-            try {
-                const response = rawResponse as QuestRelevanceItem;
-                // Verify the required fields are present and of correct type
-                if (typeof response.questId !== 'number' || 
-                    typeof response.isRelevant !== 'boolean' || 
-                    !Array.isArray(response.relevantTasks)) {
-                    console.log('❌ Object is missing required fields or has wrong types');
-                    return null;
-                }
-                console.log('✅ Object validated successfully');
-                return response;
-            } catch (error) {
-                console.error('❌ Error validating object:', error);
-                return null;
-            }
-        }
-
-        // If rawResponse is a string, proceed with LLM validation
-        console.log('🔍 Validating JSON response:', rawResponse);
-        
-        const prompt = `You are a JSON validator and repair system. Your job is to:
-1. Check if the input is valid JSON
-2. If it's valid, ensure it matches the expected format
-3. If it's invalid but fixable, repair it
-4. If it's beyond repair, return null
-
-Expected JSON format:
-{
-  "questId": ${questId},
-  "isRelevant": boolean,
-  "relevance": string | null,
-  "relevantTasks": [
-    {
-      "taskId": number,
-      "name": string,
-      "description": string,
-      "relevance": string
-    }
-  ]
-}
-
-Input to validate: "${rawResponse}"
-
-IMPORTANT: Your response must be EXACTLY in this format:
-START JSON
-{valid json object or the word 'null'}
-END JSON
-
-DO NOT add any backticks, quotes, or other markers around the JSON.`;
-
-        try {
-            console.log('📤 Sending JSON validation request to AI');
-            const result = await this.openai.chat.completions.create({
-                model: "deepseek-chat",
-                messages: [
-                    {
-                        role: "system",
-                        content: "You are a JSON validator and repair system."
-                    },
-                    {
-                        role: "user",
-                        content: prompt
-                    }
-                ],
-                temperature: 0.7,
-                max_tokens: 2000
-            });
-            const validatedResponse = result.choices[0].message?.content ?? '';
-
-            if (!validatedResponse) {
-                console.log('❌ No response received from validator');
-                return null;
-            }
-
-            // Extract content between markers
-            const startMarker = "START JSON";
-            const endMarker = "END JSON";
-            const startIndex = validatedResponse.indexOf(startMarker);
-            const endIndex = validatedResponse.indexOf(endMarker);
-
-            if (startIndex === -1 || endIndex === -1) {
-                console.log('❌ Validator response missing markers');
-                return null;
-            }
-
-            const jsonContent = validatedResponse
-                .substring(startIndex + startMarker.length, endIndex)
-                .trim();
-
-            if (jsonContent === 'null') {
-                console.log('❌ JSON validation failed - response cannot be repaired');
-                return null;
-            }
-
-            try {
-                const parsed = JSON.parse(jsonContent) as QuestRelevanceItem;
-                // Verify the required fields are present and of correct type
-                if (typeof parsed.questId !== 'number' || 
-                    typeof parsed.isRelevant !== 'boolean' || 
-                    !Array.isArray(parsed.relevantTasks)) {
-                    console.log('❌ Repaired JSON is missing required fields or has wrong types');
-                    return null;
-                }
-                console.log('✅ JSON validated and parsed successfully');
-                return parsed;
-            } catch (parseError) {
-                console.error('❌ Error parsing validated JSON:', parseError);
-                return null;
-            }
-        } catch (error) {
-            console.error('❌ Error in JSON validation:', error);
-            return null;
-        }
-    }
-
     private cleanResponseText(response: string): string {
         console.log('🧹 Cleaning response text of markdown/code markers');
         // Remove common markdown/code block markers
@@ -382,86 +263,6 @@ DO NOT add any backticks, quotes, or other markers around the JSON.`;
             .replace(/^`{1,2}/gm, '')      // Remove inline code marks at start
             .replace(/`{1,2}$/gm, '')      // Remove inline code marks at end
             .trim();
-    }
-
-    private async analyzeMiscQuestTasks(journalContent: string, miscQuest: Quest, userId: string): Promise<QuestRelevanceItem | null> {
-        console.log('🔍 Analyzing Misc quest tasks specifically');
-        
-        if (!miscQuest.tasks || miscQuest.tasks.length === 0) {
-            console.log('❌ No tasks found in Misc quest');
-            return null;
-        }
-
-        // Filter tasks by user_id
-        const userTasks = miscQuest.tasks;
-
-        try {
-            console.log('📤 Sending misc tasks analysis to AI');
-            const result = await this.actuallyOAI.responses.create({
-                model: "gpt-4o-mini-2024-07-18",
-                input: [
-                    {
-                        role: "developer",
-                        content: [
-                            {
-                                type: "input_text", 
-                                text: `You are analyzing tasks from a miscellaneous quest collection to determine their relevance to a journal entry.
-Be VERY selective - only include tasks with clear, direct relevance to the journal entry.`
-                            }
-                        ]
-                    },
-                    {
-                        role: "user",
-                        content: `Review these tasks for relevance to this journal entry:
-
-Journal Entry: "${journalContent}"
-
-Tasks to analyze:
-${userTasks.map(task => `ID: ${task.id}
-Title: ${task.title}
-Description: ${task.description || 'No description'}`).join('\n\n')}`
-                    }
-                ],
-                text: {
-                    
-                    format: {
-                        type: "json_schema",
-                        name: "quest_relevance",
-                        strict: true,
-                        schema: {
-                            type: "object",
-                            properties: {
-                                questId: { type: "number", enum: [miscQuest.id] },
-                                isRelevant: { type: "boolean" },
-                                relevance: { type: ["string", "null"] }, // Changed from nullable: true
-                                relevantTasks: {
-                                    type: "array",
-                                    items: {
-                                        type: "object",
-                                        properties: {
-                                            taskId: { type: "number" },
-                                            name: { type: "string" },
-                                            description: { type: "string" },
-                                            relevance: { type: "string" }
-                                        },
-                                        required: ["taskId", "name", "description", "relevance"]
-                                    }
-                                }
-                            },
-                            required: ["questId", "isRelevant", "relevantTasks", "relevance"], // Added relevance to required fields
-                            additionalProperties: false
-                        },
-                    },
-                },
-                temperature: 0.4
-            });
-            
-            // The response is already a JSON object, no need to parse
-            return result.output_text ? JSON.parse(result.output_text) : null;
-        } catch (error) {
-            console.error('❌ Error analyzing misc tasks:', error);
-            return null;
-        }
     }
 
     private async analyzeRegularQuest(journalContent: string, quests: Quest[], userId: string): Promise<QuestRelevanceItem[]> {
@@ -598,32 +399,17 @@ For each quest, determine if it's relevant and which specific tasks are mentione
             console.log(`📋 Found ${quests.length} total quests to analyze`);
 
             // Get the misc quest and separate regular quests
-            const miscQuest = await getOrCreateMiscQuest(userId);
-            const regularQuests = quests.filter(q => q.id !== miscQuest.id);
             
             // Filter tasks by user_id for all quests
-            regularQuests.forEach(quest => {
-                quest.tasks = quest.tasks?.filter(task => task.user_id === userId) || [];
-            });
-
+           
             // Store all relevant quest data
             let relevantQuestData: QuestRelevanceItem[] = [];
 
             // First analyze all regular quests together
-            if (regularQuests.length > 0) {
+            if (quests.length > 0) {
                 console.log('📋 Analyzing all regular quests');
-                const questAnalyses = await this.analyzeRegularQuest(journalContent, regularQuests, userId);
+                const questAnalyses = await this.analyzeRegularQuest(journalContent, quests, userId);
                 relevantQuestData.push(...questAnalyses);
-            }
-
-            // Then analyze misc quest tasks if it exists and has tasks
-            if (miscQuest.tasks && miscQuest.tasks.length > 0) {
-                console.log('📋 Analyzing Misc quest tasks');
-                miscQuest.tasks = miscQuest.tasks.filter(task => task.user_id === userId);
-                const miscAnalysis = await this.analyzeMiscQuestTasks(journalContent, miscQuest, userId);
-                if (miscAnalysis?.isRelevant) {
-                    relevantQuestData.push(miscAnalysis);
-                }
             }
 
             // Clean up and return results
