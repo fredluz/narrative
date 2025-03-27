@@ -23,6 +23,7 @@ import { CreateTaskModal } from '@/components/modals/CreateTaskModal';
 import { fetchQuests } from '@/services/questsService';
 import { useSupabase } from '@/contexts/SupabaseContext';
 import { personalityService } from '@/services/personalityService';
+import { ActivityIndicator } from 'react-native';
 
 interface Props {
   recentMessages: ChatMessage[];
@@ -77,7 +78,9 @@ export function ChatInterface({
     upgradeTaskToQuest,
     rejectQuestSuggestion,
     acceptQuestSuggestion,
-  } = useSuggestions();
+    isAcceptingTask,
+    isAcceptingQuest,
+    } = useSuggestions();
 
   // Load quests for task modal
   useEffect(() => {
@@ -124,7 +127,7 @@ export function ChatInterface({
     console.log('⬆️ [ChatInterface] Upgrading task to quest:', task.title);
     upgradeTaskToQuest(task);
   };
-
+  
   // New method to handle expanding a task suggestion to show details modal
   const handleExpandTask = (task: TaskSuggestion) => {
     console.log('🔍 [ChatInterface] Expanding task suggestion:', task.title);
@@ -597,15 +600,14 @@ export function ChatInterface({
               )}
             </ScrollView>
             
-            {/* Suggestions list area - displayed only when there are suggestions */}
             {hasSuggestions && (
               <View style={{
-                maxHeight: 220,
+                maxHeight: 220, // Adjust as needed
                 borderTopWidth: 1,
                 borderTopColor: '#333333',
                 backgroundColor: '#232323',
               }}>
-                <View style={{ 
+                <View style={{
                   flexDirection: 'row',
                   justifyContent: 'space-between',
                   alignItems: 'center',
@@ -617,7 +619,7 @@ export function ChatInterface({
                 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                     <MaterialIcons name="lightbulb" size={16} color="#FFD700" />
-                    <Text style={{ 
+                    <Text style={{
                       marginLeft: 6,
                       color: '#EEEEEE',
                       fontWeight: 'bold',
@@ -627,11 +629,11 @@ export function ChatInterface({
                     </Text>
                   </View>
                 </View>
-                
-                <ScrollView 
+
+                <ScrollView
                   horizontal={false}
-                  style={{ 
-                    maxHeight: 180,
+                  style={{
+                    maxHeight: 180, // Max height for the scrollable content
                     backgroundColor: '#1A1A1A',
                   }}
                   contentContainerStyle={{
@@ -639,153 +641,171 @@ export function ChatInterface({
                     paddingBottom: 15,
                   }}
                 >
-                  {/* Task Suggestions */}
-                  {taskSuggestions.length > 0 && (
-                    <View style={{ marginBottom: 12 }}>
-                      <View style={{ 
-                        flexDirection: 'row', 
-                        alignItems: 'center', 
-                        marginBottom: 8,
-                        paddingHorizontal: 4,
-                      }}>
-                        <Text style={{ 
-                          color: '#AAAAAA', 
-                          fontSize: 12, 
-                          fontWeight: 'bold',
-                        }}>
-                          TASKS
-                        </Text>
-                        <View style={{
-                          height: 2,
-                          width: 16,
-                          backgroundColor: '#2196F3',
-                          marginLeft: 6,
-                          borderRadius: 1,
-                        }} />
-                      </View>
-                      
-                      {taskSuggestions.map((task) => (
-                        <View key={task.id} style={{ marginBottom: 8 }}>
-                          <CompactTaskSuggestion
-                            suggestion={task}
-                            onAccept={() => handleAcceptTask(task)}
-                            onReject={() => handleRejectTask(task.id)}
-                            onExpand={() => handleExpandTask(task)}
-                            onUpgradeToQuest={() => handleUpgradeTask(task)}
-                          />
-                        </View>
-                      ))}
-                    </View>
-                  )}
-                  
-                  {/* Quest Suggestions */}
-                  {questSuggestions.length > 0 && (
-                    <View>
-                      <View style={{ 
-                        flexDirection: 'row', 
-                        alignItems: 'center', 
-                        marginBottom: 8,
-                        paddingHorizontal: 4,
-                      }}>
-                        <Text style={{ 
-                          color: '#AAAAAA', 
-                          fontSize: 12, 
-                          fontWeight: 'bold',
-                        }}>
-                          QUESTS
-                        </Text>
-                        <View style={{
-                          height: 2,
-                          width: 16,
-                          backgroundColor: '#FF9800',
-                          marginLeft: 6,
-                          borderRadius: 1,
-                        }} />
-                      </View>
-                      
-                      {questSuggestions.map((quest) => (
-                        <View key={quest.id} style={{ marginBottom: 8 }}>
-                          <View style={{
-                            backgroundColor: 'rgba(255, 152, 0, 0.05)',
-                            borderRadius: 6,
-                            borderLeftWidth: 3,
-                            borderColor: '#FF9800',
-                            shadowColor: '#000',
-                            shadowOffset: { width: 0, height: 1 },
-                            shadowOpacity: 0.2,
-                            shadowRadius: 2,
-                            elevation: 1,
-                            overflow: 'hidden',
-                          }}>
-                            <View style={{
-                              flexDirection: 'row',
-                              alignItems: 'center',
-                              padding: 10,
-                              paddingHorizontal: 12,
-                              borderBottomWidth: 1,
-                              borderBottomColor: '#333333',
-                            }}>
-                              <MaterialIcons name="emoji-events" size={16} color="#FF9800" />
-                              <Text style={{
-                                fontSize: 12,
-                                fontWeight: 'bold',
-                                marginLeft: 6,
-                                flex: 1,
-                                color: '#DDDDDD',
+                  {/* --- NEW RENDERING LOGIC --- */}
+                  {(() => {
+                    const renderedTaskIds = new Set<string>(); // Keep track of tasks rendered under quests
+
+                    return (
+                      <>
+                        {/* 1. Render Quests and their Associated Pending Tasks */}
+                        {questSuggestions.map((quest) => {
+                          const isAcceptingThisQuest = isAcceptingQuest === quest.id;
+                          const associatedTasks = (quest.pendingTaskClientIds || [])
+                            .map(taskId => taskSuggestions.find(t => t.id === taskId))
+                            .filter((t): t is TaskSuggestion => !!t); // Filter out undefined
+
+                          // Add associated task IDs to the set
+                          associatedTasks.forEach(t => renderedTaskIds.add(t.id));
+
+                          return (
+                            <View key={quest.id} style={{ marginBottom: 12 }}>
+                              {/* Quest Card */}
+                              <View style={{
+                                backgroundColor: 'rgba(255, 152, 0, 0.05)',
+                                borderRadius: 6,
+                                borderLeftWidth: 3,
+                                borderColor: '#FF9800',
+                                shadowColor: '#000',
+                                shadowOffset: { width: 0, height: 1 },
+                                shadowOpacity: 0.2,
+                                shadowRadius: 2,
+                                elevation: 1,
+                                overflow: 'hidden',
+                                opacity: isAcceptingThisQuest ? 0.6 : 1
                               }}>
-                                {quest.title}
-                              </Text>
-                              <TouchableOpacity style={{ padding: 2 }} onPress={() => handleRejectQuest(quest.id)}>
-                                <MaterialIcons name="close" size={16} color="#999999" />
-                              </TouchableOpacity>
-                            </View>
-                            
-                            <View style={{ padding: 12 }}>
-                              <Text style={{
-                                color: '#AAAAAA',
-                                fontSize: 12,
-                                marginBottom: 8
-                              }}>
-                                {quest.tagline}
-                              </Text>
-                            </View>
-                            
-                            <View style={{
-                              flexDirection: 'row',
-                              borderTopWidth: 1,
-                              borderTopColor: '#333333',
-                            }}>
-                              <TouchableOpacity
-                                style={{
+                                <View style={{
                                   flexDirection: 'row',
                                   alignItems: 'center',
-                                  justifyContent: 'center',
-                                  padding: 8,
-                                  backgroundColor: 'rgba(255, 152, 0, 0.2)',
-                                  flex: 1
-                                }}
-                                onPress={() => handleAcceptQuest(quest)}
-                              >
-                                <MaterialIcons name="check" size={14} color="#FF9800" />
-                                <Text style={{
-                                  color: '#FF9800',
-                                  fontSize: 12,
-                                  marginLeft: 4,
-                                  fontWeight: 'bold'
+                                  padding: 10,
+                                  paddingHorizontal: 12,
+                                  borderBottomWidth: 1,
+                                  borderBottomColor: '#333333',
                                 }}>
-                                  Accept
-                                </Text>
-                              </TouchableOpacity>
+                                  <MaterialIcons name="emoji-events" size={16} color="#FF9800" />
+                                  <Text style={{
+                                    fontSize: 12,
+                                    fontWeight: 'bold',
+                                    marginLeft: 6,
+                                    flex: 1,
+                                    color: '#DDDDDD',
+                                  }} numberOfLines={1}>
+                                    {quest.title}
+                                  </Text>
+                                  <TouchableOpacity style={{ padding: 2 }} onPress={() => handleRejectQuest(quest.id)} disabled={isAcceptingThisQuest}>
+                                    <MaterialIcons name="close" size={16} color={isAcceptingThisQuest ? "#666" : "#999999"} />
+                                  </TouchableOpacity>
+                                </View>
+
+                                <View style={{ padding: 12 }}>
+                                  <Text style={{
+                                    color: '#AAAAAA',
+                                    fontSize: 12,
+                                    marginBottom: 8
+                                  }} numberOfLines={2}>
+                                    {quest.tagline}
+                                  </Text>
+                                </View>
+
+                                <View style={{
+                                  flexDirection: 'row',
+                                  borderTopWidth: 1,
+                                  borderTopColor: '#333333',
+                                }}>
+                                  {/* --- FIXED QUEST ACCEPT BUTTON --- */}
+                                  <TouchableOpacity
+                                    style={{ // Apply button styles directly here
+                                      flexDirection: 'row',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      paddingVertical: 8,
+                                      paddingHorizontal: 10,
+                                      backgroundColor: isAcceptingThisQuest ? 'rgba(255, 152, 0, 0.1)' : 'rgba(255, 152, 0, 0.2)', // Keep background subtle
+                                      flex: 1,
+                                    }}
+                                    onPress={() => handleAcceptQuest(quest)}
+                                    disabled={isAcceptingThisQuest}
+                                  >
+                                    {isAcceptingThisQuest ? (
+                                      <ActivityIndicator size="small" color="#FF9800" style={{ marginRight: 6 }} />
+                                    ) : (
+                                      <MaterialIcons name="check" size={14} color="#FF9800" style={{ marginRight: 4 }} />
+                                    )}
+                                    <Text style={{ // Ensure text style is correct
+                                      color: '#FF9800',
+                                      fontSize: 12,
+                                      fontWeight: 'bold'
+                                    }}>
+                                      Accept
+                                    </Text>
+                                  </TouchableOpacity>
+                                </View>
+                              </View>
+
+                              {/* Associated Task Cards (Rendered below the Quest) */}
+                              {associatedTasks.length > 0 && (
+                                <View style={{ marginLeft: 15, marginTop: 8, borderLeftWidth: 1, borderLeftColor: '#444', paddingLeft: 10 }}>
+                                  {associatedTasks.map((task) => {
+                                    const isAcceptingThisTask = isAcceptingTask === task.id;
+                                    // Upgrade button should NOT be shown for tasks pending quest creation
+
+                                    return (
+                                      <View key={task.id} style={{ marginBottom: 8, opacity: isAcceptingThisTask ? 0.6 : 1 }}>
+                                        <CompactTaskSuggestion
+                                          suggestion={task}
+                                          // Accept is disabled automatically by isPendingQuest inside the component now
+                                          onAccept={!isAcceptingThisTask ? () => handleAcceptTask(task) : undefined}
+                                          onReject={!isAcceptingThisTask ? () => handleRejectTask(task.id) : undefined}
+                                          onExpand={!isAcceptingThisTask ? () => handleExpandTask(task) : undefined}
+                                          // Pass handler ONLY if conditions met
+                                          onUpgradeToQuest={!isAcceptingThisTask ? () => handleUpgradeTask(task) : undefined}                                          isAccepting={isAcceptingThisTask}
+                                          isPendingQuest={true} // These are known pending tasks
+                                        />
+                                        {isAcceptingThisTask && (
+                                          <ActivityIndicator size="small" color={themeColor} style={{ position: 'absolute', right: 10, top: 10 }} />
+                                        )}
+                                        {/* Pending text is now inside CompactTaskSuggestion */}
+                                      </View>
+                                    );
+                                  })}
+                                </View>
+                              )}
                             </View>
-                          </View>
-                        </View>
-                      ))}
-                    </View>
-                  )}
+                          );
+                        })}
+
+                        {/* 2. Render Standalone Tasks */}
+                        {taskSuggestions
+                          .filter(task => !renderedTaskIds.has(task.id)) // Only tasks not rendered above
+                          .map((task) => {
+                            const isAcceptingThisTask = isAcceptingTask === task.id;
+                            // Upgrade shown if no quest_id and no pending quest link
+
+                            return (
+                              <View key={task.id} style={{ marginBottom: 8, opacity: isAcceptingThisTask ? 0.6 : 1 }}>
+                                <CompactTaskSuggestion
+                                  suggestion={task}
+                                  // Accept allowed if not pending/accepting
+                                  onAccept={!isAcceptingThisTask ? () => handleAcceptTask(task) : undefined}
+                                  onReject={!isAcceptingThisTask ? () => handleRejectTask(task.id) : undefined}
+                                  onExpand={!isAcceptingThisTask ? () => handleExpandTask(task) : undefined}
+                                  // Pass handler ONLY if conditions met
+                                  onUpgradeToQuest={!isAcceptingThisTask ? () => handleUpgradeTask(task) : undefined}                                  isAccepting={isAcceptingThisTask}
+                                  isPendingQuest={false} // These are standalone
+                                />
+                                {isAcceptingThisTask && (
+                                  <ActivityIndicator size="small" color={themeColor} style={{ position: 'absolute', right: 10, top: 10 }} />
+                                )}
+                              </View>
+                            );
+                          })}
+                      </>
+                    );
+                  })()}
                 </ScrollView>
               </View>
             )}
-            {/* Chat input */}
+
+            {/* Chat input  */}
             <View style={{
               flexDirection: 'row',
               padding: 10,

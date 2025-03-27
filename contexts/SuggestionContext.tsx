@@ -4,9 +4,11 @@ import { Quest, Task } from '@/app/types';
 import { globalSuggestionStore } from '@/services/globalSuggestionStore';
 import { useSupabase } from './SupabaseContext';
 import { QuestAgent } from '@/services/agents/QuestAgent';
-import { updateTask } from '@/services/tasksService';
 import { fetchQuests } from '@/services/questsService';
 import { eventsService, EVENT_NAMES } from '@/services/eventsService';
+import { updateTask, createTask } from '@/services/tasksService'; // Ensure you are importing createTask
+import { ActivityIndicator } from 'react-native'; // Import ActivityIndicator
+
 
 type Suggestion = TaskSuggestion | QuestSuggestion ;
 
@@ -18,10 +20,14 @@ interface SuggestionContextType {
   currentQuestSuggestion: QuestSuggestion | null;
   combinedSuggestionActive: boolean;
   isAnalyzing: boolean;
-  
+
+  // Add the isAcceptingTask and isAcceptingQuest properties to the interface
+  isAcceptingTask: string | null;
+  isAcceptingQuest: string | null;
+
   // Analysis methods
   analyzeJournalEntry: (entry: string, userId: string) => Promise<void>;
-  
+
   // Navigation methods
   nextTaskSuggestion: () => void;
   prevTaskSuggestion: () => void;
@@ -46,7 +52,8 @@ const SuggestionContext = createContext<SuggestionContextType>({
   currentQuestSuggestion: null,
   combinedSuggestionActive: false,
   isAnalyzing: false,
-  
+  isAcceptingTask: null,
+  isAcceptingQuest: null,
   analyzeJournalEntry: async () => {},
   
   nextTaskSuggestion: () => {},
@@ -78,21 +85,27 @@ export const SuggestionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const [currentQuestIndex, setCurrentQuestIndex] = useState<number>(-1);
   const [combinedSuggestionActive, setCombinedSuggestionActive] = useState<boolean>(false);
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
-  
+  const [isAcceptingTask, setIsAcceptingTask] = useState<string | null>(null); // Track specific task ID being accepted
+  const [isAcceptingQuest, setIsAcceptingQuest] = useState<string | null>(null); // Track specific quest ID being accepted
+
+
   // Get singleton instances
   const suggestionAgent = SuggestionAgent.getInstance();
   const questAgent = new QuestAgent();
-
+  
   // Internal helper functions moved from SuggestionAgent
   const addSuggestionToQueue = useCallback((suggestion: Suggestion) => {
     console.log('\n=== SuggestionContext.addSuggestionToQueue ===');
+
+    // MODIFY this console.log section:
     console.log('Adding suggestion:', {
       type: suggestion.type,
       id: suggestion.id,
-      quest_id: suggestion.quest_id ? suggestion.quest_id : 'no quest id',
-      title: suggestion.type === 'task' ? suggestion.title : 
-        suggestion.type === 'quest' ? (suggestion as QuestSuggestion).title : 
-        null,
+      // Use conditional access based on type
+      quest_id: suggestion.type === 'task' ? suggestion.quest_id : undefined,
+      title: suggestion.type === 'task' ? suggestion.title :
+             suggestion.type === 'quest' ? (suggestion as QuestSuggestion).title :
+             null,
       timestamp: suggestion.timestamp
     });
     
@@ -113,6 +126,22 @@ export const SuggestionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const removeQuestSuggestion = useCallback((id: string) => {
     console.log('🗑️ [SuggestionContext] Removing quest suggestion:', id);
     globalSuggestionStore.removeQuestSuggestion(id);
+  }, []);
+
+  const updateSuggestionsInStore = useCallback((taskId: string, updates: Partial<TaskSuggestion>) => {
+    console.log(`🔄 [SuggestionContext] Updating task suggestion ${taskId} in store with:`, updates);
+    // This is tricky with a singleton store. The store itself needs an update method,
+    // or we need to remove and re-add. For simplicity, let's remove and re-add if ID doesn't change.
+    const currentTasks = globalSuggestionStore.getTaskSuggestions();
+    const taskIndex = currentTasks.findIndex(t => t.id === taskId);
+    if (taskIndex > -1) {
+        const updatedTask = { ...currentTasks[taskIndex], ...updates };
+        // Ideally, the store would have an update method. Workaround:
+        globalSuggestionStore.removeTaskSuggestion(taskId);
+        globalSuggestionStore.addTaskSuggestion(updatedTask); // Add updated version
+    } else {
+        console.warn(`[SuggestionContext] Task ${taskId} not found in store for update.`);
+    }
   }, []);
 
   // Subscribe to changes in the globalSuggestionStore
@@ -165,96 +194,28 @@ export const SuggestionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   };
 
   // Create stable references to handlers using useCallback with proper types
-  const handleJournalAnalysis = useCallback((data: JournalAnalysisEventData) => {
-    // Only process if we're not already analyzing to prevent recursion
+  // REPLACE the ENTIRE handleJournalAnalysis callback
+
+  const handleJournalAnalysis = useCallback(async (data: JournalAnalysisEventData) => {
     if (isAnalyzing) {
       console.log('🚫 Already analyzing, skipping duplicate event');
       return;
     }
 
-    console.log('📢 [SuggestionContext] Processing journal analysis');
+    console.log('📢 [SuggestionContext] Processing journal analysis/chat message');
     setIsAnalyzing(true);
-      
-    // Process using async IIFE to handle async operations
-    (async () => {
-      try {
-        // 1. First generate the task suggestions
-        console.log('🎯 Generating task suggestions');
-        const suggestions = await suggestionAgent.generateTaskSuggestion(data.entry, data.userId, {
-          sourceMessage: data.entry,
-          relatedMessages: [],
-          confidence: 0.7,
-          timing: 'short-term'
-        });
 
-        if (!suggestions || suggestions.length === 0) {
-          console.log('No task suggestions generated');
-          return;
-        }
+    try {
+      console.log('🎯 [SuggestionContext] handleJournalAnalysis - Further processing (if any)...');
 
-        // Process each suggestion through the pipeline
-        for (const suggestion of suggestions) {
-          // 2. Check for similar existing tasks
-          console.log('🔍 Checking for similar existing tasks:', suggestion.title);
-          const similarityResult = await suggestionAgent.checkForDuplicatesBeforeShowing(suggestion, data.userId);
 
-          // 3. Handle the result based on similarity and continuation
-          if (similarityResult.isMatch && similarityResult.existingTask) {
-            if (similarityResult.isContinuation) {
-              // This is a continuation of an existing task
-              console.log('🔄 Task identified as continuation:', similarityResult.continuationReason);
-              
-              // Get quest context if available
-              const questContext = similarityResult.existingTask.quest_id ? 
-                await fetchQuests(data.userId).then(quests => 
-                  quests.find(q => q.id === similarityResult.existingTask?.quest_id)
-                ) : undefined;
-              
-              // Regenerate the suggestion with continuation context and store the previous task info
-              const enhancedSuggestion = await suggestionAgent.regenerateTaskWithContinuationContext(
-                {
-                  ...suggestion,
-                  continuesFromTask: similarityResult.existingTask // Store reference to previous task
-                },
-                similarityResult.existingTask,
-                questContext
-              );
-              
-              if (enhancedSuggestion) {
-                // Add the enhanced suggestion to queue
-                console.log('✨ Adding continuation task suggestion to queue');
-                addSuggestionToQueue(enhancedSuggestion);
-              }
-            } else if (similarityResult.matchConfidence > 0.7) {
-              // If we found a very similar task with high confidence, convert to edit suggestion
-              console.log(`Found similar existing task (${similarityResult.matchConfidence.toFixed(2)} confidence). Converting to edit suggestion.`);
-              const editSuggestion = await suggestionAgent.convertToEditSuggestion(suggestion, similarityResult.existingTask);
-              
-              addSuggestionToQueue(editSuggestion);
-            }
-          } else {
-            // 4. If no similar task found, find the best quest for this task
-            console.log('🔄 Finding best quest match for new task');
-            const questId = await suggestionAgent.findBestQuestForTask(suggestion, data.userId);
-            
-            // 5. Update the suggestion with the found quest ID
-            const finalSuggestion = {
-              ...suggestion,
-              quest_id: questId
-            };
+    } catch (error) {
+      console.error('❌ Error in handleJournalAnalysis:', error);
+    } finally {
+      setIsAnalyzing(false);
+    }
+  }, [suggestionAgent, addSuggestionToQueue, isAnalyzing, userId]);
 
-            // 6. Add the suggestion to the queue
-            console.log('✨ Adding new task suggestion to queue');
-            addSuggestionToQueue(finalSuggestion);
-          }
-        }
-      } catch (error) {
-        console.error('❌ Error in analyzeJournalEntry:', error);
-      } finally {
-        setIsAnalyzing(false);
-      }
-    })();
-  }, [suggestionAgent, addSuggestionToQueue, isAnalyzing]);
 
   const handleNewSuggestions = useCallback((data: NewSuggestionsEventData) => {
     console.log('📢 [SuggestionContext] Received new suggestions:', data.suggestions);
@@ -310,12 +271,15 @@ export const SuggestionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     currentQuestSuggestion,
     combinedSuggestionActive,
     isAnalyzing,
+    isAcceptingTask, // Expose loading state
+    isAcceptingQuest,
     
     // Analysis methods - these still use SuggestionAgent for LLM operations
     analyzeJournalEntry: async (entry: string, userId: string) => {
-      // Only emit event if not already analyzing to prevent recursion
       if (!isAnalyzing) {
-        eventsService.emit(EVENT_NAMES.ANALYZE_JOURNAL_ENTRY, { entry, userId });
+         handleJournalAnalysis({ entry, userId });
+         console.log('📢 [SuggestionContext] Emitting ANALYZE_JOURNAL_ENTRY event.');
+         eventsService.emit(EVENT_NAMES.ANALYZE_JOURNAL_ENTRY, { entry, userId });
       }
     },
 
@@ -356,26 +320,49 @@ export const SuggestionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     
     // Action methods that use both local state and SuggestionAgent
     acceptTaskSuggestion: async (task: TaskSuggestion) => {
-      console.log('✅ [SuggestionContext] Accepting task suggestion:', task.title);
+      console.log(`✅ [SuggestionContext] Accepting task suggestion: ${task.title} (ID: ${task.id})`);
       if (!userId) {
         console.error('No user ID available to accept task');
         return null;
       }
-
-      // If this is a continuation task, mark the previous task as done first
-      if (task.continuesFromTask) {
-        console.log('🔄 Marking previous task as done before accepting continuation');
-        await updateTask(task.continuesFromTask.id, {
-          status: 'Done' as const,
-          updated_at: new Date().toISOString()
-        }, userId);
+      // **NEW: Check if task is pending quest creation**
+      if (task.pendingQuestClientId) {
+          console.warn(`🚫 Task "${task.title}" cannot be accepted yet. Associated quest (Client ID: ${task.pendingQuestClientId}) must be accepted first.`);
+          // Optionally: Show feedback to the user (e.g., toast message)
+          alert(`Please accept the related quest suggestion first before accepting this task.`);
+          return null; // Prevent acceptance
       }
 
-      const result = await suggestionAgent.acceptTaskSuggestion(task, userId);
-      if (result) {
-        removeTaskSuggestion(task.id);
+      setIsAcceptingTask(task.id); // Set loading state for this specific task
+
+      try {
+          // Handle continuation task logic (mark previous as done)
+          if (task.continuesFromTask && task.continuesFromTask.id && task.continuesFromTask.status !== 'Done') {
+              console.log(`🔄 Marking previous task ${task.continuesFromTask.id} as Done before accepting continuation.`);
+              await updateTask(task.continuesFromTask.id, {
+                  status: 'Done' as const,
+                  updated_at: new Date().toISOString()
+              }, userId);
+          }
+
+          // Call SuggestionAgent's accept logic (which handles create/update)
+          const result = await suggestionAgent.acceptTaskSuggestion(task, userId);
+
+          if (result) {
+              console.log(`✅ Task "${task.title}" accepted successfully (DB ID: ${result.id}). Removing suggestion.`);
+              removeTaskSuggestion(task.id); // Remove from store on success
+          } else {
+               console.error(`❌ Failed to accept task "${task.title}" in SuggestionAgent.`);
+               // Suggestion remains for retry or rejection
+          }
+          return result; // Return the created/updated task or null
+
+      } catch (error) {
+          console.error(`❌ Error accepting task suggestion ${task.title}:`, error);
+          return null;
+      } finally {
+          setIsAcceptingTask(null); // Clear loading state
       }
-      return result;
     },
     
     rejectTaskSuggestion: (taskId: string) => {
@@ -384,22 +371,78 @@ export const SuggestionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     },
     
     acceptQuestSuggestion: async (quest: QuestSuggestion) => {
-      console.log('✅ [SuggestionContext] Accepting quest suggestion:', quest.title);
+      console.log(`✅ [SuggestionContext] Accepting quest suggestion: ${quest.title} (Client ID: ${quest.id})`);
       if (!userId) {
-        console.error('No user ID available to accept quest');
-        return null;
+          console.error('No user ID available to accept quest');
+          return null;
       }
-      const result = await suggestionAgent.acceptQuestSuggestion(quest, userId);
-      if (result) {
-        removeQuestSuggestion(quest.id);
+
+      setIsAcceptingQuest(quest.id); // Set loading state
+
+      try {
+          // Call SuggestionAgent's accept logic to create the quest in DB
+          const createdQuest = await suggestionAgent.acceptQuestSuggestion(quest, userId);
+
+          if (createdQuest && createdQuest.id) {
+              console.log(`✅ Quest "${quest.title}" created in DB (ID: ${createdQuest.id}). Updating associated tasks...`);
+
+              // **NEW: Update pending tasks**
+              const taskClientIdsToUpdate = quest.pendingTaskClientIds || [];
+              if (taskClientIdsToUpdate.length > 0) {
+                  console.log(`Found ${taskClientIdsToUpdate.length} tasks to link to Quest ID ${createdQuest.id}`);
+                  const currentTasks = globalSuggestionStore.getTaskSuggestions(); // Get current tasks
+
+                  taskClientIdsToUpdate.forEach(taskId => {
+                      const taskToUpdate = currentTasks.find(t => t.id === taskId && t.pendingQuestClientId === quest.id);
+                      if (taskToUpdate) {
+                          console.log(`Updating task ${taskId} (${taskToUpdate.title}) with quest_id ${createdQuest.id}`);
+                          // Update the task suggestion in the store/state
+                          updateSuggestionsInStore(taskId, {
+                              quest_id: createdQuest.id,
+                              pendingQuestClientId: undefined // Clear the pending flag
+                          });
+                      } else {
+                          console.warn(`Task with client ID ${taskId} not found or not pending for quest ${quest.id}.`);
+                      }
+                  });
+                   // Ensure the store notifies listeners after batch update (might need explicit notify call depending on store impl)
+                   globalSuggestionStore['notifyHandlers'](); // Assuming notifyHandlers is accessible or store updates trigger it
+              }
+
+              removeQuestSuggestion(quest.id); // Remove quest suggestion from store on success
+              return createdQuest; // Return the created quest
+
+          } else {
+              console.error(`❌ Failed to accept quest "${quest.title}" in SuggestionAgent.`);
+              // Suggestion remains
+              return null;
+          }
+      } catch (error) {
+          console.error(`❌ Error accepting quest suggestion ${quest.title}:`, error);
+          return null;
+      } finally {
+           setIsAcceptingQuest(null); // Clear loading state
       }
-      return result;
-    },
+  },
     
     rejectQuestSuggestion: (questId: string) => {
-      console.log('❌ [SuggestionContext] Rejecting quest suggestion:', questId);
-      removeQuestSuggestion(questId);
-    },
+      console.log(`❌ [SuggestionContext] Rejecting quest suggestion: ${questId}`);
+      const quest = questSuggestions.find(q => q.id === questId);
+
+      // **NEW: Remove associated pending tasks**
+      if (quest && quest.pendingTaskClientIds && quest.pendingTaskClientIds.length > 0) {
+          console.log(`🗑️ Also removing ${quest.pendingTaskClientIds.length} associated pending tasks.`);
+          quest.pendingTaskClientIds.forEach(taskId => {
+              // Check if the task still exists and is linked
+              const taskExists = taskSuggestions.some(t => t.id === taskId && t.pendingQuestClientId === questId);
+              if(taskExists) {
+                  removeTaskSuggestion(taskId);
+              }
+          });
+      }
+
+      removeQuestSuggestion(questId); // Remove the quest suggestion itself
+  },
 
     upgradeTaskToQuest: async (task: TaskSuggestion) => {
       console.log('⬆️ [SuggestionContext] Upgrading task to quest:', task.title);

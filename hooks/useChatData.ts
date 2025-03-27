@@ -4,6 +4,9 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { ChatAgent } from '@/services/agents/ChatAgent';
 import { supabase } from '@/lib/supabase';
 import { useSupabase } from '@/contexts/SupabaseContext';
+import { updateTask } from '@/services/tasksService'; // Import updateTask
+
+
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const INACTIVITY_TIMEOUT = 5 * 60 * 1000;
@@ -352,7 +355,8 @@ export function useChatData() {
     
     // Add to pending messages for AI response
     pendingMessagesRef.current.push(userMessage);
-
+    
+  
     // Instead of awaiting DB insert immediately, let the sync function handle it later
     // (Optional: you can trigger syncMessages() after a delay if desired.)
 

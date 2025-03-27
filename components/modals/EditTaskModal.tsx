@@ -209,10 +209,10 @@ export function EditTaskModal({
               >
                 <Text style={{ color: '#FFF' }}>
                   {isLoadingQuests 
-                    ? 'Loading quests...' 
+                    ? 'Loading projects...' 
                     : formData.quest_id 
-                      ? quests.find(q => q.id === formData.quest_id)?.title || 'Select Quest'
-                      : 'Select Quest'}
+                      ? quests.find(q => q.id === formData.quest_id)?.title || 'Select project'
+                      : 'Select project'}
                 </Text>
                 {isLoadingQuests ? (
                   <ActivityIndicator size="small" color="#AAA" />

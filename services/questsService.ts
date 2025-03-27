@@ -303,15 +303,21 @@ async function updateMainQuest(questId: number, userId: string): Promise<void> {
     throw new Error('You do not have permission to update this quest');
   }
 
-  const { error } = await supabase.rpc('update_main_quest', { 
-    p_quest_id: questId,
-    p_user_id: userId
+  console.log('Calling update_main_quest RPC with questId:', questId);
+  
+  // Modified to only pass the questId parameter as the database function expects
+  const { data, error } = await supabase.rpc('update_main_quest', { 
+    p_quest_id: questId
   });
+  
+  console.log('RPC result:', { data, error });
   
   if (error) {
     console.error('Error updating main quest via RPC:', error);
     throw error;
   }
+  
+  return;
 }
 
 
@@ -332,6 +338,8 @@ export function useQuests() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { session } = useSupabase();
+  // Flag to track when we're in the middle of setting a main quest
+  const [isSettingMainQuest, setIsSettingMainQuest] = useState(false);
 
   const loadQuests = async () => {
     if (!session?.user?.id) return;
@@ -362,6 +370,14 @@ export function useQuests() {
         },
         (payload: QuestRealtimePayload) => {
           console.log('Quest change received:', payload);
+          
+          // If we're in the middle of a main quest update, don't reload automatically
+          // for 'UPDATE' events, as they might override our optimistic update
+          if (isSettingMainQuest && payload.eventType === 'UPDATE') {
+            console.log('Skipping automatic reload during main quest update');
+            return;
+          }
+          
           loadQuests();
         }
       )
@@ -370,7 +386,7 @@ export function useQuests() {
     return () => {
       subscription.unsubscribe();
     };
-  }, [session?.user?.id]);
+  }, [session?.user?.id, isSettingMainQuest]); // Add isSettingMainQuest as a dependency
 
   return {
     mainQuest: quests.find(q => q.is_main) || null,
@@ -378,6 +394,10 @@ export function useQuests() {
     setQuestAsMain: async (questId: number) => {
       if (!session?.user?.id) return;
       try {
+        // Set flag to prevent realtime subscription from triggering during this operation
+        setIsSettingMainQuest(true);
+
+        // Optimistically update UI - do this first for better UX
         setQuests(currentQuests => 
           currentQuests.map(quest => ({
             ...quest,
@@ -385,11 +405,21 @@ export function useQuests() {
           }))
         );
         
+        // Then update the database
         await updateMainQuest(questId, session.user.id);
+        
+        // Wait a bit before allowing automatic reloads again
+        // This delay helps prevent race conditions with Supabase realtime updates
+        setTimeout(() => setIsSettingMainQuest(false), 1000);
       } catch (err) {
         console.error('Failed to set main quest:', err);
         setError(err instanceof Error ? err.message : 'Failed to update main quest');
-        await loadQuests();
+        
+        // On error, reload quests after a short delay
+        setTimeout(() => {
+          loadQuests();
+          setIsSettingMainQuest(false);
+        }, 500);
       }
     },
     loading,
