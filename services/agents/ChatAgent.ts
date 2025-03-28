@@ -53,63 +53,60 @@ export class ChatAgent {
 
         // --- 1. Fetch Initial Context (Concurrent) ---
         const today = new Date();
-        const todayStr = formatDate(today); // Helper function assumed to return 'YYYY-MM-DD'
+        const todayStr = formatDate(today);
+
+        // Get dates for the last 7 days
+        const dates = Array.from({length: 7}, (_, i) => {
+            const d = new Date();
+            d.setDate(d.getDate() - i);
+            return formatDate(d);
+        });
 
         // Define promises for fetching data concurrently
         const activeTasksPromise = fetchActiveTasks(userId);
         const personalityTypePromise = personalityService.getUserPersonality(userId);
         const relevantQuestsPromise = this.questAgent.findRelevantQuests(message, userId);
         const historyPromise = (async (): Promise<ChatMessage[]> => {
-            // Fetch chat history (e.g., from local storage)
             try {
                 const storedMessages = localStorage.getItem(`chat_messages_local_${userId}`);
                 if (storedMessages) {
-                    // Basic validation could be added here if needed
                     return JSON.parse(storedMessages) as ChatMessage[];
                 }
             } catch (e) {
                 console.error("[ChatAgent] Error reading chat history from localStorage:", e);
             }
-            return []; // Return empty array if fetch fails or no history
+            return [];
         })();
 
-        // Fetch today's checkups using journalService
-        const checkupsPromise = journalService.getCheckupEntries(todayStr, userId)
-           .catch((err: any) => {
-              console.error("[ChatAgent] Error fetching today's checkups:", err);
-              return [] as CheckupEntry[]; // Return typed empty array on error
-           });
-
-        // Fetch recent daily journal summaries using journalService
-        const recentEntriesPromise = journalService.getRecentEntries(2, userId) // Limit to 2 entries
-           .catch((err: any) => {
-              console.error("[ChatAgent] Error fetching recent journal entries:", err);
-              return [] as JournalEntry[]; // Return typed empty array on error
-           });
+        // Fetch checkups for the last 7 days using journalService
+        const checkupsPromises = dates.map(date => 
+            journalService.getCheckupEntries(date, userId)
+                .catch((err: any) => {
+                    console.error(`[ChatAgent] Error fetching checkups for ${date}:`, err);
+                    return [] as CheckupEntry[];
+                })
+        );
 
         // Await all concurrent fetches
         const [
             activeTasks,
             personalityType,
             relevantQuests,
-            currentMessages,     // History (ChatMessage[])
-            todaysCheckups,      // Today's Checkups (CheckupEntry[])
-            recentEntries        // Recent Daily Summaries (JournalEntry[])
+            currentMessages,
+            ...checkupsByDate  // This will be an array of CheckupEntry[] arrays
         ] = await Promise.all([
             activeTasksPromise,
             personalityTypePromise,
             relevantQuestsPromise,
             historyPromise,
-            checkupsPromise,
-            recentEntriesPromise
+            ...checkupsPromises
         ]);
 
         // Get personality based on fetched type
         const personality = getPersonality(personalityType);
 
         // Log the counts of fetched items for debugging
-        console.log(`Fetched context: ${relevantQuests.length} quests, ${activeTasks.length} tasks, ${currentMessages.length} history, ${todaysCheckups.length} checkups, ${recentEntries.length} summaries.`);
-
+        console.log(`Fetched context: ${relevantQuests.length} quests, ${activeTasks.length} tasks, ${currentMessages.length} history, ${checkupsByDate.flat().length} checkups from last 7 days.`);
 
         // --- 2. Build Prompt Context Parts ---
 
@@ -164,43 +161,32 @@ export class ChatAgent {
             }).join(''); // Join task info lines
         }
 
-        // Build context string for today's checkup entries
+        // Build context string for checkups from last 7 days
         let checkupContext = '';
-        if (todaysCheckups && todaysCheckups.length > 0) {
-            checkupContext = todaysCheckups.map((checkup: CheckupEntry) => {
-                // Format time HH:MM
-                const time = new Date(checkup.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
-                return `[${time}] Checkup: "${checkup.content || ''}"\n[${time}] My Response: "${checkup.ai_checkup_response || 'No response recorded'}"`;
-            }).join('\n\n'); // Separate checkups with double newline
+        const allCheckups = checkupsByDate.flat().sort((a, b) => 
+            new Date(a.created_at).getTime() - new Date(b.created_at).getTime()  // Changed sort order to ascending
+        );
+
+        if (allCheckups.length > 0) {
+            checkupContext = '\nRECENT CHECKUPS (Last 7 Days):\n' + allCheckups.map((checkup: CheckupEntry) => {
+                const checkupDate = new Date(checkup.created_at);
+                const formattedDate = checkupDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                const time = checkupDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+                return `[${formattedDate} ${time}] Entry: "${checkup.content || ''}"\n[${formattedDate} ${time}] Response: "${checkup.ai_checkup_response || 'No response recorded'}"`;
+            }).join('\n\n');
         } else {
-             console.log("[ChatAgent] No checkup entries found for today's context.");
+            console.log("[ChatAgent] No checkup entries found for last 7 days.");
+            checkupContext = 'No recent checkups available.';
         }
 
-        // Build context string for recent daily journal summaries
-        let journalContext = '';
-        if (recentEntries && recentEntries.length > 0) {
-            journalContext = recentEntries
-                // Optional: Ensure entries belong to the user (should be handled by service ideally)
-                .filter((entry: JournalEntry) => entry.user_id === userId)
-                .map((entry: JournalEntry) => {
-                    // Format date like 'Jan 1'
-                    const entryDate = new Date(entry.updated_at || entry.created_at); // Use updated_at if available
-                    const formattedDate = entryDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-                    // Use user_entry and ai_response from JournalEntry
-                    return `[${formattedDate}] Past Daily Summary: "${entry.user_entry || ''}"\n[${formattedDate}] My Response: "${entry.ai_response || 'No response recorded'}"`;
-                }).join('\n\n'); // Separate summaries with double newline
-        } else {
-            console.log("[ChatAgent] No recent journal entries found for context.");
-        }
         // --- 3. Format History & Messages ---
-        // ... (Mapping currentMessages to chatMessages remains the same) ...
-         const chatMessages: ChatCompletionMessageParam[] = currentMessages?.map((msg: ChatMessage): ChatCompletionMessageParam => ({
+        const chatMessages: ChatCompletionMessageParam[] = currentMessages?.map((msg: ChatMessage): ChatCompletionMessageParam => ({
             role: msg.is_user ? 'user' : 'assistant',
             content: msg.message
         })) || [];
 
         const messages: ChatCompletionMessageParam[] = [
-            { role: "system", content: personality.prompts.chat.system + `\nQuests: ${questContext || 'None'}\nTasks: ${tasksContext || 'None'}\nJournal: ${journalContext || 'None'}\nCheckups: ${checkupContext || 'None'}` },
+            { role: "system", content: personality.prompts.chat.system + `\nQuests: ${questContext || 'None'}\nTasks: ${tasksContext || 'None'}\nCheckups: ${checkupContext}` },
             ...chatMessages,
             { role: "user", content: message }
         ];
@@ -351,16 +337,32 @@ export class ChatAgent {
          throw new Error('Cannot generate checkup content: Messages from multiple users');
       }
 
-      const today = new Date().toISOString().split('T')[0];
-      const todaysCheckups = await journalService.getCheckupEntries(today, userId);
-      console.log(`[ChatAgent] Found ${todaysCheckups?.length || 0} checkups from today for style analysis.`);
+      // Get dates for the last 7 days
+      const dates = Array.from({length: 7}, (_, i) => {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        return d.toISOString().split('T')[0];
+      });
+
+      // Fetch checkups for each date
+      const checkupsPromises = dates.map(date => journalService.getCheckupEntries(date, userId));
+      const checkupsByDate = await Promise.all(checkupsPromises);
+      
+      // Flatten and sort all checkups
+      const allCheckups = checkupsByDate
+        .flat()
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+      console.log(`[ChatAgent] Found ${allCheckups.length} checkups from last 7 days for style analysis.`);
 
       let userStyleSamplesContent = '';
-      if (todaysCheckups && todaysCheckups.length > 0) {
-        userStyleSamplesContent = todaysCheckups
+      if (allCheckups.length > 0) {
+        userStyleSamplesContent = allCheckups
           .map(checkup => {
-            const entryTime = new Date(checkup.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
-            return `[${entryTime}] "${checkup.content}"`; // Focus on user's words
+            const entryDate = new Date(checkup.created_at);
+            const dateStr = entryDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            const timeStr = entryDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+            return `[${dateStr} ${timeStr}] "${checkup.content}"`; // Now includes date and time
           })
           .join('\n\n');
       }
@@ -386,9 +388,6 @@ Be concise, capturing key thoughts/feelings.
 Do NOT mention this is AI-generated.
 Do NOT include ${personality.name}'s responses in the summary.`.trim();
 
-      // Using Gemini Flash for potentially faster/cheaper summarization
-      const summarizationModel = this.genAI.getGenerativeModel({ model: "gemini-2.0-flash", generationConfig: { temperature: 0.3 } });
-
       // Format the full conversation
       const fullConversation = messages.map(msg => {
           const role = msg.is_user ? "Me" : personality.name;
@@ -401,14 +400,25 @@ ${userStyleSamplesContent || "No previous entries today."}
 Here's our FULL chat conversation:
 ${fullConversation}
 
-Based on what I said in the conversation, write a reflective journal entry from MY perspective about what I discussed, matching my writing style from the examples. Don't make shit up, I'll sue you if you put words in my mouth. Start with "[${currentTime}] ".`;
+Write a reflective journal entry from my perspective about what we discussed, matching my writing style from the examples.
+ Don't make shit up, I'll sue you if you put words in my mouth. But make it a nice, well-written journal entry about my conversation with ${personality.name}.
+ It should describe what we talked about and reflect my thoughts and feelings on the conversation, just like if I was writing a journal entry about a conversation I had.
+ Start with "[${currentTime}] ".`;
 
-      const result = await summarizationModel.generateContent([
-          // Providing system instructions and user prompt together for Gemini
-          checkupEntrySystem + "\n\n" + prompt
-      ]);
+      console.log('Prompt for checkup entry:', checkupEntrySystem, prompt);
 
-      const aiContent = result.response.text() || `[${currentTime}] Just had a chat with ${personality.name}.`;
+      // Using DeepSeek instead of Gemini Flash
+      const completion = await this.openai.chat.completions.create({
+          model: "deepseek-chat",
+          messages: [
+              { role: "system", content: checkupEntrySystem },
+              { role: "user", content: prompt }
+          ],
+          temperature: 0.4, // Lower temperature for more consistent output
+          max_tokens: 600 // Reasonable length for a journal entry
+      });
+
+      const aiContent = completion.choices[0]?.message?.content || `[${currentTime}] Just had a chat with ${personality.name}.`;
 
       // Final check for timestamp
       const finalContent = aiContent.trim().startsWith(`[${currentTime}]`) ? aiContent.trim() : `[${currentTime}] ${aiContent.trim()}`;
