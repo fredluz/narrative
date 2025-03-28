@@ -306,15 +306,17 @@ export function JournalPanel({
             )}
 
             {/* AI Response */}
-            <View>
-              <AIResponse
-                response={latestAiResponse}
-                loading={isLoading}
-                aiGenerating={journalLoading}
-                fullColumnMode={fullColumnMode}
-                secondaryColor={secondaryColor}
-                entryUserId={session?.user?.id}
-              />
+            <View style={{ flex: 1, minHeight: 0 }}>
+              <ScrollView style={{ flex: 1 }}>
+                <AIResponse
+                  response={latestAiResponse}
+                  loading={isLoading}
+                  aiGenerating={journalLoading}
+                  fullColumnMode={fullColumnMode}
+                  secondaryColor={secondaryColor}
+                  entryUserId={session?.user?.id}
+                />
+              </ScrollView>
             </View>
             {/* Ensure no stray text/whitespace here */}
           </View>

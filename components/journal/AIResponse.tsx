@@ -81,9 +81,7 @@ export const AIResponse: React.FC<AIResponseProps> = ({
       borderRadius: 5,
       borderLeftWidth: 3,
       borderColor: secondaryColor,
-      display: 'flex',
-      flexDirection: 'column',
-      height: '100%',
+      minHeight: 0, // Add this to ensure proper flex behavior
     }}>
       <View style={{ 
         flexDirection: 'row', 
@@ -110,7 +108,12 @@ export const AIResponse: React.FC<AIResponseProps> = ({
         {aiGenerating && <TriangularSpinner size={20} color={secondaryColor} />}
       </View>
       
-      <ScrollView style={{ flex: 1, padding: 10 }}>
+      <ScrollView 
+        style={{ flex: 1 }}
+        contentContainerStyle={{ 
+          padding: 10,
+          flexGrow: 1 
+        }}>
         <ThemedText style={{
           fontSize: fullColumnMode ? 18 : 15,
           color: '#BBB',

@@ -1,5 +1,6 @@
 // File: services/agents/ChatAgent.ts
 import OpenAI from 'openai';
+import { GoogleGenerativeAI, GenerativeModel } from '@google/generative-ai';
 import { ChatCompletionMessageParam, ChatCompletion } from 'openai/resources/chat/completions';
 import { QuestAgent } from './QuestAgent';
 import { SuggestionAgent, ConversationData, TaskStatusChangeResult } from './SuggestionAgent';
@@ -24,6 +25,7 @@ export class ChatAgent {
   private openai: OpenAI;
   private questAgent: QuestAgent;
   private suggestionAgent: SuggestionAgent;
+  private genAI: GoogleGenerativeAI;
 
   // --------- Constructor ---------
   constructor() {
@@ -34,6 +36,7 @@ export class ChatAgent {
     });
     this.questAgent = new QuestAgent();
     this.suggestionAgent = SuggestionAgent.getInstance();
+    this.genAI = new GoogleGenerativeAI(process.env.EXPO_PUBLIC_GEMINI_API_KEY || '');
 
     console.log("🤖 [ChatAgent] Initialized with DeepSeek for main responses.");
     console.log("🤖 [ChatAgent] SuggestionAgent configured (assumed Gemini for status checks/suggestions).");
@@ -306,38 +309,120 @@ export class ChatAgent {
          await chatDataUtils.updateMessagesWithSessionId(validMessageIds, sessionData.id, userId);
       }
 
-      // <<< 3. CREATE CHECKUP ENTRY >>>
+      // 3. CREATE CHECKUP ENTRY
       try {
          const dateStr = formatDate(new Date()); // Use today's date for the checkup
          console.log(`[ChatAgent] Creating automatic checkup entry from chat session summary for date ${dateStr}...`);
-         // Use the calculated summary and tags. Let journalService handle AI response generation.
-         const savedCheckup = await journalService.saveCheckupEntry(dateStr, summary, userId, potentialTags);
+
+         // Generate the checkup content using the new method
+         const checkupContent = await this.generateCheckupContent(messages, summary);
+         const savedCheckup = await journalService.saveCheckupEntry(dateStr, checkupContent, userId, potentialTags);
          console.log(`[ChatAgent] Successfully created checkup entry ID: ${savedCheckup.id}`);
       } catch (checkupError) {
-          // Log the error but DO NOT throw - session saving already succeeded.
+          // Log the error but DO NOT throw - session saving already succeeded
           console.error('[ChatAgent] Failed to automatically create checkup entry from chat session:', checkupError);
       }
 
-      // 4. Trigger Suggestion Analysis (Optional: Could be moved after checkup creation)
+      // 4. Trigger Suggestion Analysis (Optional)
       console.log(`[ChatAgent] Triggering post-session suggestion analysis for session ${sessionData.id}`);
-      // Keep as fire-and-forget unless subsequent steps depend on it
       this.generateSuggestionsFromChatSession(messages, userId)
           .catch(suggestionError => { console.error(`[ChatAgent] Error triggering suggestion analysis:`, suggestionError); });
 
-      // Return the session ID
       return sessionData.id;
 
     } catch (error) {
        console.error('Error in summarizeAndStoreSession:', error);
-       // If session creation itself failed, sessionData might be null
        if (sessionData?.id) {
            console.warn(`[ChatAgent] Session ${sessionData.id} created, but subsequent error occurred.`);
-           // Decide if you still want to return the ID or throw
-           // return sessionData.id; // Option: Return ID even if checkup/suggestion fails
        }
-       throw error; // Re-throw the original error
+       throw error;
     }
   }
+
+  // --------- generateCheckupContent ---------
+  private async generateCheckupContent(messages: ChatMessage[], summary: string): Promise<string> {
+    console.log('\n=== [ChatAgent] generateCheckupContent ===');
+    try {
+      const userId = messages[0]?.user_id;
+      if (!userId) {
+        throw new Error('No user_id found in messages');
+      }
+      if (messages.some(m => m.user_id !== userId)) {
+         throw new Error('Cannot generate checkup content: Messages from multiple users');
+      }
+
+      const today = new Date().toISOString().split('T')[0];
+      const todaysCheckups = await journalService.getCheckupEntries(today, userId);
+      console.log(`[ChatAgent] Found ${todaysCheckups?.length || 0} checkups from today for style analysis.`);
+
+      let userStyleSamplesContent = '';
+      if (todaysCheckups && todaysCheckups.length > 0) {
+        userStyleSamplesContent = todaysCheckups
+          .map(checkup => {
+            const entryTime = new Date(checkup.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+            return `[${entryTime}] "${checkup.content}"`; // Focus on user's words
+          })
+          .join('\n\n');
+      }
+
+      const now = new Date();
+      const currentTime = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+
+      const userMessagesContent = messages
+        .filter(msg => msg.is_user)
+        .map(msg => msg.message)
+        .join('\n');
+
+      // Get the personality for the prompt context
+      const personalityType = await personalityService.getUserPersonality(userId);
+      const personality = getPersonality(personalityType);
+
+      const checkupEntrySystem = `You are helping to create a journal entry based on the user's chat with ${personality.name}.
+Current time is ${currentTime}.
+Write from the user's perspective, focusing only on what the user said.
+Match the user's writing style from the provided examples.
+Start the entry with "[${currentTime}] ".
+Be concise, capturing key thoughts/feelings.
+Do NOT mention this is AI-generated.
+Do NOT include ${personality.name}'s responses in the summary.`.trim();
+
+      // Using Gemini Flash for potentially faster/cheaper summarization
+      const summarizationModel = this.genAI.getGenerativeModel({ model: "gemini-2.0-flash", generationConfig: { temperature: 0.3 } });
+
+      // Format the full conversation
+      const fullConversation = messages.map(msg => {
+          const role = msg.is_user ? "Me" : personality.name;
+          return `${role}: ${msg.message}`;
+      }).join('\n');
+
+      const prompt = `Here are examples of my previous journal entries today (for writing style):
+${userStyleSamplesContent || "No previous entries today."}
+
+Here's our FULL chat conversation:
+${fullConversation}
+
+Based on what I said in the conversation, write a reflective journal entry from MY perspective about what I discussed, matching my writing style from the examples. Don't make shit up, I'll sue you if you put words in my mouth. Start with "[${currentTime}] ".`;
+
+      const result = await summarizationModel.generateContent([
+          // Providing system instructions and user prompt together for Gemini
+          checkupEntrySystem + "\n\n" + prompt
+      ]);
+
+      const aiContent = result.response.text() || `[${currentTime}] Just had a chat with ${personality.name}.`;
+
+      // Final check for timestamp
+      const finalContent = aiContent.trim().startsWith(`[${currentTime}]`) ? aiContent.trim() : `[${currentTime}] ${aiContent.trim()}`;
+      console.log('[ChatAgent] Generated checkup entry content:', finalContent);
+      return finalContent;
+
+    } catch (error) {
+      console.error('[ChatAgent] Error generating checkup content:', error);
+      const currentTime = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+      const personalityName = getPersonality(await personalityService.getUserPersonality(messages[0]?.user_id || 'johnny')).name || 'the AI';
+      return `[${currentTime}] Had a conversation with ${personalityName}.`; // Fallback
+    }
+  }
+
 // --- generateSuggestionsFromChatSession ---
 private async generateSuggestionsFromChatSession(messages: ChatMessage[], userId: string): Promise<void> {
   if (!messages || messages.length === 0 || !userId) { return; }
