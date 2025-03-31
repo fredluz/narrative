@@ -35,9 +35,10 @@ export const journalService = {
    * Gets the latest daily journal entry for a specific date and user.
    * @param date - The date in 'YYYY-MM-DD' format.
    * @param userId - The ID of the user.
+   * @param signal - Optional AbortController signal to cancel the operation
    * @returns The journal entry or null if not found.
    */
-  async getEntry(date: string, userId: string): Promise<JournalEntry | null> {
+  async getEntry(date: string, userId: string, signal?: AbortSignal): Promise<JournalEntry | null> {
     if (!userId) {
       console.error('[journalService] User ID is missing for getEntry.');
       return null;
@@ -46,28 +47,49 @@ export const journalService = {
     const startOfDay = `${date}T00:00:00Z`; // Use ISO format with Z for UTC
     const endOfDay = `${date}T23:59:59Z`;
 
-    const { data, error } = await supabase
-      .from('journal_entries')
-      .select('*')
-      .eq('user_id', userId)
-      .gte('created_at', startOfDay)
-      .lte('created_at', endOfDay)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle(); // Use maybeSingle to handle null without error code PGRST116
+    try {
+      // Check if already aborted
+      if (signal?.aborted) {
+        console.log('[journalService] getEntry aborted before starting');
+        throw new DOMException('Aborted', 'AbortError');
+      }
 
-    if (error) {
-      console.error('[journalService] Error fetching journal entry:', error);
-      throw new Error('Failed to fetch journal entry');
-    }
+      // Using options object with signal property if supported, or fallback to regular query
+      const { data, error } = await supabase
+        .from('journal_entries')
+        .select('*')
+        .eq('user_id', userId)
+        .gte('created_at', startOfDay)
+        .lte('created_at', endOfDay)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
-    if (data) {
-      console.log('[journalService] ✅ Found journal entry for date:', date);
-      // Add client-side date property
-      return { ...data, date };
-    } else {
-      console.log('[journalService] ℹ️ No journal entry found for date:', date);
-      return null;
+      if (error) {
+        // Check if this is an abort error
+        if (signal?.aborted) {
+          console.log('[journalService] getEntry request aborted for date:', date);
+          throw new DOMException('Aborted', 'AbortError');
+        }
+        console.error('[journalService] Error fetching journal entry:', error);
+        throw new Error('Failed to fetch journal entry');
+      }
+
+      if (data) {
+        console.log('[journalService] ✅ Found journal entry for date:', date);
+        // Add client-side date property
+        return { ...data, date };
+      } else {
+        console.log('[journalService] ℹ️ No journal entry found for date:', date);
+        return null;
+      }
+    } catch (err) {
+      // If the operation was aborted, throw an AbortError
+      if (signal?.aborted || (err instanceof DOMException && err.name === 'AbortError')) {
+        console.log('[journalService] getEntry operation aborted');
+        throw new DOMException('Aborted', 'AbortError');
+      }
+      throw err;
     }
   },
 
@@ -188,9 +210,10 @@ export const journalService = {
    * Gets all checkup entries for a specific date and user.
    * @param date - The date in 'YYYY-MM-DD' format.
    * @param userId - The ID of the user.
+   * @param signal - Optional AbortController signal to cancel the operation
    * @returns An array of checkup entries.
    */
-  async getCheckupEntries(date: string, userId: string): Promise<CheckupEntry[]> {
+  async getCheckupEntries(date: string, userId: string, signal?: AbortSignal): Promise<CheckupEntry[]> {
     if (!userId) {
       console.error('[journalService] User ID is missing for getCheckupEntries.');
       return [];
@@ -199,21 +222,41 @@ export const journalService = {
     const startOfDay = `${date}T00:00:00Z`; // Use ISO format with Z for UTC
     const endOfDay = `${date}T23:59:59Z`;
 
-    const { data, error } = await supabase
-      .from('checkup_entries')
-      .select('*')
-      .eq('user_id', userId)
-      .gte('created_at', startOfDay)
-      .lte('created_at', endOfDay)
-      .order('created_at', { ascending: true });
+    try {
+      // Check if already aborted
+      if (signal?.aborted) {
+        console.log('[journalService] getCheckupEntries aborted before starting');
+        throw new DOMException('Aborted', 'AbortError');
+      }
+      
+      const { data, error } = await supabase
+        .from('checkup_entries')
+        .select('*')
+        .eq('user_id', userId)
+        .gte('created_at', startOfDay)
+        .lte('created_at', endOfDay)
+        .order('created_at', { ascending: true });
 
-    if (error) {
-      console.error('[journalService] Error fetching checkup entries:', error);
-      throw new Error('Failed to fetch checkup entries');
+      if (error) {
+        // Check if this is an abort error
+        if (signal?.aborted) {
+          console.log('[journalService] getCheckupEntries request aborted for date:', date);
+          throw new DOMException('Aborted', 'AbortError');
+        }
+        console.error('[journalService] Error fetching checkup entries:', error);
+        throw new Error('Failed to fetch checkup entries');
+      }
+
+      console.log('[journalService] ✅ Retrieved', data?.length || 0, 'checkup entries for', date);
+      return data || [];
+    } catch (err) {
+      // If the operation was aborted, throw an AbortError
+      if (signal?.aborted || (err instanceof DOMException && err.name === 'AbortError')) {
+        console.log('[journalService] getCheckupEntries operation aborted');
+        throw new DOMException('Aborted', 'AbortError');
+      }
+      throw err;
     }
-
-    console.log('[journalService] ✅ Retrieved', data?.length || 0, 'checkup entries for', date);
-    return data || [];
   },
 
   /**
@@ -224,9 +267,10 @@ export const journalService = {
    * @param userId - The ID of the user.
    * @param tags - Optional array of tags.
    * @param aiResponse - Optional pre-generated AI response (e.g., from ChatAgent).
+   * @param signal - Optional AbortController signal to cancel the operation
    * @returns The saved checkup entry.
    */
-  async saveCheckupEntry(date: string, content: string, userId: string, tags: string[] = [], aiResponse?: string): Promise<CheckupEntry> {
+  async saveCheckupEntry(date: string, content: string, userId: string, tags: string[] = [], aiResponse?: string, signal?: AbortSignal): Promise<CheckupEntry> {
     if (!userId) {
       console.error('[journalService] User ID is required for saveCheckupEntry.');
       throw new Error('User ID is required');
@@ -237,10 +281,17 @@ export const journalService = {
     }
     console.log('[journalService] 💾 saveCheckupEntry called for date:', date, 'userId:', userId);
     console.log('[journalService] 📝 Content length:', content.length, 'Tags:', tags, 'AI resp provided:', !!aiResponse);
+    
     try {
+      // Check for abort before starting
+      if (signal?.aborted) {
+        console.log('[journalService] saveCheckupEntry aborted before starting');
+        throw new DOMException('Aborted', 'AbortError');
+      }
+      
       // Fetch today's checkups for context
       console.log('[journalService] 🔄 Fetching existing checkups for context');
-      const todaysCheckups = await this.getCheckupEntries(date, userId);
+      const todaysCheckups = await this.getCheckupEntries(date, userId, signal);
 
       // Format context
       console.log('[journalService] 🔄 Formatting', todaysCheckups.length, 'checkups as context');
@@ -256,6 +307,12 @@ export const journalService = {
           .join('\n\n');
       }
 
+      // Check for abort before AI generation
+      if (signal?.aborted) {
+        console.log('[journalService] saveCheckupEntry aborted before AI generation');
+        throw new DOMException('Aborted', 'AbortError');
+      }
+
       // Generate AI response via JournalAgent IF NOT provided
       // This call to generateResponse will trigger the suggestion analysis event
       let checkupResponse = aiResponse;
@@ -265,6 +322,12 @@ export const journalService = {
       } else {
         console.log('[journalService] ℹ️ Using provided AI response. Suggestion trigger relies on caller.');
         // IMPORTANT: If aiResponse is provided (e.g., from ChatAgent), the suggestion trigger must happen elsewhere (e.g., ChatAgent calling SuggestionAgent post-session).
+      }
+
+      // Check for abort before database save
+      if (signal?.aborted) {
+        console.log('[journalService] saveCheckupEntry aborted before database save');
+        throw new DOMException('Aborted', 'AbortError');
       }
 
       // Prepare data for insertion
@@ -287,6 +350,11 @@ export const journalService = {
         .single();
 
       if (error) {
+        // Check if this is an abort error
+        if (signal?.aborted) {
+          console.log('[journalService] saveCheckupEntry database operation aborted');
+          throw new DOMException('Aborted', 'AbortError');
+        }
         console.error('[journalService] ❌ Database error when saving checkup:', error);
         throw error;
       }
@@ -294,6 +362,11 @@ export const journalService = {
       console.log('[journalService] ✅ Checkup entry saved with ID:', data.id);
       return data;
     } catch (err) {
+      // If the operation was aborted, throw an AbortError
+      if (signal?.aborted || (err instanceof DOMException && err.name === 'AbortError')) {
+        console.log('[journalService] saveCheckupEntry operation aborted');
+        throw new DOMException('Aborted', 'AbortError');
+      }
       console.error('[journalService] Error saving checkup entry:', err);
       // Re-throw the error so the calling function (e.g., in useJournal) can handle it
       throw err;

@@ -10,17 +10,24 @@ import { useJournal } from '@/hooks/useJournal';
 import { createTask } from '@/services/tasksService';
 import { fetchQuests } from '@/services/questsService';
 import { useSupabase } from '@/contexts/SupabaseContext';
-import { journalService } from '@/services/journalService';
 
 export default function JournalScreen() {
   const { session } = useSupabase();
   const { themeColor, secondaryColor } = useTheme();
-  const { currentDate, latestAiResponse, checkups, refreshEntries } = useJournal();
+  const { 
+    currentDate, 
+    latestAiResponse, 
+    checkups, 
+    refreshEntries,
+    goToNextDay,
+    goToPreviousDay,
+    dailyEntry
+  } = useJournal();
+  
   const [selectedSection, setSelectedSection] = useState<'entries' | 'analysis'>('entries');
   const [quests, setQuests] = useState<Array<{ id: number; title: string }>>([]);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [loading, setLoading] = useState(false);
-  const [journalEntry, setJournalEntry] = useState<any>(null);
   const [expandedCheckupId, setExpandedCheckupId] = useState<string | null>(null);
 
   // Load quests on mount with user ID
@@ -72,6 +79,17 @@ export default function JournalScreen() {
 
   const handleDateSelect = (date: Date) => {
     setSelectedDate(date);
+    if (date.getTime() < currentDate.getTime()) {
+      const daysDiff = Math.floor((currentDate.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
+      for (let i = 0; i < daysDiff; i++) {
+        goToPreviousDay();
+      }
+    } else if (date.getTime() > currentDate.getTime()) {
+      const daysDiff = Math.floor((date.getTime() - currentDate.getTime()) / (1000 * 60 * 60 * 24));
+      for (let i = 0; i < daysDiff; i++) {
+        goToNextDay();
+      }
+    }
   };
 
   // Toggle checkup expansion
@@ -108,28 +126,12 @@ export default function JournalScreen() {
   
   const brightAccent = getBrightAccent(themeColor);
 
-  // Load journal entries when selected date changes
+  // Keep useJournal in sync with selectedDate
   useEffect(() => {
-    const loadEntries = async () => {
-      if (!session?.user?.id) return;
-      
-      try {
-        setLoading(true);
-        // Format date as YYYY-MM-DD for API
-        const dateStr = selectedDate.toISOString().split('T')[0];
-        
-        // Get daily entry
-        const entry = await journalService.getEntry(dateStr, session.user.id);
-        setJournalEntry(entry);
-      } catch (err) {
-        console.error('Error loading journal entries:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    
-    loadEntries();
-  }, [selectedDate, session?.user?.id, refreshEntries]);
+    if (currentDate.toDateString() !== selectedDate.toDateString()) {
+      setSelectedDate(currentDate);
+    }
+  }, [currentDate]);
 
   return (
     <SafeAreaView style={journalStyles.container}>
@@ -281,7 +283,7 @@ export default function JournalScreen() {
                 {selectedSection === 'entries' ? (
                   <View>
                     {/* Daily Entry */}
-                    {journalEntry && (
+                    {dailyEntry && (
                       <Card style={[journalStyles.entryContainer, { borderLeftColor: themeColor }]}>
                         <View style={journalStyles.entryScrollView}>
                           <ThemedText style={{
@@ -296,7 +298,7 @@ export default function JournalScreen() {
                             Daily Journal
                           </ThemedText>
                           <ThemedText style={journalStyles.entryText}>
-                            {journalEntry.user_entry || "No daily entry yet."}
+                            {dailyEntry.user_entry || "No daily entry yet."}
                           </ThemedText>
                           
                           <View style={{
@@ -333,7 +335,7 @@ export default function JournalScreen() {
                               textShadowOffset: { width: 0, height: 0 },
                               textShadowRadius: 2
                             }}>
-                              {journalEntry.ai_response || "No response yet."}
+                              {dailyEntry.ai_response || "No response yet."}
                             </ThemedText>
                           </View>
                         </View>
@@ -458,7 +460,7 @@ export default function JournalScreen() {
                       </View>
                     )}
 
-                    {!journalEntry && checkups.length === 0 && (
+                    {!dailyEntry && checkups.length === 0 && (
                       <Card style={[journalStyles.insightCard, { marginTop: 20 }]}>
                         <ThemedText style={{ color: '#AAA', textAlign: 'center' }}>
                           No journal entries for this date.
@@ -469,7 +471,7 @@ export default function JournalScreen() {
                 ) : (
                   /* AI Analysis View */
                   <View>
-                    {journalEntry && journalEntry.ai_analysis ? (
+                    {dailyEntry && dailyEntry.ai_analysis ? (
                       <Card style={[journalStyles.entryContainer, { borderLeftColor: secondaryColor }]}>
                         <View style={{ 
                           flexDirection: 'row', 
@@ -503,7 +505,7 @@ export default function JournalScreen() {
                           textShadowOffset: { width: 0, height: 0 },
                           textShadowRadius: 3
                         }}>
-                          {journalEntry.ai_analysis}
+                          {dailyEntry.ai_analysis}
                         </ThemedText>
                         
                         <View style={{
@@ -528,7 +530,7 @@ export default function JournalScreen() {
                             color: '#BBB',
                             fontStyle: 'normal',
                           }}>
-                            {journalEntry.user_entry}
+                            {dailyEntry.user_entry}
                           </ThemedText>
                         </View>
                       </Card>

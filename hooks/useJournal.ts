@@ -11,6 +11,8 @@ export function useJournal() {
     const [currentDate, setCurrentDate] = useState(new Date());
     // State holds CheckupEntry arrays grouped by date string ('YYYY-MM-DD')
     const [entriesByDate, setEntriesByDate] = useState<Record<string, CheckupEntry[]>>({});
+    // Add state for daily journal entry
+    const [dailyEntry, setDailyEntry] = useState<JournalEntry | null>(null);
     const [localEntryText, setLocalEntryText] = useState<Record<string, string>>({}); // Tracks unsaved text per date
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -19,6 +21,26 @@ export function useJournal() {
     const formatDate = (date: Date): string => {
         return date.toISOString().split('T')[0];
     };
+
+    // Fetches the daily journal entry for the current date
+    const fetchDailyEntry = useCallback(async () => {
+        if (!session?.user?.id) {
+            setDailyEntry(null);
+            return;
+        }
+
+        try {
+            const dateStr = formatDate(currentDate);
+            console.log('[useJournal] Fetching daily entry for user', session.user.id, 'for', dateStr);
+            
+            const entry = await journalService.getEntry(dateStr, session.user.id);
+            setDailyEntry(entry);
+            console.log('[useJournal] Daily entry fetch result:', entry ? 'Found entry' : 'No entry found');
+        } catch (err: any) {
+            console.error("[useJournal] Error fetching daily entry:", { error: err, userId: session.user.id });
+            // Don't set error state here to avoid affecting the checkup flow
+        }
+    }, [session?.user?.id, currentDate]);
 
     // Fetches checkup entries for the current date and updates state
     const fetchRecentCheckups = useCallback(async () => {
@@ -48,6 +70,9 @@ export function useJournal() {
             setEntriesByDate(groupedEntries);
             console.log('[useJournal] Updated entriesByDate state:', Object.keys(groupedEntries).length, 'dates');
 
+            // Also fetch the daily entry when we fetch checkups
+            await fetchDailyEntry();
+
         } catch (err: any) {
             const errorMessage = err?.message || "Failed to load journal entries";
             setError(errorMessage);
@@ -55,19 +80,14 @@ export function useJournal() {
         } finally {
             setLoading(false);
         }
-    }, [session?.user?.id, currentDate]); // Added currentDate as dependency
+    }, [session?.user?.id, currentDate, fetchDailyEntry]); // Added currentDate dependency
 
-    // Load entries initially and when session changes
+    // Combined effect to load entries when session changes or date changes
+    // This eliminates the duplicate fetching problem
     useEffect(() => {
-      fetchRecentCheckups();
-    }, [fetchRecentCheckups]); // fetchRecentCheckups includes session?.user?.id dependency
-
-    // Refetch when currentDate changes
-    useEffect(() => {
-      // This might refetch the whole week range, consider fetching only the specific day if performance is an issue
-      console.log('[useJournal] Current date changed, refetching...');
-      fetchRecentCheckups();
-    }, [currentDate, fetchRecentCheckups]);
+        console.log('[useJournal] Session or date changed, fetching entries...');
+        fetchRecentCheckups();
+    }, [fetchRecentCheckups]); // fetchRecentCheckups includes both session?.user?.id and currentDate dependencies
 
     // <<< NEW: Selector function to get checkups for a specific date >>>
     const getCheckupsForDate = useCallback((date: Date): CheckupEntry[] => {
@@ -165,6 +185,7 @@ export function useJournal() {
         localEntryText: getLocalEntryText(currentDate), // Provide text for the current date
         checkups: getCheckupsForDate(currentDate), // Provide checkups for the current date
         latestAiResponse: getLatestAiResponseForDate(currentDate), // Provide latest AI response for the current date
+        dailyEntry, // Expose the daily entry to components
         updateLocalEntryText,
         saveCurrentCheckup, // Renamed from saveEntry for clarity
         goToPreviousDay,
@@ -172,6 +193,5 @@ export function useJournal() {
         loading,
         error,
         refreshEntries: fetchRecentCheckups, // Expose refresh function
-        // getEntry and getAiResponses might be less needed now
     };
 }
