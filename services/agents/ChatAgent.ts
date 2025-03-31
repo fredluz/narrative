@@ -209,7 +209,7 @@ export class ChatAgent {
                     messages: messages,
                     // <<< FIX: Added temperature and max_tokens back
                     temperature: 0.6,
-                    max_tokens: 420
+                    max_tokens: 1020
                 }).catch((err: any) => {
                     // <<< FIX: Added error logging back
                     console.error("[ChatAgent] Error during concurrent main response generation (DeepSeek):", err);

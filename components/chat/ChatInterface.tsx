@@ -291,6 +291,9 @@ export function ChatInterface({
             case 'bt7274':
               setPersonalityName('TITAN');
               break;
+            case 'bigBoss':
+              setPersonalityName('BOSS');
+              break;
             default:
               setPersonalityName('ASSISTANT');
           }

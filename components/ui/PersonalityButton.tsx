@@ -105,15 +105,12 @@ export function PersonalityButton() {
 
 const styles = StyleSheet.create({
   container: {
-    position: 'absolute',
-    left: 20,
-    bottom: 80, // Position above settings button
-    zIndex: 1000,
+    width: '100%',
   },
   button: {
-    width: 48,
+    width: '100%',
     height: 48,
-    borderRadius: 24,
+    borderRadius: 8,
     backgroundColor: '#333',
     justifyContent: 'center',
     alignItems: 'center',

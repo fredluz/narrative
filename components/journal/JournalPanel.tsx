@@ -14,6 +14,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { useSupabase } from '@/contexts/SupabaseContext';
 import { assertSession } from '@/utils/authGuards';
 import { useSuggestions } from '@/contexts/SuggestionContext';
+import { personalityService } from '@/services/personalityService';
 
 import { JournalEntryInput } from './JournalEntryInput';
 import { CheckupItem } from './CheckupItem';
@@ -54,6 +55,7 @@ export function JournalPanel({
   const router = useRouter();
   const { session } = useSupabase();
   const { analyzeJournalEntry } = useSuggestions();
+  const [personalityName, setPersonalityName] = useState('ASSISTANT');
 
   const {
     currentDate,
@@ -77,6 +79,7 @@ export function JournalPanel({
 
   const isLoading = journalLoading || localLoading;
 
+ 
   const verifyCurrentUser = React.useMemo(() => {
     if (!session?.user?.id || !userId) return false;
     return session.user.id === userId;

@@ -25,32 +25,36 @@ export const AIResponse: React.FC<AIResponseProps> = ({
   entryUserId
 }) => {
   const { session } = useSupabase();
-  const [personalityName, setPersonalityName] = useState('SILVERHAND');
+  const [personalityName, setPersonalityName] = useState('')
   
   useEffect(() => {
     if (session?.user?.id) {
       personalityService.getUserPersonality(session.user.id)
         .then(personality => {
-          // Convert personality type to display name
           switch(personality) {
-            case 'bt7274':
-              setPersonalityName('BT');
-              break;
             case 'johnny':
               setPersonalityName('SILVERHAND');
               break;
             case 'batman':
-              setPersonalityName('BATMAN');
+              setPersonalityName('BRUCE');
               break;
-            
+            case 'bt7274':
+              setPersonalityName('TITAN');
+              break;
+            case 'bigBoss':
+              setPersonalityName('BOSS');
+              break;
+            default:
+              setPersonalityName('ASSISTANT');
           }
         })
         .catch(error => {
           console.error('Error getting personality:', error);
-          setPersonalityName('SILVERHAND'); // Fallback to default
+          setPersonalityName('ASSISTANT'); // Fallback to default
         });
     }
   }, [session?.user?.id]);
+
   
   const { allowed, message } = React.useMemo(() => 
     requireOwnership(session, entryUserId),
@@ -122,7 +126,13 @@ export const AIResponse: React.FC<AIResponseProps> = ({
           textShadowOffset: { width: 0, height: 0 },
           textShadowRadius: 3
         }}>
-          {loading ? "Thinking..." : (response || "Keep typing, choom. Your story's writing itself.")}
+          {loading ? "Thinking..." : (response || (
+            personalityName === 'SILVERHAND' ? "Keep typing, choom. Your story's writing itself." :
+            personalityName === 'BRUCE' ? "Continue your log. Every detail matters." :
+            personalityName === 'TITAN' ? "Continue your log, pilot. Record your experiences." :
+            personalityName === 'BOSS' ? "Kept you waiting, huh? Keep writing." :
+            "I'm listening. Please continue your entry."
+          ))}
         </ThemedText>
       </ScrollView>
     </View>

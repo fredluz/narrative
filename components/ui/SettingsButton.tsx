@@ -7,7 +7,7 @@ import { ColorPicker } from './ColorPicker';
 import { authService } from '@/services/authService';
 import { PersonalityType, personalities } from '@/services/agents/PersonalityPrompts';
 import { personalityService } from '@/services/personalityService';
-
+import { PersonalityButton } from './PersonalityButton';
 
 export function SettingsButton() {
   const [isOpen, setIsOpen] = useState(false);
@@ -66,7 +66,10 @@ export function SettingsButton() {
               label="Secondary Theme Color"
               textColor={textColor}
             />
-            
+            <View style={styles.section}>
+              <Text style={[styles.sectionTitle, { color: textColor }]}></Text>
+              <PersonalityButton />
+            </View>
             <TouchableOpacity 
               style={[styles.logoutButton, { borderColor: themeColor }]}
               onPress={handleLogout}
@@ -129,6 +132,15 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     fontSize: 16,
     fontWeight: '500',
+  },
+  section: {
+    marginTop: 24,
+    marginBottom: 8,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '500',
+    marginBottom: 12,
   },
   personalityContainer: {
     marginBottom: 20,
