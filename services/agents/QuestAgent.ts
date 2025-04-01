@@ -81,7 +81,7 @@ export class QuestAgent {
         end_date?: string;
         parent_quest_id?: number;
         tags?: string[];
-        user_id?: string;
+        clerk_id?: string;
     }): Promise<Quest> {
         if (!userId) {
             console.error('User ID is required for createQuest');
@@ -103,8 +103,8 @@ export class QuestAgent {
             if (miscQuest.tasks && miscQuest.tasks.length > 0) {
                 console.log('📋 Checking misc quest tasks for relevance to new quest');
 
-                // Filter tasks by user_id
-                const userTasks = miscQuest.tasks.filter(task => task.user_id === userId);
+                // Filter tasks by clerk_id
+                const userTasks = miscQuest.tasks.filter(task => task.clerk_id === userId);
 
                 if (userTasks.length > 0) {
                     const prompt = `
@@ -206,7 +206,7 @@ Be SELECTIVE - only include tasks that have a CLEAR and STRONG connection to the
         end_date?: string;
         parent_quest_id?: number;
         tags?: string[];
-        user_id?: string;
+        clerk_id?: string;
     }): Promise<Quest> {
         // Check if userId exists
         if (!userId) {
@@ -400,7 +400,7 @@ For each quest, determine if it's relevant and which specific tasks are mentione
 
             // Get the misc quest and separate regular quests
             
-            // Filter tasks by user_id for all quests
+            // Filter tasks by clerk_id for all quests
            
             // Store all relevant quest data
             let relevantQuestData: QuestRelevanceItem[] = [];
@@ -425,7 +425,7 @@ For each quest, determine if it's relevant and which specific tasks are mentione
                 })
                 .map(quest => ({
                     ...quest,
-                    tasks: quest.tasks?.filter(task => task.user_id === userId) || [],
+                    tasks: quest.tasks?.filter(task => task.clerk_id === userId) || [],
                     relevance: finalQuestData.find(data => data.questId === quest.id)?.relevance || undefined,
                     relevantTasks: finalQuestData.find(data => data.questId === quest.id)?.relevantTasks || []
                 }));

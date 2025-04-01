@@ -15,7 +15,7 @@ interface QuestFormData {
   start_date?: string;
   end_date?: string;
   is_main: boolean;
-  user_id: string; // Add user_id field
+  clerk_id: string; // Add clerk_id field
 }
 
 interface EditQuestModalProps {
@@ -46,7 +46,7 @@ export function EditQuestModal({
     start_date: '',
     end_date: '',
     is_main: false,
-    user_id: userId
+    clerk_id: userId
   });
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -60,7 +60,7 @@ export function EditQuestModal({
         start_date: quest.start_date || '',
         end_date: quest.end_date || '',
         is_main: quest.is_main,
-        user_id: userId
+        clerk_id: userId
       });
     }
   }, [quest, userId]);
@@ -68,7 +68,7 @@ export function EditQuestModal({
   const handleSubmit = async () => {
     await onSubmit({
       ...formData,
-      user_id: userId
+      clerk_id: userId
     });
   };
 

@@ -19,16 +19,16 @@ interface QuestUpdate {
   start_date?: string;
   end_date?: string;
   tags?: string[];
-  user_id: string;
+  clerk_id: string;
 }
 
 interface QuestInput extends Omit<Quest, 'id' | 'created_at' | 'updated_at' | 'tasks'> {
   description?: string;
-  user_id: string;
+  clerk_id: string;
 }
 
 // Update type definition for update operations to allow partial data
-type QuestUpdateInput = Partial<Omit<QuestInput, 'user_id'>> & {
+type QuestUpdateInput = Partial<Omit<QuestInput, 'clerk_id'>> & {
   description_sugg?: string;
   analysis_sugg?: string;
 };
@@ -70,10 +70,10 @@ export async function fetchQuests(userId: string): Promise<Quest[]> {
         analysis,
         analysis_sugg,
         parent_quest_id,
-        user_id,
+        clerk_id,
         tasks (*)
       `)
-      .eq('user_id', userId)
+      .eq('clerk_id', userId)
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -100,10 +100,10 @@ async function getQuestsWithTasks(userId: string): Promise<Quest[]> {
 }
 
 // Remove the export keyword here since we'll export at the bottom
-async function createQuest(userId: string, questData: Omit<QuestInput, 'user_id'>): Promise<Quest> {
+async function createQuest(userId: string, questData: Omit<QuestInput, 'clerk_id'>): Promise<Quest> {
   const fullQuestData: QuestInput = {
     ...questData,
-    user_id: userId
+    clerk_id: userId
   };
 
   const cleanedFields = Object.fromEntries(
@@ -135,7 +135,7 @@ async function updateQuest(questId: number, userId: string, questData: QuestUpda
   // First verify ownership
   const { data: quest, error: fetchError } = await supabase
     .from('quests')
-    .select('user_id')
+    .select('clerk_id')
     .eq('id', questId)
     .single();
 
@@ -144,14 +144,14 @@ async function updateQuest(questId: number, userId: string, questData: QuestUpda
     throw new Error(`Failed to verify quest ownership: ${fetchError.message}`);
   }
 
-  if (!quest || quest.user_id !== userId) {
+  if (!quest || quest.clerk_id !== userId) {
     console.error('Cannot update quest: User does not own this quest');
     throw new Error('You do not have permission to update this quest');
   }
 
   const fullQuestData = {
     ...questData,
-    user_id: userId
+    clerk_id: userId
   };
 
   const cleanedFields = Object.fromEntries(
@@ -170,7 +170,7 @@ async function updateQuest(questId: number, userId: string, questData: QuestUpda
       updated_at: new Date().toISOString()
     })
     .eq('id', questId)
-    .eq('user_id', userId)
+    .eq('clerk_id', userId)
     .select('*')
     .single();
 
@@ -183,7 +183,7 @@ async function deleteQuest(questId: number, userId: string): Promise<void> {
   // First verify ownership
   const { data: quest, error: fetchError } = await supabase
     .from('quests')
-    .select('user_id')
+    .select('clerk_id')
     .eq('id', questId)
     .single();
 
@@ -192,7 +192,7 @@ async function deleteQuest(questId: number, userId: string): Promise<void> {
     throw new Error(`Failed to verify quest ownership: ${fetchError.message}`);
   }
 
-  if (!quest || quest.user_id !== userId) {
+  if (!quest || quest.clerk_id !== userId) {
     console.error('Cannot delete quest: User does not own this quest');
     throw new Error('You do not have permission to delete this quest');
   }
@@ -202,7 +202,7 @@ async function deleteQuest(questId: number, userId: string): Promise<void> {
     .from('quests')
     .delete()
     .eq('id', questId)
-    .eq('user_id', userId);
+    .eq('clerk_id', userId);
 
   if (error) throw error;
 }
@@ -227,10 +227,10 @@ async function getMiscQuest(userId: string): Promise<Quest | null> {
       analysis,
       analysis_sugg,
       parent_quest_id,
-      user_id,
+      clerk_id,
       tasks (*)
     `)
-    .eq('user_id', userId)
+    .eq('clerk_id', userId)
     .eq('title', 'Misc')
     .single();
 
@@ -275,7 +275,7 @@ async function moveTasksToQuest(fromQuestId: number, toQuestId: number | null, u
     .from('tasks')
     .update({ quest_id: actualToQuestId })
     .eq('quest_id', fromQuestId)
-    .eq('user_id', userId);
+    .eq('clerk_id', userId);
 
   // If specific taskIds are provided, only move those tasks
   if (taskIds && taskIds.length > 0) {
@@ -290,7 +290,7 @@ async function updateMainQuest(questId: number, userId: string): Promise<void> {
   // First verify ownership
   const { data: quest, error: fetchError } = await supabase
     .from('quests')
-    .select('user_id')
+    .select('clerk_id')
     .eq('id', questId)
     .single();
 
@@ -299,7 +299,7 @@ async function updateMainQuest(questId: number, userId: string): Promise<void> {
     throw new Error(`Failed to verify quest ownership: ${fetchError.message}`);
   }
 
-  if (!quest || quest.user_id !== userId) {
+  if (!quest || quest.clerk_id !== userId) {
     console.error('Cannot update main quest: User does not own this quest');
     throw new Error('You do not have permission to update this quest');
   }
@@ -374,7 +374,7 @@ export function useQuests() {
           event: '*', 
           schema: 'public',
           table: 'quests',
-          filter: `user_id=eq.${userId}` // Use Clerk userId in filter
+          filter: `clerk_id=eq.${userId}` // Use Clerk userId in filter
         },
         (payload: QuestRealtimePayload) => {
           console.log('Quest change received:', payload);

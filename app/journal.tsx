@@ -62,7 +62,7 @@ export default function JournalScreen() {
       await createTask({
         ...taskData,
         created_at: new Date().toISOString(),
-        user_id: userId // Use Clerk userId
+        clerk_id: userId // Use Clerk userId
       });
     } catch (err) {
       console.error('Error creating task:', { error: err, userId: userId });

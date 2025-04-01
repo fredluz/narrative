@@ -563,7 +563,7 @@ export class JournalAgent {
     private async createResponsePrompt(currentEntry: string, context: Array<{ entry: string; response: string; updated_at: string }>, userId: string, previousCheckupsContext?: string): Promise<string> {
       console.log('🔧 Creating response prompt with context entries:', context.length);
 
-      // Fetch relevant quests - RLS handles user_id filtering
+      // Fetch relevant quests - RLS handles clerk_id filtering
       const relevantQuests = await this.questAgent.findRelevantQuests(currentEntry, userId);
       console.log('✨ Found relevant quests for prompt:', relevantQuests.map(q => q.title));
 
@@ -851,7 +851,7 @@ export interface JournalEntry {
   ai_analysis: string | null; // Allow null from DB
   ai_response: string | null; // Allow null from DB
   date?: string; // Client-side convenience property
-  user_id: string;
+  clerk_id: string;
 }
 
 // Interface for Checkup entries from checkup_entries table
@@ -863,7 +863,7 @@ export interface CheckupEntry {
   // Foreign key to journal_entries.id (linking each checkup to its associated daily entry)
   daily_entry_id: string | null; // Should be string if referencing UUID
   ai_checkup_response: string | null; // AI response for individual checkups
-  user_id: string;
+  clerk_id: string;
 }
 
 // Instantiate the JournalAgent (ensure this uses the updated version)
@@ -888,7 +888,7 @@ export const journalService = {
     const { data, error } = await supabase
       .from('journal_entries')
       .select('*')
-      .eq('user_id', userId)
+      .eq('clerk_id', userId)
       .gte('created_at', startOfDay)
       .lte('created_at', endOfDay)
       .order('created_at', { ascending: false })
@@ -929,7 +929,7 @@ export const journalService = {
     const { data, error } = await supabase
       .from('checkup_entries')
       .select('*')
-      .eq('user_id', userId)
+      .eq('clerk_id', userId)
       .gte('created_at', startDateTime)
       .lte('created_at', endDateTime)
       .order('created_at', { ascending: true });
@@ -1041,7 +1041,7 @@ export const journalService = {
     const { data, error } = await supabase
       .from('checkup_entries')
       .select('*')
-      .eq('user_id', userId)
+      .eq('clerk_id', userId)
       .gte('created_at', startOfDay)
       .lte('created_at', endOfDay)
       .order('created_at', { ascending: true });
@@ -1114,7 +1114,7 @@ export const journalService = {
           tags: tags.length > 0 ? tags : null,
           daily_entry_id: null, // Initially unlinked
           ai_checkup_response: checkupResponse,
-          user_id: userId
+          clerk_id: userId
       };
 
       // Insert the checkup
@@ -1157,7 +1157,7 @@ export const journalService = {
     const { data, error } = await supabase
       .from('checkup_entries')
       .select('*')
-      .eq('user_id', userId)
+      .eq('clerk_id', userId)
       .gte('created_at', startOfDay)
       .lte('created_at', endOfDay)
       .is('daily_entry_id', null) // Filter for unlinked entries
@@ -1232,7 +1232,7 @@ export const journalService = {
           tags: null, // Or derive tags if needed
           ai_response: dailyResponse,
           ai_analysis: dailyAnalysis,
-          user_id: userId
+          clerk_id: userId
       };
 
       console.log('[journalService] 💾 Creating daily entry in database');
@@ -1260,7 +1260,7 @@ export const journalService = {
         const { error: updateError } = await supabase
           .from('checkup_entries')
           .update({ daily_entry_id: dailyEntryId })
-          .eq('user_id', userId)
+          .eq('clerk_id', userId)
           .in('id', checkupIdsToLink); // Link specifically the checkups we processed
 
         if (updateError) {
@@ -1299,7 +1299,7 @@ export const journalService = {
       const { data, error } = await supabase
         .from('checkup_entries')
         .select('*')
-        .eq('user_id', userId)
+        .eq('clerk_id', userId)
         .eq('daily_entry_id', dailyEntryId) // Match the foreign key
         .order('created_at', { ascending: true });
 
@@ -1333,7 +1333,7 @@ export const journalService = {
       const { data, error } = await supabase
         .from('journal_entries')
         .select('*') // Select all fields
-        .eq('user_id', userId)
+        .eq('clerk_id', userId)
         .order('created_at', { ascending: false })
         .limit(limit);
 
@@ -1450,12 +1450,12 @@ export function JournalPanel({
       
       const dateStr = currentDate.toISOString().split('T')[0];
       
-      // Get daily entry first with user_id
+      // Get daily entry first with clerk_id
       const dailyEntryForDate = await journalService.getEntry(dateStr, session.user.id);
       setDailyEntry(dailyEntryForDate);
       setHasDailyEntry(!!dailyEntryForDate);
 
-      // Get today's checkups with user_id
+      // Get today's checkups with clerk_id
       const todaysCheckups = await journalService.getCheckupEntries(dateStr, session.user.id);
       setCheckups(todaysCheckups);
 
@@ -1569,7 +1569,7 @@ export function JournalPanel({
       
       updateLocalEntry(currentDate, localEntry);
       
-      // Use saveCheckupEntry with user_id
+      // Use saveCheckupEntry with clerk_id
       const dateStr = currentDate.toISOString().split('T')[0];
       await journalService.saveCheckupEntry(dateStr, localEntry, session.user.id, processedTags);
       
@@ -1995,7 +1995,7 @@ export async function getCurrentMessagesFromDB(userId: string) {
     .from('chat_messages')
     .select('*')
     .is('chat_session_id', null)
-    .eq('user_id', userId)
+    .eq('clerk_id', userId)
     .order('created_at', { ascending: true });
   
   if (error) {
@@ -2016,7 +2016,7 @@ export async function createChatSession(summary: string, tags: string[], userId:
     .insert([{ 
       summary,
       tags,
-      user_id: userId
+      clerk_id: userId
     }])
     .select('id')
     .single();
@@ -2037,7 +2037,7 @@ export async function updateMessagesWithSessionId(messageIds: any[], sessionId: 
     .from('chat_messages')
     .update({ chat_session_id: sessionId })
     .in('id', messageIds)
-    .eq('user_id', userId);
+    .eq('clerk_id', userId);
   
   if (error) {
     throw error;
@@ -2102,17 +2102,17 @@ export function useChatData() {
         try {
           // Verify all messages belong to current user before proceeding
           const allMessagesOwnedByUser = sessionMessages.every(msg => 
-            !msg.user_id || msg.user_id === userId);
+            !msg.clerk_id || msg.clerk_id === userId);
             
           if (!allMessagesOwnedByUser) {
             console.error('Security issue: Found messages not owned by current user');
             return;
           }
           
-          // All messages should have the same user_id
+          // All messages should have the same clerk_id
           const sessionMessagesWithUserId = sessionMessages.map(msg => ({
             ...msg,
-            user_id: userId
+            clerk_id: userId
           }));
           
           const sessionId = await chatAgent.summarizeAndStoreSession(sessionMessagesWithUserId);
@@ -2156,7 +2156,7 @@ export function useChatData() {
     try {
       // Verify all messages belong to current user
       const allMessagesOwnedByUser = sessionMessages.every(msg => 
-        !msg.user_id || msg.user_id === userId);
+        !msg.clerk_id || msg.clerk_id === userId);
         
       if (!allMessagesOwnedByUser) {
         console.error('Security issue: Found messages not owned by current user');
@@ -2164,10 +2164,10 @@ export function useChatData() {
         return;
       }
       
-      // Ensure all messages have user_id
+      // Ensure all messages have clerk_id
       const sessionMessagesWithUserId = sessionMessages.map(msg => ({
         ...msg,
-        user_id: userId
+        clerk_id: userId
       }));
       
       const sessionId = await chatAgent.summarizeAndStoreSession(sessionMessagesWithUserId);
@@ -2202,7 +2202,7 @@ export function useChatData() {
         const stored = await AsyncStorage.getItem(key);
         if (stored) {
           const parsed: ChatMessage[] = JSON.parse(stored);
-          const valid = parsed.filter(msg => !msg.chat_session_id && msg.user_id === userId);
+          const valid = parsed.filter(msg => !msg.chat_session_id && msg.clerk_id === userId);
           setMessages(valid);
         }
       } catch (err) {
@@ -2215,14 +2215,14 @@ export function useChatData() {
         const { data, error } = await supabase
           .from('chat_messages')
           .select('*')
-          .eq('user_id', userId)
+          .eq('clerk_id', userId)
           .is('chat_session_id', null)
           .order('created_at', { ascending: true });
         if (error) {
           console.error('Error loading messages from database:', error);
           return;
         }
-        const valid = data?.filter(msg => msg.user_id === userId) || [];
+        const valid = data?.filter(msg => msg.clerk_id === userId) || [];
         setMessages(prev => {
           const map = new Map(prev.map(msg => [String(msg.id), msg]));
           valid.forEach(msg => map.set(String(msg.id), msg));
@@ -2318,7 +2318,7 @@ export function useChatData() {
       is_user: true,
       message: messageText.trim(),
       chat_session_id: currentSessionId || undefined,
-      user_id: authenticatedUserId
+      clerk_id: authenticatedUserId
     };
 
     // OPTIMISTIC UPDATE: Add message to local state first for immediate UI update
@@ -2340,10 +2340,10 @@ export function useChatData() {
     johnnyResponseTimerRef.current = setTimeout(async () => {
       setIsTyping(true);
       try {
-        // Get all pending messages and ensure they have user_id
+        // Get all pending messages and ensure they have clerk_id
         const pendingMessages = [...pendingMessagesRef.current].map(msg => ({
           ...msg,
-          user_id: authenticatedUserId
+          clerk_id: authenticatedUserId
         }));
         
         const combinedMessage = pendingMessages
@@ -2370,7 +2370,7 @@ export function useChatData() {
               is_user: false,
               message: message,
               chat_session_id: currentSessionId || undefined,
-              user_id: authenticatedUserId // Explicit user ID assignment
+              clerk_id: authenticatedUserId // Explicit user ID assignment
             };
             
             // OPTIMISTIC UPDATE: Add AI message to local state immediately
@@ -2389,7 +2389,7 @@ export function useChatData() {
       } catch (error) {
         console.error('Error in Johnny\'s response:', error);
         
-        // Handle error with proper user_id
+        // Handle error with proper clerk_id
         const clientErrorId = -Date.now();
         const errorMessage: ChatMessage = {
           id: clientErrorId,
@@ -2398,7 +2398,7 @@ export function useChatData() {
           is_user: false,
           message: "Damn netrunners must be messing with our connection. Try again in a bit.",
           chat_session_id: currentSessionId || undefined,
-          user_id: authenticatedUserId // Explicit user ID assignment
+          clerk_id: authenticatedUserId // Explicit user ID assignment
         };
 
         // OPTIMISTIC UPDATE: Add error message to local state
@@ -2649,7 +2649,7 @@ export class ChatAgent {
         if (recentEntries && recentEntries.length > 0) {
             journalContext = recentEntries
                 // Optional: Ensure entries belong to the user (should be handled by service ideally)
-                .filter((entry: JournalEntry) => entry.user_id === userId)
+                .filter((entry: JournalEntry) => entry.clerk_id === userId)
                 .map((entry: JournalEntry) => {
                     // Format date like 'Jan 1'
                     const entryDate = new Date(entry.updated_at || entry.created_at); // Use updated_at if available
@@ -2743,11 +2743,11 @@ export class ChatAgent {
 
   // --- summarizeAndStoreSession ---
   async summarizeAndStoreSession(messages: ChatMessage[]): Promise<string> {
-    const userId = messages[0]?.user_id;
+    const userId = messages[0]?.clerk_id;
     if (!userId) { throw new Error('User ID is required to store session'); }
     try {
       if (!messages || messages.length === 0) { throw new Error('No messages to store'); }
-      if (messages.some(msg => msg.user_id !== userId)) { throw new Error('Session contains messages from multiple users'); }
+      if (messages.some(msg => msg.clerk_id !== userId)) { throw new Error('Session contains messages from multiple users'); }
       console.log('\n=== ChatAgent.summarizeAndStoreSession ===');
       console.log(`Processing ${messages.length} messages for user ${userId}`);
       const messageCount = messages.length;

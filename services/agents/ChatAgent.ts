@@ -261,7 +261,7 @@ export class ChatAgent {
 
   // --- summarizeAndStoreSession ---
   async summarizeAndStoreSession(messages: ChatMessage[]): Promise<string> {
-    const userId = messages[0]?.user_id;
+    const userId = messages[0]?.clerk_id;
     if (!userId) { throw new Error('User ID is required to store session'); }
     let sessionData: { id: string } | null = null; // To store session ID
     let summary: string = ''; // To store summary for checkup
@@ -269,7 +269,7 @@ export class ChatAgent {
 
     try {
       if (!messages || messages.length === 0) { throw new Error('No messages to store'); }
-      if (messages.some(msg => msg.user_id !== userId)) { throw new Error('Session contains messages from multiple users'); }
+      if (messages.some(msg => msg.clerk_id !== userId)) { throw new Error('Session contains messages from multiple users'); }
 
       console.log('\n=== ChatAgent.summarizeAndStoreSession ===');
       console.log(`Processing ${messages.length} messages for user ${userId}`);
@@ -329,11 +329,11 @@ export class ChatAgent {
   private async generateCheckupContent(messages: ChatMessage[], summary: string): Promise<string> {
     console.log('\n=== [ChatAgent] generateCheckupContent ===');
     try {
-      const userId = messages[0]?.user_id;
+      const userId = messages[0]?.clerk_id;
       if (!userId) {
-        throw new Error('No user_id found in messages');
+        throw new Error('No clerk_id found in messages');
       }
-      if (messages.some(m => m.user_id !== userId)) {
+      if (messages.some(m => m.clerk_id !== userId)) {
          throw new Error('Cannot generate checkup content: Messages from multiple users');
       }
 
@@ -428,7 +428,7 @@ Write a reflective journal entry from my perspective about what we discussed, ma
     } catch (error) {
       console.error('[ChatAgent] Error generating checkup content:', error);
       const currentTime = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
-      const personalityName = getPersonality(await personalityService.getUserPersonality(messages[0]?.user_id || 'johnny')).name || 'the AI';
+      const personalityName = getPersonality(await personalityService.getUserPersonality(messages[0]?.clerk_id || 'johnny')).name || 'the AI';
       return `[${currentTime}] Had a conversation with ${personalityName}.`; // Fallback
     }
   }

@@ -20,7 +20,7 @@ interface TaskFormData {
   quest_id?: number;  // Changed from string to number
   priority: 'high' | 'medium' | 'low';
   subtasks?: string;
-  user_id: string; // Add user_id field
+  clerk_id: string; // Add clerk_id field
 }
 
 interface EditTaskModalProps {
@@ -56,7 +56,7 @@ export function EditTaskModal({
     tags: [],
     priority: 'medium',
     subtasks: '',
-    user_id: userId // Initialize with userId
+    clerk_id: userId // Initialize with userId
   });
 
   // Improved quest loading logic
@@ -99,18 +99,18 @@ export function EditTaskModal({
         priority: task.priority || 'medium', // Changed from 'Medium' to 'medium'
         subtasks: task.subtasks || '',
         quest_id: task.quest_id,
-        user_id: userId // Set user_id when loading task data
+        clerk_id: userId // Set clerk_id when loading task data
       });
     }
   }, [task, userId]);
 
-  // Update handleSubmit to include user_id
+  // Update handleSubmit to include clerk_id
   const handleSubmit = async () => {
     const processedTags = formData.tags || []; // Handle undefined tags
     await onSubmit({
       ...formData,
       tags: processedTags,
-      user_id: userId // Add user_id to submission
+      clerk_id: userId // Add clerk_id to submission
     });
   };
 

@@ -11,6 +11,7 @@ import { SuggestionProvider } from '@/contexts/SuggestionContext';
 import { TriangularSpinner } from '@/components/loading/TriangularSpinner';
 import { ClerkProvider, useAuth } from '@clerk/clerk-expo';
 import * as SecureStore from 'expo-secure-store';
+import { supabase } from '@/lib/supabase'; // Import Supabase client
 
 // Retrieve Clerk Publishable Key from environment variables
 const CLERK_PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
@@ -55,7 +56,7 @@ function InitialLayout() {
   const renderCount = useRef(0);
   renderCount.current += 1;
 
-  const { isLoaded: isClerkLoaded, isSignedIn } = useAuth(); // Use Clerk auth state
+  const { isLoaded: isClerkLoaded, isSignedIn, getToken } = useAuth(); // Use Clerk auth state, add getToken
   const { themeColor } = useTheme();
   const router = useRouter();
   const segments = useSegments();
@@ -74,36 +75,7 @@ function InitialLayout() {
     console.log(`[InitialLayout] STATE CHECK - Clerk Loaded: ${isClerkLoaded}, Signed In: ${isSignedIn}, Fonts Loaded: ${fontsLoaded} at ${new Date().toISOString()}`);
   }, [isClerkLoaded, isSignedIn, fontsLoaded]);
 
-  // Effect for handling authentication state changes and redirection
-  useEffect(() => {
-    console.log(`[InitialLayout] Auth Effect Running - isClerkLoaded: ${isClerkLoaded}, isSignedIn: ${isSignedIn}`);
-    if (!isClerkLoaded) {
-      console.log("[InitialLayout] Clerk not loaded yet, returning.");
-      return; // Wait for Clerk to load
-    }
-
-    const inAuthGroup = segments[0] === '(auth)'; // Check if current route is in the auth group
-
-    if (isSignedIn && !inAuthGroup) {
-      // User is signed in and not in the auth group.
-      // Ensure they are redirected away from auth pages if they somehow land there.
-      // Typically, navigation from auth happens automatically, but this is a safeguard.
-      console.log("[InitialLayout] User signed in, ensuring not stuck in auth group.");
-      // No explicit redirect needed here usually, main content will render.
-    } else if (!isSignedIn && !inAuthGroup) {
-      // User is not signed in and not in the auth group.
-      console.log("[InitialLayout] User not signed in, redirecting to /auth");
-      router.replace('/auth'); // Redirect to the auth entry point
-    } else if (isSignedIn && inAuthGroup) {
-        // User is signed in but somehow landed in the auth group (e.g. pressing back button)
-        console.log("[InitialLayout] User signed in but in auth group, redirecting to /landing");
-        router.replace('/landing'); // Redirect to main app screen
-    } else {
-        // User is not signed in and IS in the auth group - stay there.
-        console.log("[InitialLayout] User not signed in and in auth group - allowing.");
-    }
-  }, [isClerkLoaded, isSignedIn, segments, router]);
-
+  // Removed Supabase auth sync effect - accessToken in supabase client handles this now
 
   // Hide splash screen when both fonts and Clerk are loaded
   const onLayoutRootView = useCallback(async () => {

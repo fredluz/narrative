@@ -24,7 +24,7 @@ export async function getCurrentMessagesFromDB(userId: string) {
     .from('chat_messages')
     .select('*')
     .is('chat_session_id', null)
-    .eq('user_id', userId)
+    .eq('clerk_id', userId)
     .order('created_at', { ascending: true });
   
   if (error) {
@@ -45,7 +45,7 @@ export async function createChatSession(summary: string, tags: string[], userId:
     .insert([{ 
       summary,
       tags,
-      user_id: userId
+      clerk_id: userId
     }])
     .select('id')
     .single();
@@ -66,7 +66,7 @@ export async function updateMessagesWithSessionId(messageIds: any[], sessionId: 
     .from('chat_messages')
     .update({ chat_session_id: sessionId })
     .in('id', messageIds)
-    .eq('user_id', userId);
+    .eq('clerk_id', userId);
   
   if (error) {
     throw error;
@@ -131,17 +131,17 @@ export function useChatData() {
         try {
           // Verify all messages belong to current user before proceeding
           const allMessagesOwnedByUser = sessionMessages.every(msg => 
-            !msg.user_id || msg.user_id === userId);
+            !msg.clerk_id || msg.clerk_id === userId);
             
           if (!allMessagesOwnedByUser) {
             console.error('Security issue: Found messages not owned by current user');
             return;
           }
           
-          // All messages should have the same user_id
+          // All messages should have the same clerk_id
           const sessionMessagesWithUserId = sessionMessages.map(msg => ({
             ...msg,
-            user_id: userId
+            clerk_id: userId
           }));
           
           const sessionId = await chatAgent.summarizeAndStoreSession(sessionMessagesWithUserId);
@@ -185,7 +185,7 @@ export function useChatData() {
     try {
       // Verify all messages belong to current user
       const allMessagesOwnedByUser = sessionMessages.every(msg => 
-        !msg.user_id || msg.user_id === userId);
+        !msg.clerk_id || msg.clerk_id === userId);
         
       if (!allMessagesOwnedByUser) {
         console.error('Security issue: Found messages not owned by current user');
@@ -193,10 +193,10 @@ export function useChatData() {
         return;
       }
       
-      // Ensure all messages have user_id
+      // Ensure all messages have clerk_id
       const sessionMessagesWithUserId = sessionMessages.map(msg => ({
         ...msg,
-        user_id: userId
+        clerk_id: userId
       }));
       
       const sessionId = await chatAgent.summarizeAndStoreSession(sessionMessagesWithUserId);
@@ -231,7 +231,7 @@ export function useChatData() {
         const stored = await AsyncStorage.getItem(key);
         if (stored) {
           const parsed: ChatMessage[] = JSON.parse(stored);
-          const valid = parsed.filter(msg => !msg.chat_session_id && msg.user_id === userId);
+          const valid = parsed.filter(msg => !msg.chat_session_id && msg.clerk_id === userId);
           setMessages(valid);
         }
       } catch (err) {
@@ -244,14 +244,14 @@ export function useChatData() {
         const { data, error } = await supabase
           .from('chat_messages')
           .select('*')
-          .eq('user_id', userId)
+          .eq('clerk_id', userId)
           .is('chat_session_id', null)
           .order('created_at', { ascending: true });
         if (error) {
           console.error('Error loading messages from database:', error);
           return;
         }
-        const valid = data?.filter(msg => msg.user_id === userId) || [];
+        const valid = data?.filter(msg => msg.clerk_id === userId) || [];
         setMessages(prev => {
           const map = new Map(prev.map(msg => [String(msg.id), msg]));
           valid.forEach(msg => map.set(String(msg.id), msg));
@@ -349,7 +349,7 @@ export function useChatData() {
       is_user: true,
       message: messageText.trim(),
       chat_session_id: currentSessionId || undefined,
-      user_id: authenticatedUserId
+      clerk_id: authenticatedUserId
     };
 
     // OPTIMISTIC UPDATE: Add message to local state first for immediate UI update
@@ -371,10 +371,10 @@ export function useChatData() {
     johnnyResponseTimerRef.current = setTimeout(async () => {
       setIsTyping(true);
       try {
-        // Get all pending messages and ensure they have user_id
+        // Get all pending messages and ensure they have clerk_id
         const pendingMessages = [...pendingMessagesRef.current].map(msg => ({
           ...msg,
-          user_id: authenticatedUserId
+          clerk_id: authenticatedUserId
         }));
         
         const combinedMessage = pendingMessages
@@ -401,7 +401,7 @@ export function useChatData() {
               is_user: false,
               message: message,
               chat_session_id: currentSessionId || undefined,
-              user_id: authenticatedUserId // Explicit user ID assignment
+              clerk_id: authenticatedUserId // Explicit user ID assignment
             };
             
             // OPTIMISTIC UPDATE: Add AI message to local state immediately
@@ -420,7 +420,7 @@ export function useChatData() {
       } catch (error) {
         console.error('Error in Johnny\'s response:', error);
 
-        // Handle error with proper user_id
+        // Handle error with proper clerk_id
         const clientErrorId = -Date.now();
         const errorMessage: ChatMessage = {
           id: clientErrorId,
@@ -429,7 +429,7 @@ export function useChatData() {
           is_user: false,
           message: "Damn netrunners must be messing with our connection. Try again in a bit.",
           chat_session_id: currentSessionId || undefined,
-          user_id: authenticatedUserId // Explicit user ID assignment
+          clerk_id: authenticatedUserId // Explicit user ID assignment
         };
 
         // OPTIMISTIC UPDATE: Add error message to local state

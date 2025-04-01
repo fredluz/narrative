@@ -19,7 +19,7 @@ interface TaskFormData {
   quest_id?: number;
   priority: 'high' | 'medium' | 'low';
   subtasks?: string;
-  user_id: string;
+  clerk_id: string;
 }
 
 interface CreateTaskModalProps {
@@ -55,7 +55,7 @@ export function CreateTaskModal({
     tags: [],
     priority: 'medium' as 'high' | 'medium' | 'low',
     subtasks: '',
-    user_id: userId,
+    clerk_id: userId,
     quest_id: undefined as number | undefined
   });
 
@@ -70,7 +70,7 @@ export function CreateTaskModal({
           ...getDefaultFormData(),
           ...initialData,
           quest_id: initialData.quest_id,
-          user_id: userId // Always ensure user_id is set
+          clerk_id: userId // Always ensure clerk_id is set
         });
       } else {
         // Reset to default values if no initialData
@@ -113,7 +113,7 @@ export function CreateTaskModal({
     });
     await onSubmit({
       ...formData,
-      user_id: userId
+      clerk_id: userId
     });
     // Reset form after submission
     setFormData(getDefaultFormData());

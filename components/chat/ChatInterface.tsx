@@ -892,8 +892,7 @@ export function ChatInterface({
           status: 'ToDo',
           priority: currentTaskModal.priority || 'medium',
           subtasks: currentTaskModal.subtasks,
-          user_id: userId
-          clerk_id: 
+          clerk_id: userId
         } : undefined}
       />
     </>

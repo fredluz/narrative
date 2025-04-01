@@ -112,7 +112,7 @@ export const journalService = {
     const { data, error } = await supabase
       .from('journal_entries')
       .select('*')
-      .eq('user_id', userId)
+      .eq('clerk_id', userId)
       .gte('created_at', startDateTime)
       .lte('created_at', endDateTime)
       .order('created_at', { ascending: true });
@@ -232,7 +232,7 @@ export const journalService = {
       const { data, error } = await supabase
         .from('checkup_entries')
         .select('*')
-        .eq('user_id', userId)
+        .eq('clerk_id', userId)
         .gte('created_at', startOfDay)
         .lte('created_at', endOfDay)
         .order('created_at', { ascending: true });
@@ -338,7 +338,7 @@ export const journalService = {
           tags: tags.length > 0 ? tags : null,
           daily_entry_id: null, // Initially unlinked
           ai_checkup_response: checkupResponse,
-          user_id: userId
+          clerk_id: userId
       };
 
       // Insert the checkup
@@ -391,7 +391,7 @@ export const journalService = {
     const { data, error } = await supabase
       .from('checkup_entries')
       .select('*')
-      .eq('user_id', userId)
+      .eq('clerk_id', userId)
       .gte('created_at', startOfDay)
       .lte('created_at', endOfDay)
       .is('daily_entry_id', null) // Filter for unlinked entries
@@ -466,7 +466,7 @@ export const journalService = {
           tags: null, // Or derive tags if needed
           ai_response: dailyResponse,
           ai_analysis: dailyAnalysis,
-          user_id: userId
+          clerk_id: userId
       };
 
       console.log('[journalService] 💾 Creating daily entry in database');
@@ -494,7 +494,7 @@ export const journalService = {
         const { error: updateError } = await supabase
           .from('checkup_entries')
           .update({ daily_entry_id: dailyEntryId })
-          .eq('user_id', userId)
+          .eq('clerk_id', userId)
           .in('id', checkupIdsToLink); // Link specifically the checkups we processed
 
         if (updateError) {
@@ -533,7 +533,7 @@ export const journalService = {
       const { data, error } = await supabase
         .from('checkup_entries')
         .select('*')
-        .eq('user_id', userId)
+        .eq('clerk_id', userId)
         .eq('daily_entry_id', dailyEntryId) // Match the foreign key
         .order('created_at', { ascending: true });
 
@@ -567,7 +567,7 @@ export const journalService = {
       const { data, error } = await supabase
         .from('journal_entries')
         .select('*') // Select all fields
-        .eq('user_id', userId)
+        .eq('clerk_id', userId)
         .order('created_at', { ascending: false })
         .limit(limit);
 

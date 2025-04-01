@@ -11,7 +11,7 @@ interface AIAnalysisProps {
   fullColumnMode?: boolean;
   themeColor: string;
   expanded?: boolean;
-  quests?: Array<{ id: string; title: string; user_id: string; }>;
+  quests?: Array<{ id: string; title: string; clerk_id: string; }>;
   onCreateTask?: (taskData: any) => Promise<void>;
   entryUserId?: string; // Add this to verify ownership
 }
@@ -51,7 +51,7 @@ export function AIAnalysis({
     if (onCreateTask) {
       await onCreateTask({
         ...taskData,
-        user_id: authUserId // Use Clerk userId
+        clerk_id: authUserId // Use Clerk userId
       });
     }
   }, [onCreateTask, authUserId, isOwner]); // Depend on Clerk userId and ownership status

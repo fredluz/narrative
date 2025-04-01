@@ -117,7 +117,7 @@ export function KanbanBoard({ mainQuest, onViewAllQuests, userId: propUserId }: 
       return;
     }
      // Ensure the task actually belongs to the user (redundant check if isCurrentUserBoard is true, but safe)
-    if (task.user_id !== authUserId) {
+    if (task.clerk_id !== authUserId) {
        console.warn("Task ownership mismatch (Kanban)");
        return;
     }

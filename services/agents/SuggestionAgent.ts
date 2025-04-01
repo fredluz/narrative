@@ -619,7 +619,7 @@ IMPORTANT:
         priority: suggestion.priority,
         subtasks: suggestion.subtasks,
         quest_id: finalQuestId,
-        user_id: userId
+        clerk_id: userId
       };
       
       return await createTask(taskData);
@@ -1083,7 +1083,7 @@ IMPORTANT:
   public async convertToEditSuggestion(suggestion: TaskSuggestion, existingTask: Task): Promise<TaskSuggestion> {
     try {
       // Generate update fields based on the source content
-      const updateFields = await this.generateTaskUpdateFields(suggestion, existingTask, suggestion.sourceContent, existingTask.user_id);
+      const updateFields = await this.generateTaskUpdateFields(suggestion, existingTask, suggestion.sourceContent, existingTask.clerk_id);
       
       // Modify the suggestion to indicate it's an edit suggestion and preserve quest context
       suggestion.isEditSuggestion = true;
@@ -1153,7 +1153,7 @@ IMPORTANT:
         start_date: suggestion.start_date,
         end_date: suggestion.end_date,
         is_main: false, // Keep default as false
-        user_id: userId
+        clerk_id: userId
       };
 
       // Create the quest in the database

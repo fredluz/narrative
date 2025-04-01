@@ -102,7 +102,7 @@ export async function updateTask(taskId: number, updateData: Record<string, any>
     .from('tasks')
     .update(updateData)
     .eq('id', taskId)
-    // .eq('user_id', userId) // This check is now handled by RLS using clerk_id
+    // .eq('clerk_id', userId) // This check is now handled by RLS using clerk_id
     .select()
     .single();
 
@@ -123,7 +123,7 @@ export async function updateTaskStatus(taskId: number, newStatus: TaskStatus, us
   // First verify ownership
   const { data: task, error: fetchError } = await supabase
     .from('tasks')
-    .select('user_id')
+    .select('clerk_id')
     .eq('id', taskId)
     .single();
 
@@ -132,7 +132,7 @@ export async function updateTaskStatus(taskId: number, newStatus: TaskStatus, us
     throw new Error(`Failed to verify task ownership: ${fetchError.message}`);
   }
 
-  if (!task || task.user_id !== userId) {
+  if (!task || task.clerk_id !== userId) {
     console.error('Cannot update task: User does not own this task');
     throw new Error('You do not have permission to update this task');
   }
@@ -141,7 +141,7 @@ export async function updateTaskStatus(taskId: number, newStatus: TaskStatus, us
     .from('tasks')
     .update({ status: newStatus, updated_at: new Date().toISOString() })
     .eq('id', taskId)
-    .eq('user_id', userId);
+    .eq('clerk_id', userId);
   
   if (error) {
     console.error('Error updating task status:', error);
@@ -163,18 +163,18 @@ export async function createTask(taskData: {
   priority: 'high' | 'medium' | 'low';
   subtasks?: string;
   tags?: string[];
-  user_id: string; // This is the Clerk ID (text) coming from the app
+  clerk_id: string; // This is the Clerk ID (text) coming from the app
 }): Promise<Task> {
   console.log('Creating new task:', taskData);
 
-  // Map the incoming user_id (Clerk ID) to the clerk_id column
-  // Omit the user_id field from the object being inserted into the DB
-  const { user_id: clerkId, ...restData } = taskData;
+  // Map the incoming clerk_id (Clerk ID) to the clerk_id column
+  // Omit the clerk_id field from the object being inserted into the DB
+  const { clerk_id: clerkId, ...restData } = taskData;
 
   const newTask = {
     ...restData,
     clerk_id: clerkId, // Insert Clerk ID into the correct column
-    // user_id: undefined, // Explicitly ensure the old uuid column isn't set (or let default handle if applicable)
+    // clerk_id: undefined, // Explicitly ensure the old uuid column isn't set (or let default handle if applicable)
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
   };
@@ -215,7 +215,7 @@ export async function fetchQuestTasks(questId: number, userId: string) { // user
   // First verify quest ownership
   const { data: quest, error: questError } = await supabase
     .from('quests')
-    .select('user_id')
+    .select('clerk_id')
     .eq('id', questId)
     .single();
 
@@ -224,7 +224,7 @@ export async function fetchQuestTasks(questId: number, userId: string) { // user
     throw new Error(`Failed to verify quest ownership: ${questError.message}`);
   }
 
-  if (!quest || quest.user_id !== userId) {
+  if (!quest || quest.clerk_id !== userId) {
     console.error('Cannot fetch tasks: User does not own this quest');
     throw new Error('You do not have permission to view these tasks');
   }
@@ -281,7 +281,7 @@ export async function fetchTasksByStatus(userId: string, statuses: TaskStatus[])
         end_date
       )
     `)
-    .eq('user_id', userId)
+    .eq('clerk_id', userId)
     .in('status', statuses)
     .order('scheduled_for', { ascending: true });
 

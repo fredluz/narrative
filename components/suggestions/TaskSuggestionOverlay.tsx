@@ -135,7 +135,7 @@ export function TaskSuggestionOverlay({
           priority: taskSuggestion.priority || 'medium',
           subtasks: taskSuggestion.subtasks,
           quest_id: taskSuggestion.quest_id, // Add quest_id to initialData
-          user_id: userId
+          clerk_id: userId
         }}
       />
     </>

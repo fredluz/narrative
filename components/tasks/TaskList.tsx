@@ -225,7 +225,7 @@ export function TaskList({ compactMode = false, userId: propUserId }: TaskListPr
                   >
                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                       <TouchableOpacity
-                        onPress={() => toggleTaskCompletion(task.id, task.status, task.user_id)}
+                        onPress={() => toggleTaskCompletion(task.id, task.status, task.clerk_id)}
                         style={{ padding: compactMode ? 4 : 8 }}
                         disabled={!canUpdateTasks} // Disable based on canUpdateTasks
                       >

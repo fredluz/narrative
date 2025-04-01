@@ -7,9 +7,9 @@ export const personalityService = {
       const { data, error } = await supabase
         .from('profiles')
         .select('ai_personality')
-        .eq('id', userId)
+        .eq('clerk_id', userId) // Use clerk_id for lookup
         .single();
-      
+
       if (error) throw error;
       
       // Use 'johnny' as default personality
@@ -25,7 +25,7 @@ export const personalityService = {
       const { error } = await supabase
         .from('profiles')
         .update({ ai_personality: personality })
-        .eq('id', userId);
+        .eq('clerk_id', userId); // Use clerk_id for update condition
 
       if (error) throw error;
     } catch (error) {

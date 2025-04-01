@@ -42,7 +42,7 @@ interface QuestFormData {
   start_date?: string;
   end_date?: string;
   is_main: boolean;
-  user_id: string;  // Made optional since it's added in handleCreateQuest
+  clerk_id: string;  // Made optional since it's added in handleCreateQuest
   created_at?: string;
   updated_at?: string;
 }
@@ -87,7 +87,7 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
     description: '', // Initialize description field
     status: 'Active',
     is_main: false,
-    user_id: userId || ''  // Initialize user_id field with Clerk userId
+    clerk_id: userId || ''  // Initialize clerk_id field with Clerk userId
   });
 
   const filteredQuests = quests.filter(q => q.status === activeTab);
@@ -138,7 +138,7 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
     }
 
     // Verify task ownership using Clerk userId
-    if (task.user_id !== userId) {
+    if (task.clerk_id !== userId) {
       console.error("Cannot edit task: User does not own this task (Clerk check)");
       return;
     }
@@ -169,7 +169,7 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
       const taskData = {
         ...data,
         quest_id: selectedQuest.id,
-        user_id: userId // Use Clerk userId
+        clerk_id: userId // Use Clerk userId
       };
 
       const newTask = await createTask(taskData);
@@ -200,7 +200,7 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
       setIsSubmitting(true);
       const updatedTask = {
         ...data,
-        user_id: userId, // Use Clerk userId
+        clerk_id: userId, // Use Clerk userId
         updated_at: new Date().toISOString()
       };
 
@@ -215,7 +215,7 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
         .from('tasks')
         .update(updatedTask)
         .eq('id', taskBeingEdited.id)
-        .eq('user_id', userId) // Use Clerk userId for RLS check
+        .eq('clerk_id', userId) // Use Clerk userId for RLS check
         .select();
 
       if (error) throw error;
@@ -246,7 +246,7 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
         return;
     }
      // Verify ownership before attempting update
-    if (task.user_id !== userId) {
+    if (task.clerk_id !== userId) {
         console.error("Cannot toggle task completion: User does not own this task (Clerk check).");
         return;
     }
@@ -318,7 +318,7 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
       status: 'Active',
       start_date: format(new Date(), 'yyyy-MM-dd'),
       is_main: false,
-      user_id: userId // Use Clerk userId
+      clerk_id: userId // Use Clerk userId
     });
     setCreateQuestModalVisible(true);
   };
@@ -332,7 +332,7 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
     }
 
     // Verify quest ownership using Clerk userId
-    if (quest.user_id !== userId) {
+    if (quest.clerk_id !== userId) {
       console.error("Cannot edit quest: User does not own this quest (Clerk check)");
       return;
     }
@@ -346,7 +346,7 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
       start_date: quest.start_date || '',
       end_date: quest.end_date || '',
       is_main: quest.is_main,
-      user_id: userId // Use Clerk userId
+      clerk_id: userId // Use Clerk userId
     });
     setEditQuestModalVisible(true);
   };
@@ -363,7 +363,7 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
       setIsSubmitting(true);
       const questData = {
         ...data,
-        // user_id is already set in the form data from Clerk userId
+        // clerk_id is already set in the form data from Clerk userId
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
@@ -387,7 +387,7 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
       return;
     }
      // Verify ownership before attempting update
-    if (questBeingEdited.user_id !== userId) {
+    if (questBeingEdited.clerk_id !== userId) {
         console.error("Cannot update quest: User does not own this quest (Clerk check).");
         return;
     }
@@ -396,7 +396,7 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
       setIsSubmitting(true);
       const questData = {
         ...data,
-        // user_id is already set in the form data from Clerk userId
+        // clerk_id is already set in the form data from Clerk userId
         updated_at: new Date().toISOString()
       };
 

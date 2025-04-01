@@ -165,7 +165,7 @@ export class JournalAgent {
     private async createResponsePrompt(currentEntry: string, context: Array<{ entry: string; response: string; updated_at: string }>, userId: string, previousCheckupsContext?: string): Promise<string> {
       console.log('🔧 Creating response prompt with context entries:', context.length);
 
-      // Fetch relevant quests - RLS handles user_id filtering
+      // Fetch relevant quests - RLS handles clerk_id filtering
       const relevantQuests = await this.questAgent.findRelevantQuests(currentEntry, userId);
       console.log('✨ Found relevant quests for prompt:', relevantQuests.map(q => q.title));
 
