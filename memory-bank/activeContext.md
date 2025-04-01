@@ -38,3 +38,4 @@ Update Memory Bank (`activeContext.md`, `progress.md`) following the second refa
 *   Suggestion analysis triggering needs verification (event vs. direct call).
 *   The daily entry flow relies on consolidating checkups before generating the final EOD summary/analysis.
 *   The two-pane layout in `app/journal.tsx` provides a different UX for reviewing daily summaries, separating navigation from content horizontally, and user entry from AI feedback vertically within the content pane.
+*   **Voice-to-Text Implementation:** Currently implementing voice input for journal checkups. Decided to use Cloudflare Workers as the backend proxy (instead of Supabase/Netlify) due to execution time considerations. The worker will call OpenAI's `gpt-4o-mini-transcribe` model. `JournalPanel.tsx` and `TranscriptionAgent.ts` are partially implemented.

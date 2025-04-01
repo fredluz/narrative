@@ -7,16 +7,22 @@
 *   **UI Libraries:** React Native Paper, Expo Vector Icons
 *   **Routing:** Expo Router
 *   **State Management:** React Hooks (useState, useEffect, useCallback), React Context API, Custom Hooks
+*   **Backend-as-a-Service (BaaS):** Supabase (Database)
+    
+*   **Serverless Functions:** Cloudflare Workers (for secure API proxying, e.g., transcription)
 *   **AI APIs:**
     *   DeepSeek (via OpenAI compatible API - primary chat)
     *   Google Gemini (via `generative-ai` SDK - likely for suggestions, status checks, potentially analysis)
+    *   OpenAI (Whisper/gpt-4o-mini-transcribe via Cloudflare Worker for voice-to-text)
 
 ## 2. Development Environment & Tooling
 *   **Package Manager:** npm (inferred from `package.json`, `package-lock.json`)
 *   **Build/Bundling:** Managed by Expo CLI
 *   **Linting/Formatting:** Likely ESLint/Prettier (standard for TypeScript projects, but config files not explicitly provided yet)
 *   **Version Control:** Git (inferred from `.gitignore`)
-*   **Configuration:** Environment variables (`.env.local`) for API keys and potentially other settings.
+*   **Configuration:**
+    *   Environment variables (`.env.local`) for client-side keys/settings.
+    *   Cloudflare Secrets for backend API keys (e.g., OpenAI key for transcription worker).
 
 ## 3. Key Dependencies (Observed/Inferred)
 *   `react`, `react-native`
@@ -36,9 +42,11 @@
 *   **Cross-Platform Compatibility:** Ensuring UI components and native features work consistently across iOS, Android, and Web.
 *   **Offline Support:** No indication of offline support currently. Data operations likely require an active internet connection.
 *   **State Management Complexity:** As the application grows, managing state across contexts, hooks, and local state might become complex.
+*   **Serverless Function Cold Starts:** Cloudflare Workers generally have very low cold start times, but it's a factor to be aware of for user experience.
 
 ## 5. Tool Usage Patterns
 *   **Supabase Client:** Likely initialized once (e.g., in `lib/supabase.ts`) and used across various service files (`journalService.ts`, `tasksService.ts`, etc.).
 *   **AI Clients:** `OpenAI` (for DeepSeek) and `GoogleGenerativeAI` clients are instantiated within the relevant Agent classes (`ChatAgent`, `SuggestionAgent`).
 *   **Custom Hooks:** Used extensively to encapsulate feature-specific logic and state (e.g., `useJournal` for journal data, `useSuggestions` for suggestion interactions).
-*   **Services:** Provide a clear API for interacting with backend resources, separating data logic from UI and state management.
+*   **Services:** Provide a clear API for interacting with backend resources (Supabase), separating data logic from UI and state management.
+*   **Cloudflare Workers:** Used for specific backend tasks requiring secure API key handling or potentially heavier computation offloaded from the client (e.g., transcription proxy). Wrangler CLI used for development and deployment.

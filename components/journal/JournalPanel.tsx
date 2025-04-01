@@ -1,8 +1,9 @@
 // File: components/journal/JournalPanel.tsx
-import React, { useCallback, useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, TextInput } from 'react-native';
+import React, { useCallback, useState, useEffect, useRef } from 'react';
+import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, TextInput, Alert, Platform } from 'react-native';
 import { Card } from 'react-native-paper';
 import { useRouter } from 'expo-router';
+import { Audio } from 'expo-av';
 import { ThemedText } from '@/components/ui/ThemedText';
 import { MaterialIcons } from '@expo/vector-icons';
 import styles from '@/app/styles/global';
@@ -13,6 +14,7 @@ import { journalService } from '@/services/journalService';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@clerk/clerk-expo';
 import { useSuggestions } from '@/contexts/SuggestionContext';
+import { transcriptionAgent } from '@/services/agents/TranscriptionAgent'; // Import the new agent
 
 import { CheckupItem } from './CheckupItem';
 import { AIResponse } from './AIResponse';
@@ -64,8 +66,14 @@ export function JournalPanel({
   const [localTags, setLocalTags] = useState<string>('');
   const [expandedCheckupId, setExpandedCheckupId] = useState<string | null>(null);
   const [hasDailyEntry, setHasDailyEntry] = useState(false);
+  const [recordingStatus, setRecordingStatus] = useState<'idle' | 'recording' | 'transcribing'>('idle');
+  const [audioRecording, setAudioRecording] = useState<Audio.Recording | null>(null);
+  const [audioUri, setAudioUri] = useState<string | null>(null);
+  const recordingInstanceRef = useRef<Audio.Recording | null>(null);
+  const [showDailyEntryOverlay, setShowDailyEntryOverlay] = useState(false); // State for daily entry overlay
 
-  const isLoading = journalLoading || localLoading;
+
+  const isLoading = journalLoading || localLoading || recordingStatus === 'transcribing';
 
   const verifyCurrentUser = React.useMemo(() => {
     return !!authUserId && !!userId && authUserId === userId;
@@ -105,6 +113,14 @@ export function JournalPanel({
     if (verifyCurrentUser) {
         checkDailyEntryStatus();
     }
+    // Clean up recording resources if component unmounts while recording
+    return () => {
+      if (recordingInstanceRef.current) {
+        console.log('[JournalPanel] Unmounting, stopping and unloading recording.');
+        recordingInstanceRef.current.stopAndUnloadAsync().catch(err => console.error("Error stopping recording on unmount:", err));
+        recordingInstanceRef.current = null;
+      }
+    };
   }, [currentDate, authUserId, checkups, verifyCurrentUser]);
 
   const handleEntryChange = useCallback((text: string) => {
@@ -138,12 +154,136 @@ export function JournalPanel({
     }
   }, [currentDate, localEntryText, localTags, saveCurrentCheckup, analyzeJournalEntry, authUserId]);
 
+  // --- Audio Recording Handlers ---
+
+  const requestPermissions = async (): Promise<boolean> => {
+    console.log('[JournalPanel] Requesting Audio Permissions...');
+    const { status } = await Audio.requestPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission required', 'Microphone access is needed for voice entries.');
+      console.log('[JournalPanel] Audio permission denied.');
+      return false;
+    }
+    console.log('[JournalPanel] Audio permission granted.');
+    return true;
+  };
+
+  const startRecording = async () => {
+    const hasPermission = await requestPermissions();
+    if (!hasPermission) return;
+
+    setRecordingStatus('recording');
+    setLocalError(null); // Clear previous errors
+    setAudioUri(null); // Clear previous URI
+
+    try {
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
+
+      console.log('[JournalPanel] Starting recording...');
+      // Define custom recording options for smaller web file size
+      const recordingOptions: Audio.RecordingOptions = {
+        isMeteringEnabled: true,
+        android: { // Keep default Android settings for now
+          extension: '.m4a',
+          outputFormat: Audio.AndroidOutputFormat.MPEG_4,
+          audioEncoder: Audio.AndroidAudioEncoder.AAC,
+          sampleRate: 44100,
+          numberOfChannels: 2,
+          bitRate: 128000,
+        },
+        ios: { // Keep default iOS settings for now
+          extension: '.m4a',
+          outputFormat: Audio.IOSOutputFormat.MPEG4AAC,
+          audioQuality: Audio.IOSAudioQuality.HIGH,
+          sampleRate: 44100,
+          numberOfChannels: 2,
+          bitRate: 128000,
+          linearPCMBitDepth: 16,
+          linearPCMIsBigEndian: false,
+          linearPCMIsFloat: false,
+        },
+        web: {
+          mimeType: 'audio/webm;codecs=opus', // Use efficient Opus codec
+          bitsPerSecond: 64000, // Lower bitrate for smaller size (adjust if needed)
+        },
+      };
+
+      const { recording } = await Audio.Recording.createAsync(recordingOptions);
+      recordingInstanceRef.current = recording; // Store instance in ref
+      setAudioRecording(recording); // Also store in state if needed for UI updates
+      console.log('[JournalPanel] Recording started.');
+
+    } catch (err: any) {
+      console.error('[JournalPanel] Failed to start recording', err);
+      setLocalError('Failed to start recording: ' + err.message);
+      setRecordingStatus('idle');
+      if (recordingInstanceRef.current) {
+        await recordingInstanceRef.current.stopAndUnloadAsync();
+        recordingInstanceRef.current = null;
+      }
+    }
+  };
+
+  const stopRecordingAndTranscribe = async () => {
+    if (!recordingInstanceRef.current) {
+      console.warn('[JournalPanel] stopRecording called but no recording instance found.');
+      setRecordingStatus('idle');
+      return;
+    }
+
+    console.log('[JournalPanel] Stopping recording...');
+    setRecordingStatus('transcribing'); // Indicate transcription process starts now
+
+    try {
+      await recordingInstanceRef.current.stopAndUnloadAsync();
+      const uri = recordingInstanceRef.current.getURI();
+      console.log('[JournalPanel] Recording stopped, URI:', uri);
+      recordingInstanceRef.current = null; // Clear the ref
+      setAudioRecording(null); // Clear state
+
+      if (uri) {
+        setAudioUri(uri); // Store URI for potential retry or debugging
+        // Call the transcription agent
+        const transcript = await transcriptionAgent.requestTranscription(uri);
+        console.log('[JournalPanel] Transcription result:', transcript);
+
+        // Append transcript to existing text
+        const currentText = localEntryText || '';
+        const newText = currentText ? `${currentText}\n${transcript}` : transcript;
+        updateLocalEntryText(currentDate, newText); // Update text via hook
+
+        setRecordingStatus('idle');
+        setAudioUri(null); // Clear URI after successful transcription
+      } else {
+        throw new Error('Recording URI is null after stopping.');
+      }
+    } catch (err: any) {
+      console.error('[JournalPanel] Failed to stop recording or transcribe', err);
+      // Use Alert instead of setting localError state for this specific failure
+      Alert.alert(
+        'Transcription Error',
+        `Sorry, transcription is currently unavailable. Please try again later or type your entry manually.\n\nError: ${err.message || 'Unknown error'}`
+      );
+      // setLocalError(`Transcription failed: ${err.message || 'Unknown error'}`); // Removed this line
+      setRecordingStatus('idle'); // Reset status on error
+      // Keep audioUri in case user wants to retry manually? Or clear it? Clearing for now.
+      setAudioUri(null);
+    }
+  };
+
+  // --- End Audio Recording Handlers ---
+
+
   const handleDailyEntry = useCallback(async () => {
      if (!authUserId || !verifyCurrentUser) {
          console.error("Cannot handle daily entry: Unauthorized");
          return;
      }
-     setLocalLoading(true);
+     setShowDailyEntryOverlay(true); // Show overlay immediately
+     setLocalLoading(true); // Keep for button state
      setLocalError(null);
      const dateStr = formatDate(currentDate); // Define dateStr outside the try block
      try {
@@ -166,7 +306,8 @@ export function JournalPanel({
         const daily = await journalService.getEntry(dateStr, authUserId);
         setHasDailyEntry(!!daily);
      } finally {
-        setLocalLoading(false);
+        setLocalLoading(false); // Clear loading for button state
+        // Do NOT clear showDailyEntryOverlay here
      }
   }, [currentDate, authUserId, verifyCurrentUser, localEntryText, saveCurrentCheckup, router, refreshJournalEntries]); // Added refreshJournalEntries dependency
 
@@ -184,9 +325,7 @@ export function JournalPanel({
     ? `ANALYSIS - ${formattedHeaderDate}`
     : isToday
     ? `TODAY'S JOURNAL - ${formattedHeaderDate}`
-    : `YOUR JOURNAL - ${formattedHeaderDate}`;
-
-
+    : `JOURNAL - ${formattedHeaderDate}`;
   return (
     <Card style={{
       backgroundColor: '#1E1E1E',
@@ -289,7 +428,31 @@ export function JournalPanel({
             <MaterialIcons name="auto-stories" size={24} color={themeColor} /> {/* Icon for archive */}
           </TouchableOpacity>
 
-          {/* REMOVED Daily Entry Button from here */}
+          {/* Add Daily Entry Save Button Here */}
+          <TouchableOpacity
+            style={{
+              padding: 8,
+              borderRadius: 6,
+              backgroundColor: '#333333',
+              borderWidth: 1,
+              borderColor: '#444444',
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 1 },
+              shadowOpacity: 0.2,
+              shadowRadius: 2,
+              elevation: 1,
+              opacity: hasDailyEntry || isLoading ? 0.5 : 1, // Disable visually if entry exists or loading
+            }}
+            onPress={handleDailyEntry}
+            disabled={hasDailyEntry || isLoading} // Disable if entry exists or any loading is active
+          >
+            {/* Use localLoading specifically for the daily entry generation indicator */}
+            {localLoading ? (
+              <ActivityIndicator size="small" color={secondaryColor} /> // Use secondaryColor for consistency
+            ) : (
+              <MaterialIcons name="nightlight-round" size={24} color={secondaryColor} /> // Changed icon and color
+            )}
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -371,13 +534,39 @@ export function JournalPanel({
                       <Text style={{ 
                         color: '#EEEEEE', 
                         fontWeight: 'bold', 
-                        fontSize: 14 
+                        fontSize: 14
                       }}>
                         JOURNAL ENTRY
                       </Text>
-                      <TouchableOpacity
-                        style={{
-                      padding: 8,
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        {/* Microphone Button */}
+                        <TouchableOpacity
+                          style={{
+                            padding: 8,
+                            borderRadius: 6,
+                            backgroundColor: recordingStatus === 'recording' ? themeColor : '#333333', // Highlight when recording
+                            borderWidth: 1,
+                            borderColor: '#444444',
+                            opacity: isLoading && recordingStatus !== 'recording' ? 0.5 : 1, // Dim if generally loading but not recording
+                          }}
+                          onPress={recordingStatus === 'recording' ? stopRecordingAndTranscribe : startRecording}
+                          disabled={isLoading && recordingStatus !== 'recording'} // Disable if generally loading but not recording
+                        >
+                          {recordingStatus === 'transcribing' ? (
+                            <ActivityIndicator size="small" color={secondaryColor} />
+                          ) : (
+                            <MaterialIcons
+                              name={recordingStatus === 'recording' ? "stop-circle" : "mic"}
+                              size={24}
+                              color={recordingStatus === 'recording' ? '#FFFFFF' : secondaryColor} // White icon when recording, secondary otherwise
+                            />
+                          )}
+                        </TouchableOpacity>
+
+                        {/* Save Button */}
+                        <TouchableOpacity
+                          style={{
+                            padding: 8,
                       borderRadius: 6,
                       backgroundColor: '#333333',
                       borderWidth: 1,
@@ -390,16 +579,17 @@ export function JournalPanel({
                           opacity: (!localEntryText.trim() || isLoading) ? 0.5 : 1, // Grey out if disabled
                         }}
                         onPress={handleSaveCheckup}
-                        disabled={!localEntryText.trim() || isLoading} // Disable if text is empty/whitespace or loading
-                      >
-                        {localLoading ? ( // Use localLoading for this specific button's indicator
-                          <ActivityIndicator size="small" color={themeColor} /> 
-                        ) : journalLoading ? ( // Show indicator if journal hook is loading generally
-                           <ActivityIndicator size="small" color={themeColor} />
-                        ) : (
-                          <MaterialIcons name="save" size={24} color={themeColor} />
-                        )}
-                      </TouchableOpacity>
+                          disabled={!localEntryText.trim() || isLoading || recordingStatus !== 'idle'} // Disable if text is empty, loading, or recording/transcribing
+                        >
+                          {localLoading ? ( // Use localLoading for this specific button's indicator
+                            <ActivityIndicator size="small" color={themeColor} />
+                          ) : journalLoading ? ( // Show indicator if journal hook is loading generally
+                             <ActivityIndicator size="small" color={themeColor} />
+                          ) : (
+                            <MaterialIcons name="save" size={24} color={themeColor} />
+                          )}
+                        </TouchableOpacity>
+                      </View>
                     </View>
                     <View style={{ flex: 1, padding: 12 }}>
                       <TextInput
@@ -421,59 +611,9 @@ export function JournalPanel({
                         onChangeText={handleEntryChange}
                         editable={!isLoading}
                       />
+                      {/* Removed extra /> above this line */}
                     </View>
-                  </View>
-                )}
-                {/* AI Response Section */}
-                {!showAnalysis && latestAiResponse && (
-                  <View style={{
-                    flex: 1,
-                    backgroundColor: '#252525',
-                    borderRadius: 6,
-                    borderWidth: 1,
-                    borderColor: '#333333',
-                  }}>
-                    <View style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      padding: 12,
-                      borderBottomWidth: 1,
-                      borderBottomColor: '#333333'
-                    }}>
-                      <View style={{ 
-                        flexDirection: 'row',
-                        alignItems: 'center'
-                      }}>
-                        <MaterialIcons 
-                          name="chat" 
-                          size={16} 
-                          color={secondaryColor}
-                          style={{ marginRight: 6 }}
-                        />
-                        <Text style={{ 
-                          color: '#EEEEEE',
-                          fontWeight: 'bold',
-                          fontSize: 14,
-                          textShadowColor: 'rgba(0, 0, 0, 0.25)',
-                          textShadowOffset: { width: 0, height: 1 },
-                          textShadowRadius: 2
-                        }}>
-                          AI RESPONSE
-                        </Text>
-                      </View>
-                    </View>
-                    <ScrollView style={{ flex: 1 }}>
-                      <View style={{ padding: 12 }}>
-                        <AIResponse
-                          response={latestAiResponse}
-                          loading={isLoading}
-                          aiGenerating={journalLoading}
-                          fullColumnMode={fullColumnMode}
-                          secondaryColor={secondaryColor}
-                          entryUserId={authUserId}
-                        />
-                      </View>
-                    </ScrollView>
+                    {/* Removed misplaced </ScrollView> above this line */}
                   </View>
                 )}
               </View>
@@ -481,8 +621,8 @@ export function JournalPanel({
           )}
         </View>
 
-        {/* Loading Overlay for Daily Entry Generation */}
-        {localLoading && (
+        {/* Loading Overlay for Daily Entry Generation - Show until navigation */}
+        {showDailyEntryOverlay && (
           <View style={{
             position: 'absolute',
             top: 0,

@@ -1,0 +1,23 @@
+# Top-level configuration
+name = "questlog-workers" # A name for your overall project/service containing workers
+compatibility_date = "2024-03-20" # Use a recent date
+
+# Define the transcription worker
+[[workers]]
+name = "transcribe-audio" # Specific name for this worker function
+main = "workers/transcribe-audio/index.ts" # Path to the worker script
+compatibility_flags = ["nodejs_compat"] # Enable Node.js compatibility
+
+# Define secrets for this specific worker
+# Values are set via CLI: wrangler secret put <SECRET_NAME>
+[workers.secrets]
+OPENAI_API_KEY = "" # The worker code expects env.OPENAI_API_KEY
+
+# Environment variables (optional, can be overridden by secrets)
+[workers.vars]
+# EXAMPLE_VAR = "example_value"
+
+# KV Namespaces (if needed, uncomment and configure)
+# [[workers.kv_namespaces]]
+# binding = "MY_KV_NAMESPACE"
+# id = "<YOUR_KV_NAMESPACE_ID>"
