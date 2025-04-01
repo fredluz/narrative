@@ -21,7 +21,7 @@ import CompactTaskSuggestion from '../suggestions/CompactTaskSuggestion';
 import { TaskSuggestion, QuestSuggestion } from '@/services/agents/SuggestionAgent';
 import { CreateTaskModal } from '@/components/modals/CreateTaskModal';
 import { fetchQuests } from '@/services/questsService';
-import { useSupabase } from '@/contexts/SupabaseContext';
+import { useAuth } from '@clerk/clerk-expo'; // Import useAuth from Clerk
 import { personalityService } from '@/services/personalityService';
 import { ActivityIndicator } from 'react-native';
 
@@ -58,7 +58,7 @@ export function ChatInterface({
   const [currentTaskModal, setCurrentTaskModal] = useState<TaskSuggestion | null>(null);
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [quests, setQuests] = useState<Array<{ id: number; title: string }>>([]);
-  const { session } = useSupabase();
+  const { userId: authUserId } = useAuth(); // Get logged-in user's ID
   const [personalityName, setPersonalityName] = useState('ASSISTANT');
 
   // Define message status colors
@@ -278,9 +278,10 @@ export function ChatInterface({
     }
   };
 
+  // Fetch personality based on the logged-in user's ID
   useEffect(() => {
-    if (session?.user?.id) {
-      personalityService.getUserPersonality(session.user.id)
+    if (authUserId) {
+      personalityService.getUserPersonality(authUserId)
         .then(personality => {
           switch(personality) {
             case 'johnny':
@@ -302,8 +303,11 @@ export function ChatInterface({
           console.error('Error getting personality:', error);
           setPersonalityName('ASSISTANT'); // Fallback to default
         });
+    } else {
+      // Reset personality if user logs out
+      setPersonalityName('ASSISTANT');
     }
-  }, [session?.user?.id]);
+  }, [authUserId]); // Depend on the logged-in user's ID
 
   return (
     <>
@@ -889,6 +893,7 @@ export function ChatInterface({
           priority: currentTaskModal.priority || 'medium',
           subtasks: currentTaskModal.subtasks,
           user_id: userId
+          clerk_id: 
         } : undefined}
       />
     </>

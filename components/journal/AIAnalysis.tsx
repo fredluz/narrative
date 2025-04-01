@@ -3,8 +3,7 @@ import { View, ScrollView, ActivityIndicator } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { ThemedText } from '@/components/ui/ThemedText';
 import { useTheme } from '@/contexts/ThemeContext';
-import { useSupabase } from '@/contexts/SupabaseContext';
-import { requireOwnership } from '@/utils/auth';
+import { useAuth } from '@clerk/clerk-expo'; // Import useAuth from Clerk
 
 interface AIAnalysisProps {
   analysis: string | null;
@@ -27,34 +26,40 @@ export function AIAnalysis({
   quests = [],
   onCreateTask
 }: AIAnalysisProps) {
-  const { session } = useSupabase();
+  const { userId: authUserId } = useAuth(); // Get logged-in user's ID
   const { secondaryColor } = useTheme();
 
-  const { allowed, message } = React.useMemo(() => 
-    requireOwnership(session, entryUserId),
-    [session, entryUserId]
-  );
-  
+  // Perform ownership check directly using Clerk's authUserId and the entryUserId prop
+  const isOwner = React.useMemo(() => {
+    // User must be logged in (authUserId exists) AND their ID must match the entry's user ID
+    return !!authUserId && !!entryUserId && authUserId === entryUserId;
+  }, [authUserId, entryUserId]);
+
   const handleCreateTask = React.useCallback(async (taskData: any) => {
-    if (!session?.user?.id) {
-      console.warn("Cannot create task: User not logged in");
+    // Use authUserId for check
+    if (!authUserId) {
+      console.warn("Cannot create task: User not logged in (Clerk)");
       return;
     }
 
-    if (!allowed) {
+    // Use isOwner for permission check
+    if (!isOwner) {
       console.error("Cannot create task: User does not own this entry");
       return;
     }
-    
+
     if (onCreateTask) {
       await onCreateTask({
         ...taskData,
-        user_id: session.user.id
+        user_id: authUserId // Use Clerk userId
       });
     }
-  }, [onCreateTask, session?.user?.id, allowed]);
+  }, [onCreateTask, authUserId, isOwner]); // Depend on Clerk userId and ownership status
 
-  if (!allowed) {
+  // If the logged-in user is not the owner, display an unauthorized message
+  if (!isOwner) {
+    // Define a simple message for unauthorized access
+    const message = "You do not have permission to view this analysis.";
     return (
       <View style={{ 
         backgroundColor: 'rgba(15, 15, 15, 0.8)',

@@ -12,7 +12,7 @@ export interface JournalEntry {
   ai_analysis: string | null; // Allow null from DB
   ai_response: string | null; // Allow null from DB
   date?: string; // Client-side convenience property
-  user_id: string;
+  clerk_id: string;
 }
 
 // Interface for Checkup entries from checkup_entries table
@@ -24,7 +24,7 @@ export interface CheckupEntry {
   // Foreign key to journal_entries.id (linking each checkup to its associated daily entry)
   daily_entry_id: string | null; // Should be string if referencing UUID
   ai_checkup_response: string | null; // AI response for individual checkups
-  user_id: string;
+  clerk_id: string;
 }
 
 // Instantiate the JournalAgent (ensure this uses the updated version)
@@ -58,7 +58,7 @@ export const journalService = {
       const { data, error } = await supabase
         .from('journal_entries')
         .select('*')
-        .eq('user_id', userId)
+        .eq('clerk_id', userId)
         .gte('created_at', startOfDay)
         .lte('created_at', endOfDay)
         .order('created_at', { ascending: false })

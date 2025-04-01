@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react'; // Added useCallback
 import { supabase } from '@/lib/supabase';
 import type { Task } from '@/app/types';
-import { useSupabase } from '@/contexts/SupabaseContext';
+// import { useSupabase } from '@/contexts/SupabaseContext'; // Removed Supabase session
+import { useAuth } from '@clerk/clerk-expo'; // Import useAuth from Clerk
 
 // Define types for status
 export type TaskStatus = 'ToDo' | 'InProgress' | 'Done';
@@ -23,7 +24,7 @@ export async function fetchTasks(userId: string): Promise<Task[]> {
         end_date
       )
     `)
-    .eq('user_id', userId)
+    .eq('clerk_id', userId) // Use clerk_id
     .order('scheduled_for', { ascending: true });
 
   if (error) {
@@ -35,12 +36,12 @@ export async function fetchTasks(userId: string): Promise<Task[]> {
   return data as Task[];
 }
 
-export async function fetchTasksByQuest(questId: number, userId: string): Promise<Task[]> {
+export async function fetchTasksByQuest(questId: number, userId: string): Promise<Task[]> { // userId is now Clerk ID (text)
   const { data, error } = await supabase
     .from('tasks')
     .select('*')
     .eq('quest_id', questId)
-    .eq('user_id', userId)
+    .eq('clerk_id', userId) // Use clerk_id
     .order('scheduled_for', { ascending: true });
 
   if (error) throw error;
@@ -66,7 +67,7 @@ export async function getTasksByDate(date: string, userId: string): Promise<Task
         end_date
       )
     `)
-    .eq('user_id', userId)
+    .eq('clerk_id', userId) // Use clerk_id
     .gte('scheduled_for', startOfDay)
     .lte('scheduled_for', endOfDay)
     .order('scheduled_for', { ascending: true });
@@ -88,38 +89,23 @@ export async function getTasksByDate(date: string, userId: string): Promise<Task
  */
 export async function updateTask(taskId: number, updateData: Record<string, any>, userId: string): Promise<Task> {
   console.log('[tasksService] Updating task:', { taskId, fields: Object.keys(updateData) });
-  
-  // First verify ownership
-  const { data: task, error: fetchError } = await supabase
-    .from('tasks')
-    .select('user_id')
-    .eq('id', taskId)
-    .single();
 
-  if (fetchError) {
-    console.error('[tasksService] Error verifying task ownership:', fetchError);
-    throw new Error(`Failed to verify task ownership: ${fetchError.message}`);
-  }
+  // Ownership check removed - RLS handles this based on the JWT
 
-  if (!task || task.user_id !== userId) {
-    console.error('[tasksService] Cannot update task: User does not own this task');
-    throw new Error('You do not have permission to update this task');
-  }
-  
   // Add updated_at timestamp if not provided
   if (!updateData.updated_at) {
     updateData.updated_at = new Date().toISOString();
   }
-  
-  // Perform the update
+
+  // Perform the update - RLS policy will enforce ownership
   const { data, error } = await supabase
     .from('tasks')
     .update(updateData)
     .eq('id', taskId)
-    .eq('user_id', userId)
+    // .eq('user_id', userId) // This check is now handled by RLS using clerk_id
     .select()
     .single();
-  
+
   if (error) {
     console.error('[tasksService] Error updating task:', error);
     throw new Error(`Failed to update task: ${error.message}`);
@@ -177,22 +163,28 @@ export async function createTask(taskData: {
   priority: 'high' | 'medium' | 'low';
   subtasks?: string;
   tags?: string[];
-  user_id: string;
+  user_id: string; // This is the Clerk ID (text) coming from the app
 }): Promise<Task> {
   console.log('Creating new task:', taskData);
-  
+
+  // Map the incoming user_id (Clerk ID) to the clerk_id column
+  // Omit the user_id field from the object being inserted into the DB
+  const { user_id: clerkId, ...restData } = taskData;
+
   const newTask = {
-    ...taskData,
+    ...restData,
+    clerk_id: clerkId, // Insert Clerk ID into the correct column
+    // user_id: undefined, // Explicitly ensure the old uuid column isn't set (or let default handle if applicable)
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
   };
-  
+
   const { data, error } = await supabase
     .from('tasks')
     .insert(newTask)
     .select()
     .single();
-  
+
   if (error) {
     console.error('Error creating task:', error);
     throw new Error(`Failed to create task: ${error.message}`);
@@ -219,7 +211,7 @@ export function getNextStatus(currentStatus: string): TaskStatus {
 }
 
 // New function to fetch quest tasks in Supabase
-export async function fetchQuestTasks(questId: number, userId: string) {
+export async function fetchQuestTasks(questId: number, userId: string) { // userId is now Clerk ID (text)
   // First verify quest ownership
   const { data: quest, error: questError } = await supabase
     .from('quests')
@@ -241,7 +233,7 @@ export async function fetchQuestTasks(questId: number, userId: string) {
     .from('tasks')
     .select('*')
     .eq('quest_id', questId)
-    .eq('user_id', userId)
+    .eq('clerk_id', userId) // Use clerk_id
     .order('scheduled_for', { ascending: true });
 
   if (error) throw error;
@@ -251,41 +243,17 @@ export async function fetchQuestTasks(questId: number, userId: string) {
 // Delete task function
 export async function deleteTask(taskId: number, userId: string): Promise<void> {
   console.log('[tasksService] Starting task deletion process', { taskId, userId });
-  
-  // First verify ownership
-  console.log('[tasksService] Verifying task ownership');
-  const { data: task, error: fetchError } = await supabase
-    .from('tasks')
-    .select('user_id')
-    .eq('id', taskId)
-    .single();
 
-  if (fetchError) {
-    console.error('[tasksService] Error verifying task ownership:', fetchError);
-    throw new Error(`Failed to verify task ownership: ${fetchError.message}`);
-  }
+  // Ownership check removed - RLS handles this based on the JWT
 
-  if (!task) {
-    console.error('[tasksService] No task found with ID:', taskId);
-    throw new Error('Task not found');
-  }
+  console.log('[tasksService] Proceeding with deletion (RLS will verify ownership)');
 
-  if (task.user_id !== userId) {
-    console.error('[tasksService] Task ownership verification failed', { 
-      taskUserId: task.user_id, 
-      requestingUserId: userId 
-    });
-    throw new Error('You do not have permission to delete this task');
-  }
-
-  console.log('[tasksService] Task ownership verified, proceeding with deletion');
-  
   const { error } = await supabase
     .from('tasks')
     .delete()
-    .eq('id', taskId)
-    .eq('user_id', userId);
-  
+    .eq('id', taskId);
+    // .eq('clerk_id', userId); // This check is now handled by RLS using clerk_id
+
   if (error) {
     console.error('[tasksService] Error during task deletion:', error);
     throw new Error(`Failed to delete task: ${error.message}`);
@@ -336,15 +304,17 @@ export function useTasks(providedUserId?: string) {
   const [taskListVisible, setTaskListVisible] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { session } = useSupabase();
+  const { userId: authUserId } = useAuth(); // Get userId from Clerk
 
-  // Use provided userId if available, otherwise fall back to session user
-  const userId = providedUserId || session?.user?.id;
+  // Use provided userId if available, otherwise fall back to Clerk user
+  const userId = providedUserId || authUserId;
 
-  // Load tasks
-  const loadTasks = async () => {
+  // Load tasks - wrapped in useCallback
+  const loadTasks = useCallback(async () => {
     if (!userId) {
       console.warn("useTasks: No userId provided, skipping task load");
+      setTasks([]); // Clear tasks if no user
+      setLoading(false); // Ensure loading stops
       return;
     }
     
@@ -358,35 +328,44 @@ export function useTasks(providedUserId?: string) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [userId]); // Depend on the resolved userId
 
   // Initial load and subscription setup
   useEffect(() => {
-    if (!userId) return;
-    
-    loadTasks();
+    if (!userId) {
+        setTasks([]); // Clear tasks if user logs out or isn't available initially
+        return; // Exit if no userId
+    }
+
+    loadTasks(); // Initial load
 
     // Set up real-time subscription for this user's tasks
     const subscription = supabase
       .channel('tasks_changes')
-      .on('postgres_changes', 
-        { 
-          event: '*', 
-          schema: 'public', 
+      .on('postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
           table: 'tasks',
-          filter: `user_id=eq.${userId}`
+          filter: `clerk_id=eq.${userId}` // Use clerk_id in filter
         },
         (payload) => {
           console.log('Task change received:', payload);
           loadTasks(); // Reload all tasks when any change occurs
         }
       )
-      .subscribe();
+      .subscribe((status, err) => { // Add error handling for subscription
+        if (err) {
+          console.error('Supabase subscription error in useTasks:', err);
+          setError('Subscription error: ' + err.message);
+        }
+      });
 
+    // Cleanup function
     return () => {
       subscription.unsubscribe();
     };
-  }, [userId]);
+  }, [userId, loadTasks]); // Depend on userId and loadTasks callback
 
   return {
     tasks,

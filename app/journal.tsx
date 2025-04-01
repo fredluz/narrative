@@ -9,12 +9,12 @@ import { journalStyles } from '@/app/styles/journalStyles';
 import { useJournal } from '@/hooks/useJournal';
 import { createTask } from '@/services/tasksService';
 import { fetchQuests } from '@/services/questsService';
-import { useSupabase } from '@/contexts/SupabaseContext';
+import { useAuth } from '@clerk/clerk-expo'; // Import useAuth from Clerk
 
 export default function JournalScreen() {
-  const { session } = useSupabase();
+  const { userId } = useAuth(); // Get userId from Clerk
   const { themeColor, secondaryColor } = useTheme();
-  const { 
+  const {
     currentDate, 
     latestAiResponse, 
     checkups, 
@@ -33,25 +33,28 @@ export default function JournalScreen() {
   // Load quests on mount with user ID
   useEffect(() => {
     const loadQuests = async () => {
-      if (!session?.user?.id) {
-        console.warn("Cannot load quests: User not logged in");
+      // Use Clerk userId for check
+      if (!userId) {
+        console.warn("Cannot load quests: User not logged in (Clerk)");
+        setQuests([]); // Clear quests if logged out
         return;
       }
 
       try {
-        const loadedQuests = await fetchQuests(session.user.id);
+        const loadedQuests = await fetchQuests(userId); // Use Clerk userId
         setQuests(loadedQuests.map(q => ({ id: q.id, title: q.title })));
       } catch (err) {
-        console.error('Error loading quests:', { error: err, userId: session.user.id });
+        console.error('Error loading quests:', { error: err, userId: userId });
       }
     };
     loadQuests();
-  }, [session?.user?.id]);
+  }, [userId]); // Depend on Clerk userId
 
   // Handle task creation from recommendations with user ID
   const handleCreateTask = useCallback(async (taskData: any) => {
-    if (!session?.user?.id) {
-      console.warn("Cannot create task: User not logged in");
+    // Use Clerk userId for check
+    if (!userId) {
+      console.warn("Cannot create task: User not logged in (Clerk)");
       return;
     }
 
@@ -59,12 +62,12 @@ export default function JournalScreen() {
       await createTask({
         ...taskData,
         created_at: new Date().toISOString(),
-        user_id: session.user.id
+        user_id: userId // Use Clerk userId
       });
     } catch (err) {
-      console.error('Error creating task:', { error: err, userId: session.user.id });
+      console.error('Error creating task:', { error: err, userId: userId });
     }
-  }, [session?.user?.id]);
+  }, [userId]); // Depend on Clerk userId
 
   // Get dates for the quick date selector
   const getDatesForSelector = () => {
@@ -135,7 +138,8 @@ export default function JournalScreen() {
 
   return (
     <SafeAreaView style={journalStyles.container}>
-      {!session?.user?.id ? (
+      {/* Use Clerk userId for login check */}
+      {!userId ? (
         <View style={journalStyles.contentContainer}>
           <Card style={[journalStyles.insightCard, { borderLeftColor: secondaryColor }]}>
             <ThemedText style={journalStyles.insightText}>

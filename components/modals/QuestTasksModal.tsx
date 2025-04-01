@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, Modal, ScrollView, TouchableOpacity } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useSupabase } from '@/contexts/SupabaseContext';
+import { useAuth } from '@clerk/clerk-expo'; // Import useAuth from Clerk
 import { useTheme } from '@/contexts/ThemeContext';
 import { fetchQuestTasks } from '@/services/tasksService';
 import { Task, Quest } from '@/app/types';
@@ -13,25 +13,29 @@ interface QuestTasksModalProps {
 }
 
 export function QuestTasksModal({ visible, onClose, quest }: QuestTasksModalProps) {
-  const { session } = useSupabase();
+  const { userId } = useAuth(); // Get userId from Clerk
   const { themeColor } = useTheme();
   const [tasks, setTasks] = useState<Task[]>([]);
 
   useEffect(() => {
     const loadData = async () => {
-      if (!session?.user?.id || !quest) return;
+      // Use Clerk userId for check
+      if (!userId || !quest) return;
       try {
-        const questTasks = await fetchQuestTasks(quest.id, session.user.id);
+        const questTasks = await fetchQuestTasks(quest.id, userId); // Use Clerk userId
         setTasks(questTasks);
       } catch (err) {
         console.error('Error loading quest tasks:', err);
       }
     };
     
-    if (visible) {
+    if (visible && userId) { // Ensure userId exists before loading
       loadData();
+    } else if (visible && !userId) {
+        console.warn("QuestTasksModal: Cannot load tasks, user not logged in.");
+        setTasks([]); // Clear tasks if user logs out while modal might be open
     }
-  }, [visible, quest, session?.user?.id]);
+  }, [visible, quest, userId]); // Depend on Clerk userId
 
   return (
     <Modal

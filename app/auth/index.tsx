@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, Dimensions, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, Dimensions, StyleSheet } from 'react-native'; // Removed TouchableOpacity, ScrollView
 import { useRouter } from 'expo-router';
-import { MaterialIcons } from '@expo/vector-icons';
-import { authService } from '@/services/authService';
-import { useTheme } from '@/contexts/ThemeContext';
+import { useTheme } from '@/contexts/ThemeContext'; // Keep for potential styling
 import { colors } from '@/app/styles/global';
-import { useSupabase } from '@/contexts/SupabaseContext';
+import { SignedIn, SignedOut, useAuth, } from '@clerk/clerk-expo'; 
+import { SignIn, SignUp } from '@clerk/clerk-expo/web'; // Import SignIn component from Clerk
 const asciiArt = `
 ███╗   ██╗                                          
  ███╗   ██╗   █████╗   ███████╗  ███████╗   █████╗   ██████╗  ██╗  ██╗   ██╗  ███████╗
@@ -25,13 +24,10 @@ const CHAR_SET =
 
 export default function AuthScreen() {
   const router = useRouter();
-  const { themeColor } = useTheme();
-  const { session } = useSupabase();
-
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  // Track window dims
+  // const { themeColor } = useTheme(); // Keep theme if needed for Clerk styling later
+  const { isLoaded, isSignedIn } = useAuth(); // Use Clerk's auth state
+  const { themeColor } = useTheme(); // Use theme color from context
+  // Track window dims for Matrix effect
   const [screenDims, setScreenDims] = useState(Dimensions.get('window'));
   // Only store half as many columns
   const [matrixIndices, setMatrixIndices] = useState<number[][]>([]);
@@ -56,12 +52,13 @@ export default function AuthScreen() {
     return () => clearInterval(intervalId);
   }, [matrixIndices]);
 
-  // If session found, navigate
+  // Redirect if signed in (Clerk handles session state)
   useEffect(() => {
-    if (session) {
-      router.replace('/landing');
+    // Ensure Clerk is loaded before checking isSignedIn
+    if (isLoaded && isSignedIn) {
+      router.replace('/landing'); // Or wherever authenticated users should go
     }
-  }, [session]);
+  }, [isLoaded, isSignedIn, router]);
 
   const initMatrix = () => {
     const columnWidth = 20;
@@ -104,43 +101,7 @@ export default function AuthScreen() {
     });
   };
 
-  const handleGoogleSignIn = async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const { data, error: signInError } = await authService.signInWithOAuth('google');
-      
-      if (signInError) {
-        throw signInError;
-      }
-      
-      // Add null check for data
-      if (!data) {
-        throw new Error('No data received from authentication service');
-      }
-      
-      // Handle URL-based OAuth flow (redirect case)
-      if ('url' in data) {
-        // For web platforms, redirect to the OAuth URL
-        window.location.href = data.url;
-        return;
-      }
-      
-      // Handle direct session return case
-      if ('session' in data) {
-        // If we have a session already, we can navigate directly
-        router.replace('/landing');
-        return;
-      }
-      
-      // Fallback if neither case matches
-      router.replace('/auth/loading');
-    } catch (err: any) {
-      setError(err.message || 'Google sign-in failed.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  // Removed handleGoogleSignIn function
 
   /**
    * For each row:
@@ -171,26 +132,21 @@ export default function AuthScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Matrix: wave + reflection */}
       <View style={styles.backgroundContainer}>{renderMatrix()}</View>
-
-      {/* Auth UI */}
+      {/* ASCII Art Title */}
+      <Text style={styles.asciiTitle}>{asciiArt}</Text>
+      {/* Content Area */}
       <View style={styles.content}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <Text style={[styles.asciiArt, { color: themeColor }]}>
-            {asciiArt}
-          </Text>
-        </ScrollView>
-        <Text style={styles.subtitle}>Your Digital Journey</Text>
-        {error && <Text style={styles.errorText}>{error}</Text>}
-        <TouchableOpacity
-          style={[styles.googleButton, { borderColor: themeColor }]}
-          onPress={handleGoogleSignIn}
-          disabled={isLoading}
-        >
-          <MaterialIcons name="login" size={24} color={themeColor} style={styles.buttonIcon} />
-          <Text style={[styles.buttonText, { color: themeColor }]}>
-            {isLoading ? 'Signing in...' : 'Sign in with Google'}
-          </Text>
-        </TouchableOpacity>
+        {/* Clerk handles the actual Sign In/Sign Up UI via its Provider configuration */}
+        {/* We show the Matrix background when signed out */}
+        <SignedOut>
+           <Text style={styles.subtitle}>Your Digital Journey</Text>
+           {/* Clerk's Sign In Button */}
+           <SignIn />
+          </SignedOut>
+        {/* SignedIn might just show a loading indicator briefly before redirect */}
+        <SignedIn>
+          <Text style={styles.loadingText}>Loading...</Text>
+        </SignedIn>
       </View>
     </View>
   );
@@ -238,36 +194,44 @@ const styles = StyleSheet.create({
     maxWidth: 600,
     padding: 20,
     alignItems: 'center',
-    zIndex: 1,
+    zIndex: 1, // Ensure content is above matrix
+    backgroundColor: 'rgba(0,0,0,0.6)', // Semi-transparent background for readability
+    borderRadius: 10,
   },
-  asciiArt: {
-    fontFamily: 'monospace',
-    fontSize: 8,
-    textAlign: 'left',
+  title: { // Added title style
+    fontSize: 48, // Larger title
+    fontWeight: 'bold',
+    color: '#FFF', // White title
+    fontFamily: 'monospace', // Consistent font
     marginBottom: 10,
+    textAlign: 'center',
   },
   subtitle: {
     fontSize: 18,
     fontFamily: 'monospace',
-    color: '#999',
-    marginBottom: 20,
+    color: '#CCC', // Lighter grey subtitle
+    marginBottom: 40, // More space below subtitle
+    textAlign: 'center',
   },
-  googleButton: {
-    flexDirection: 'row',
-    padding: 16,
-    borderRadius: 8,
-    borderWidth: 1,
-    justifyContent: 'center',
+  loadingText: { // Style for loading text when signed in
+      fontSize: 18,
+      color: '#FFF',
+      fontFamily: 'monospace',
   },
-  buttonIcon: {
-    marginRight: 8,
-  },
-  buttonText: {
+  // Button styles
+  
+  signInText: {
+    color: '#FFFFFF',
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: 'monospace',
+    fontWeight: 'bold',
+    textAlign: 'center',
   },
-  errorText: {
-    color: colors.error,
-    marginBottom: 16,
-  },
+  asciiTitle: {
+    color: '#FFFFFF',
+    fontSize: 8,
+    fontFamily: 'monospace',
+    marginBottom: 20,
+    opacity: 0.8,
+  }
 });

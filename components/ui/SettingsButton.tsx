@@ -1,26 +1,23 @@
 import React, { useState } from 'react';
 import { View, Pressable, Text, StyleSheet, Modal, TouchableOpacity } from 'react-native';
-import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons'; // Removed MaterialIcons if not used elsewhere
 import { useTheme } from '@/contexts/ThemeContext';
-import { useSupabase } from '@/contexts/SupabaseContext';
+import { useAuth } from '@clerk/clerk-expo'; // Import useAuth from Clerk
 import { ColorPicker } from './ColorPicker';
-import { authService } from '@/services/authService';
-import { PersonalityType, personalities } from '@/services/agents/PersonalityPrompts';
-import { personalityService } from '@/services/personalityService';
 import { PersonalityButton } from './PersonalityButton';
 
 export function SettingsButton() {
   const [isOpen, setIsOpen] = useState(false);
   const { themeColor, secondaryColor, setThemeColor, setSecondaryColor, textColor } = useTheme();
-  const { session } = useSupabase();
+  const { signOut } = useAuth(); // Get signOut from Clerk
 
   const handleLogout = async () => {
     try {
-      const { error } = await authService.signOut();
-      if (error) throw error;
+      await signOut(); // Use Clerk's signOut
       setIsOpen(false);
+      // No need to check for error explicitly here, Clerk handles errors internally or throws
     } catch (error) {
-      console.error('Error signing out:', error);
+      console.error('Error signing out with Clerk:', error);
     }
   };
 

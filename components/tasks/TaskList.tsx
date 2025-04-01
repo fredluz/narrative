@@ -17,61 +17,76 @@ import styles, { colors } from '@/app/styles/global';
 
 import { useTasks, updateTaskStatus, getNextStatus, TaskStatus } from '@/services/tasksService';
 import { useQuestUpdate } from '@/contexts/QuestUpdateContext';
-import { useSupabase } from '@/contexts/SupabaseContext';
+import { useAuth } from '@clerk/clerk-expo'; // Import useAuth from Clerk
 
 interface TaskListProps {
   compactMode?: boolean;
-  userId?: string; // Add userId as a prop
+  // userId prop might become redundant if we always use the logged-in user's ID from Clerk
+  // For now, keep it for potential flexibility (e.g., viewing another user's tasks if permissions allow)
+  userId?: string; // Keep only one definition
 }
 
-export function TaskList({ compactMode = false, userId }: TaskListProps) {
-  const { session } = useSupabase();
+export function TaskList({ compactMode = false, userId: propUserId }: TaskListProps) {
+  const { userId: authUserId } = useAuth(); // Get logged-in user's ID from Clerk
   const { shouldUpdate, resetUpdate } = useQuestUpdate();
   const { themeColor, secondaryColor } = useTheme();
   const [containerHeight, setContainerHeight] = useState<number>(0);
   const [availableSpace, setAvailableSpace] = useState<number>(0);
   const [localError, setLocalError] = useState<string | null>(null);
-  
-  // Pass userId to useTasks hook and ensure it's not undefined
-  const { tasks, loading, error, reload: loadTasks } = useTasks(userId || '');
-  
+
+  // Determine which userId to use: the one from props or the logged-in user's ID
+  // Default to the logged-in user if propUserId is not provided
+  const targetUserId = propUserId || authUserId;
+
+  // Only call useTasks if we have a valid targetUserId
+  const { tasks, loading, error, reload: loadTasks } = useTasks(targetUserId ?? ''); // Pass empty string if null/undefined to satisfy hook, but guard usage
+
   // Clear local error when tasks reload
   useEffect(() => {
     setLocalError(null);
   }, [tasks]);
 
-  // Verify current user has permission to update tasks
-  const verifyCurrentUser = React.useMemo(() => {
-    if (!session?.user?.id || !userId) return false;
-    return session.user.id === userId;
-  }, [session?.user?.id, userId]);
+  // Verify current logged-in user has permission to update tasks shown (if targetUserId is defined)
+  const canUpdateTasks = React.useMemo(() => {
+    // User must be logged in (authUserId exists) AND
+    // they must be viewing their own tasks (targetUserId matches authUserId)
+    return !!authUserId && !!targetUserId && authUserId === targetUserId;
+  }, [authUserId, targetUserId]);
 
-  // Reload tasks when quest updates occur
+  // Reload tasks when quest updates occur or targetUserId changes
   useEffect(() => {
-    if (shouldUpdate && userId) {
+    if (shouldUpdate && targetUserId) {
       loadTasks();
       resetUpdate();
     }
-  }, [shouldUpdate, userId, loadTasks, resetUpdate]);
+  }, [shouldUpdate, targetUserId, loadTasks, resetUpdate]);
 
   const toggleTaskCompletion = async (taskId: number, currentStatus: string, taskUserId: string) => {
-    if (!userId || !verifyCurrentUser) {
-      setLocalError("Please log in to update tasks.");
+    // Use canUpdateTasks for permission check
+    if (!canUpdateTasks) {
+      setLocalError("You don't have permission to update these tasks.");
       return;
+    }
+    // Ensure the task actually belongs to the target user (redundant check if canUpdateTasks is true, but safe)
+    if (taskUserId !== targetUserId) {
+       setLocalError("Task ownership mismatch."); // Should ideally not happen if canUpdateTasks is true
+       return;
     }
 
-    // Verify task ownership
-    if (taskUserId !== userId) {
-      setLocalError("You don't have permission to update this task.");
-      return;
-    }
-    
     try {
       const newStatus = getNextStatus(currentStatus);
-      await updateTaskStatus(taskId, newStatus, userId);
-      await loadTasks(); // Added await to ensure tasks are reloaded after update
+      // Use authUserId for the update operation, as it's the logged-in user performing the action
+      // Ensure authUserId is not null before calling updateTaskStatus
+      if (authUserId) {
+        await updateTaskStatus(taskId, newStatus, authUserId);
+        await loadTasks(); // Reload tasks for the targetUserId
+      } else {
+         console.error("Cannot update task status: authUserId is null.");
+         setLocalError("Authentication error.");
+      }
     } catch (err) {
-      console.error("Failed to update task status:", { error: err, userId: userId });
+      // Correct variable name here
+      console.error("Failed to update task status:", { error: err, userId: authUserId });
       setLocalError("Failed to update task status");
     }
   };
@@ -142,12 +157,17 @@ export function TaskList({ compactMode = false, userId }: TaskListProps) {
         </TouchableOpacity>
       </View>
 
-      {loading ? (
+      {/* Add check for targetUserId before rendering content */}
+      {!targetUserId ? (
+         <View style={{ padding: compactMode ? 10 : 20, alignItems: 'center' }}>
+           <Text style={{ color: colors.textMuted }}>User not identified.</Text>
+         </View>
+      ) : loading ? (
         <View style={{ padding: compactMode ? 10 : 20, alignItems: 'center' }}>
           <ActivityIndicator size={compactMode ? "small" : "large"} color={themeColor} />
         </View>
       ) : error ? (
-        <View style={{ 
+        <View style={{
           margin: compactMode ? 10 : 15,
           padding: compactMode ? 8 : 10, 
           backgroundColor: '#3A2222', 
@@ -207,9 +227,9 @@ export function TaskList({ compactMode = false, userId }: TaskListProps) {
                       <TouchableOpacity
                         onPress={() => toggleTaskCompletion(task.id, task.status, task.user_id)}
                         style={{ padding: compactMode ? 4 : 8 }}
-                        disabled={!verifyCurrentUser || task.user_id !== userId}
+                        disabled={!canUpdateTasks} // Disable based on canUpdateTasks
                       >
-                        <MaterialIcons 
+                        <MaterialIcons
                           name={
                             task.status === 'Done' ? 'check-circle' :
                             task.status === 'InProgress' ? 'timelapse' :
@@ -217,7 +237,7 @@ export function TaskList({ compactMode = false, userId }: TaskListProps) {
                           }
                           size={compactMode ? 18 : 22}
                           color={
-                            !verifyCurrentUser || task.user_id !== userId ? '#444444' :
+                            !canUpdateTasks ? '#444444' : // Use canUpdateTasks for color logic
                             task.status === 'Done' ? '#4CAF50' :
                             task.status === 'InProgress' ? '#2196F3' :
                             '#9E9E9E'

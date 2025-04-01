@@ -3,8 +3,7 @@ import { View, ScrollView } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { ThemedText } from '@/components/ui/ThemedText';
 import TriangularSpinner from '@/components/loading/TriangularSpinner';
-import { useSupabase } from '@/contexts/SupabaseContext';
-import { requireOwnership } from '@/utils/auth';
+import { useAuth } from '@clerk/clerk-expo'; // Import useAuth from Clerk
 import { personalityService } from '@/services/personalityService';
 
 interface AIResponseProps {
@@ -22,14 +21,15 @@ export const AIResponse: React.FC<AIResponseProps> = ({
   aiGenerating,
   fullColumnMode,
   secondaryColor,
-  entryUserId
+  entryUserId // This is the ID of the user who wrote the journal entry
 }) => {
-  const { session } = useSupabase();
-  const [personalityName, setPersonalityName] = useState('')
-  
+  const { userId: authUserId } = useAuth(); // Get the currently logged-in user's ID
+  const [personalityName, setPersonalityName] = useState('');
+
+  // Fetch personality based on the logged-in user's ID
   useEffect(() => {
-    if (session?.user?.id) {
-      personalityService.getUserPersonality(session.user.id)
+    if (authUserId) {
+      personalityService.getUserPersonality(authUserId)
         .then(personality => {
           switch(personality) {
             case 'johnny':
@@ -52,16 +52,23 @@ export const AIResponse: React.FC<AIResponseProps> = ({
           console.error('Error getting personality:', error);
           setPersonalityName('ASSISTANT'); // Fallback to default
         });
+    } else {
+      // Reset personality if user logs out
+      setPersonalityName('ASSISTANT');
     }
-  }, [session?.user?.id]);
+  }, [authUserId]); // Depend on the logged-in user's ID
 
-  
-  const { allowed, message } = React.useMemo(() => 
-    requireOwnership(session, entryUserId),
-    [session, entryUserId]
-  );
 
-  if (!allowed) {
+  // Perform ownership check directly using Clerk's authUserId and the entryUserId prop
+  const isOwner = React.useMemo(() => {
+    // User must be logged in (authUserId exists) AND their ID must match the entry's user ID
+    return !!authUserId && !!entryUserId && authUserId === entryUserId;
+  }, [authUserId, entryUserId]);
+
+  // If the logged-in user is not the owner, display an unauthorized message
+  if (!isOwner) {
+    // Define a simple message for unauthorized access
+    const message = "You do not have permission to view this AI response.";
     return (
       <View style={{
         flex: 1,

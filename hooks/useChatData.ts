@@ -3,7 +3,7 @@ import { ChatMessage } from '@/app/types';
 import { useTheme } from '@/contexts/ThemeContext';
 import { ChatAgent } from '@/services/agents/ChatAgent';
 import { supabase } from '@/lib/supabase';
-import { useSupabase } from '@/contexts/SupabaseContext';
+import { useAuth } from '@clerk/clerk-expo'; // Import useAuth from Clerk
 import { updateTask } from '@/services/tasksService'; // Import updateTask
 
 
@@ -77,7 +77,7 @@ export async function updateMessagesWithSessionId(messageIds: any[], sessionId: 
 
 export function useChatData() {
   const { themeColor } = useTheme();
-  const { session } = useSupabase();
+  const { userId } = useAuth(); // Get userId from Clerk
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isTyping, setIsTyping] = useState(false);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
@@ -105,10 +105,10 @@ export function useChatData() {
   const resetInactivityTimer = useCallback(() => {
     // Clear any existing error
     setError(null);
-    
-    // Strong guard clause for authentication
-    if (!session?.user?.id) {
-      console.error('Cannot reset inactivity timer: No user ID');
+
+    // Use Clerk userId for check
+    if (!userId) {
+      console.error('Cannot reset inactivity timer: No user ID (Clerk)');
       setError('Authentication required');
       return;
     }
@@ -120,9 +120,9 @@ export function useChatData() {
     setCheckupCreated(false);
 
     inactivityTimerRef.current = setTimeout(async () => {
-      const userId = session.user.id; // Cache userId for use in closure
+      // userId is already available from the hook's scope
       if (!userId) {
-        console.error('User ID missing in timer execution');
+        console.error('User ID missing in timer execution (Clerk)');
         return;
       }
       
@@ -160,20 +160,20 @@ export function useChatData() {
         }
       }
     }, INACTIVITY_TIMEOUT);
-  }, [session?.user?.id]);
+  }, [userId]); // Depend on Clerk userId
 
   // End session with stronger auth check
   const endSession = useCallback(async () => {
-    // Strong guard clause for authentication
-    if (!session?.user?.id) {
-      console.error('Cannot end session: No user ID');
+    // Use Clerk userId for check
+    if (!userId) {
+      console.error('Cannot end session: No user ID (Clerk)');
       setError('Authentication required to end session');
       return;
     }
 
-    const userId = session.user.id;
+    // userId is already available from the hook's scope
     const sessionMessages = currentSessionMessagesRef.current;
-    
+
     // Set session ended state immediately
     setSessionEnded(true);
     
@@ -213,18 +213,18 @@ export function useChatData() {
       console.error('Error summarizing session:', error);
       setError('Failed to end session: ' + (error instanceof Error ? error.message : 'Unknown error'));
     }
-  }, [session?.user?.id]);
+  }, [userId]); // Depend on Clerk userId
 
-  // Remove real-time subscription useEffect block completely
+  // Load messages on mount or when userId changes
   useEffect(() => {
-    // Instead load messages from DB and local storage once
-    setMessages([]);
-    if (!session?.user?.id) {
-      console.log('No active user session, skipping message loading');
+    setMessages([]); // Clear messages on user change
+    // Use Clerk userId for check
+    if (!userId) {
+      console.log('No active user session, skipping message loading (Clerk)');
       return;
     }
-    const userId = session.user.id;
-    
+    // userId is already available from the hook's scope
+
     const loadLocalMessages = async () => {
       try {
         const key = `${LOCAL_STORAGE_KEY}_${userId}`;
@@ -261,28 +261,30 @@ export function useChatData() {
         console.error('Exception loading messages from DB:', err);
       }
     };
-    
+
     loadLocalMessages().then(loadDatabaseMessages);
-  }, [resetInactivityTimer, session?.user?.id]);
+  }, [userId, resetInactivityTimer]); // Depend on Clerk userId
 
   // Save local messages whenever they change
   useEffect(() => {
     const saveLocal = async () => {
-      if (!session?.user?.id) return;
+      // Use Clerk userId for check
+      if (!userId) return;
       try {
-        const key = `${LOCAL_STORAGE_KEY}_${session.user.id}`;
+        const key = `${LOCAL_STORAGE_KEY}_${userId}`; // Use Clerk userId
         await AsyncStorage.setItem(key, JSON.stringify(getCurrentSessionMessages()));
       } catch (err) {
         console.error('Error saving messages to local storage:', err);
       }
     };
     saveLocal();
-  }, [messages, getCurrentSessionMessages, session?.user?.id]);
+  }, [messages, getCurrentSessionMessages, userId]); // Depend on Clerk userId
 
   // Add helper: sync unsynced messages to DB
   const syncMessages = useCallback(async () => {
-    if (!session?.user?.id) return;
-    const userId = session.user.id;
+    // Use Clerk userId for check
+    if (!userId) return;
+    // userId is already available from the hook's scope
     try {
       // Read from local storage
       const key = `${LOCAL_STORAGE_KEY}_${userId}`;
@@ -308,7 +310,7 @@ export function useChatData() {
     } catch (err) {
       console.error('Error in syncMessages:', err);
     }
-  }, [session?.user?.id]);
+  }, [userId]); // Depend on Clerk userId
 
   // Handle user typing
   const handleTyping = useCallback((text: string) => {
@@ -324,10 +326,10 @@ export function useChatData() {
   const sendMessage = useCallback(async (messageText: string, userId?: string) => {
     // Clear any existing errors first
     setError(null);
-    
-    // Strong auth check - prefer explicit userId parameter, fallback to session
-    const authenticatedUserId = userId || session?.user?.id;
-    
+
+    // Use Clerk userId directly. The userId parameter in the function signature is now redundant but kept for compatibility if needed elsewhere.
+    const authenticatedUserId = userId; // Use userId from useAuth()
+
     if (!messageText.trim() || !authenticatedUserId) {
       const errorMsg = !authenticatedUserId 
         ? 'Authentication required to send messages'
@@ -417,7 +419,7 @@ export function useChatData() {
         resetInactivityTimer();
       } catch (error) {
         console.error('Error in Johnny\'s response:', error);
-        
+
         // Handle error with proper user_id
         const clientErrorId = -Date.now();
         const errorMessage: ChatMessage = {
@@ -437,19 +439,19 @@ export function useChatData() {
       }
     }, JOHNNY_RESPONSE_DELAY);
 
-  }, [currentSessionId, resetInactivityTimer, session?.user?.id, getCurrentSessionMessages]);
+  }, [currentSessionId, resetInactivityTimer, userId, getCurrentSessionMessages]); // Depend on Clerk userId
 
   // Add a new function to delete current session messages
   const deleteCurrentMessages = useCallback(async () => {
-    // Strong guard clause for authentication
-    if (!session?.user?.id) {
-      console.error('Cannot delete messages: No user ID');
+    // Use Clerk userId for check
+    if (!userId) {
+      console.error('Cannot delete messages: No user ID (Clerk)');
       setError('Authentication required to delete messages');
       return;
     }
 
-    const userId = session.user.id;
-    
+    // userId is already available from the hook's scope
+
     try {
       // Clear local storage for current session
       const key = `${LOCAL_STORAGE_KEY}_${userId}`;
@@ -466,7 +468,7 @@ export function useChatData() {
       console.error('Error deleting current messages:', error);
       setError('Failed to delete messages: ' + (error instanceof Error ? error.message : 'Unknown error'));
     }
-  }, [session?.user?.id]);
+  }, [userId]); // Depend on Clerk userId
 
   // Cleanup timers on unmount
   useEffect(() => {
@@ -489,7 +491,7 @@ export function useChatData() {
     sessionEnded,
     checkupCreated,
     error, // Expose error state for UI feedback
-    authenticated: !!session?.user?.id, // Add authentication status
+    authenticated: !!userId, // Use Clerk userId for authentication status
     syncMessages, // Expose sync function so you can trigger it externally if needed
     deleteCurrentMessages // Expose the new function
   };

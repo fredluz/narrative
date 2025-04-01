@@ -5,7 +5,6 @@ import { format } from 'date-fns';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Task } from '@/app/types';
 import { fetchQuests } from '@/services/questsService';
-import { useSupabase } from '@/contexts/SupabaseContext';
 import { deleteTask } from '@/services/tasksService';
 
 type TaskStatus = 'ToDo' | 'InProgress' | 'Done';
@@ -34,16 +33,15 @@ interface EditTaskModalProps {
   onDelete?: () => void; // Add onDelete prop
 }
 
-export function EditTaskModal({ 
-  visible, 
-  onClose, 
+export function EditTaskModal({
+  visible,
+  onClose,
   onSubmit,
   isSubmitting,
   task,
-  userId,
+  userId, // Keep userId prop as it's used
   onDelete
 }: EditTaskModalProps) {
-  const { session } = useSupabase();
   const { themeColor } = useTheme();
   const [quests, setQuests] = useState<Array<{ id: number; title: string }>>([]);
   const [isDeleting, setIsDeleting] = useState(false);

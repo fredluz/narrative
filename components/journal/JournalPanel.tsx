@@ -11,8 +11,7 @@ import { journalStyles } from '@/app/styles/journalStyles';
 import { questStyles } from '@/app/styles/questStyles';
 import { journalService, CheckupEntry } from '@/services/journalService'; // Removed unused JournalEntry
 import { useTheme } from '@/contexts/ThemeContext';
-import { useSupabase } from '@/contexts/SupabaseContext';
-import { assertSession } from '@/utils/authGuards';
+import { useAuth } from '@clerk/clerk-expo'; // Import useAuth from Clerk
 import { useSuggestions } from '@/contexts/SuggestionContext';
 import { personalityService } from '@/services/personalityService';
 
@@ -49,11 +48,11 @@ export function JournalPanel({
   textColor: string;
   fullColumnMode?: boolean;
   showAnalysis?: boolean;
-  userId: string;
+  userId: string; // Keep userId prop for now, represents the user whose journal is being viewed
 }) {
   const { secondaryColor } = useTheme();
   const router = useRouter();
-  const { session } = useSupabase();
+  const { userId: authUserId } = useAuth(); // Get logged-in user's ID from Clerk
   const { analyzeJournalEntry } = useSuggestions();
   const [personalityName, setPersonalityName] = useState('ASSISTANT');
 
@@ -79,13 +78,14 @@ export function JournalPanel({
 
   const isLoading = journalLoading || localLoading;
 
- 
-  const verifyCurrentUser = React.useMemo(() => {
-    if (!session?.user?.id || !userId) return false;
-    return session.user.id === userId;
-  }, [session?.user?.id, userId]);
 
-  if (!verifyCurrentUser) {
+  // Verify the logged-in user (authUserId) matches the user whose journal is being viewed (userId prop)
+  const verifyCurrentUser = React.useMemo(() => {
+    return !!authUserId && !!userId && authUserId === userId;
+  }, [authUserId, userId]);
+
+  // Check if logged in at all, and if they match the prop userId
+  if (!authUserId || !verifyCurrentUser) {
     return (
       <Card style={[styles.taskCard, { padding: 15, backgroundColor: '#1a1a1a' }]}>
         <ThemedText style={{ color: '#777', textAlign: 'center' }}>Unauthorized access</ThemedText>
@@ -95,18 +95,24 @@ export function JournalPanel({
 
   useEffect(() => {
     const checkDailyEntryStatus = async () => {
-      if (!session?.user?.id) return;
+      // Use authUserId for check
+      if (!authUserId) return;
       const dateStr = formatDate(currentDate);
       try {
-        const daily = await journalService.getEntry(dateStr, session.user.id);
+        // Use authUserId to fetch the entry (assuming viewing own journal)
+        // If viewing others' journals is intended, this needs adjustment based on `userId` prop and permissions
+        const daily = await journalService.getEntry(dateStr, authUserId);
         setHasDailyEntry(!!daily);
       } catch (err) {
         console.error("[JournalPanel] Error checking daily entry status:", err);
         setHasDailyEntry(false);
       }
     };
-    checkDailyEntryStatus();
-  }, [currentDate, session?.user?.id, checkups]); // Re-check when date/user/checkups change
+    // Only run if the logged-in user matches the journal user being viewed
+    if (verifyCurrentUser) {
+        checkDailyEntryStatus();
+    }
+  }, [currentDate, authUserId, checkups, verifyCurrentUser]); // Re-check when date/authUserId/checkups/verification change
 
   const handleEntryChange = useCallback((text: string) => {
     updateLocalEntryText(currentDate, text);
@@ -126,10 +132,13 @@ export function JournalPanel({
     setLocalError(null);
     try {
       const processedTags = localTags.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0);
+      // saveCurrentCheckup likely uses the userId internally from useJournal hook, which needs refactoring too.
+      // Assuming saveCurrentCheckup is refactored or implicitly uses the correct user:
       const savedCheckup = await saveCurrentCheckup(currentDate, processedTags);
       console.log("[JournalPanel] Checkup saved via hook:", savedCheckup?.id);
-      if (savedCheckup && session?.user?.id) {
-           await analyzeJournalEntry(savedCheckup.content, session.user.id);
+      // Use authUserId for analysis
+      if (savedCheckup && authUserId) {
+           await analyzeJournalEntry(savedCheckup.content, authUserId);
       }
       setLocalTags('');
     } catch (err: any) {
@@ -138,31 +147,42 @@ export function JournalPanel({
     } finally {
       setLocalLoading(false);
     }
-  }, [currentDate, localEntryText, localTags, saveCurrentCheckup, analyzeJournalEntry, session?.user?.id]);
+  }, [currentDate, localEntryText, localTags, saveCurrentCheckup, analyzeJournalEntry, authUserId]);
 
   const handleDailyEntry = useCallback(async () => {
-     if (!session?.user?.id) return;
+     // Use authUserId for check
+     if (!authUserId) {
+         console.error("Cannot handle daily entry: User not logged in (Clerk).");
+         return;
+     }
+     // Ensure the action is performed by the owner of the journal
+     if (!verifyCurrentUser) {
+         console.error("Cannot handle daily entry: Logged-in user does not match journal owner.");
+         return;
+     }
      setLocalLoading(true);
      setLocalError(null);
      try {
         const dateStr = formatDate(currentDate);
         if (localEntryText.trim()) {
             console.log("[JournalPanel] Saving final checkup before creating daily entry...");
+            // Assuming saveCurrentCheckup uses correct user context
             await saveCurrentCheckup(currentDate, []);
             setLocalTags('');
         }
         console.log("[JournalPanel] Creating daily summary entry...");
-        const newDailyEntry = await journalService.saveDailyEntry(dateStr, session.user.id);
+        // Use authUserId to save the daily entry
+        const newDailyEntry = await journalService.saveDailyEntry(dateStr, authUserId);
         console.log("[JournalPanel] Daily entry created:", newDailyEntry.id);
         setHasDailyEntry(true);
-        router.push('/daily-review');
+        router.push('/daily-review'); // Consider if this route needs auth check
      } catch (err: any) {
         console.error('JournalPanel: Error in handleDailyEntry:', err);
         setLocalError(err?.message || 'Failed to generate daily entry');
      } finally {
         setLocalLoading(false);
      }
-  }, [currentDate, session?.user?.id, localEntryText, saveCurrentCheckup, router]);
+  }, [currentDate, authUserId, verifyCurrentUser, localEntryText, saveCurrentCheckup, router]);
 
   const brightAccent = getBrightAccent(themeColor);
   const amberColor = '#FFB74D';
@@ -314,10 +334,10 @@ export function JournalPanel({
                 <AIResponse
                   response={latestAiResponse}
                   loading={isLoading}
-                  aiGenerating={journalLoading}
+                  aiGenerating={journalLoading} // Assuming useJournal hook handles loading state correctly
                   fullColumnMode={fullColumnMode}
                   secondaryColor={secondaryColor}
-                  entryUserId={session?.user?.id}
+                  entryUserId={authUserId} // Pass logged-in user ID
                 />
               </ScrollView>
             </View>

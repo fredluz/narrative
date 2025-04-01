@@ -1,5 +1,5 @@
 // components/layouts/DesktopLayout.tsx
-import React, { useEffect, useCallback, useRef } from 'react'; // Added useRef for tracking
+import React, { useEffect, useRef, useCallback } from 'react'; // Added useCallback back for getBrightAccent
 import { View, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -8,95 +8,81 @@ import { TaskList } from '@/components/tasks/TaskList';
 import { PersonalityButton } from '@/components/ui/PersonalityButton';
 import { ChatInterface } from '@/components/chat/ChatInterface';
 import { useQuests } from '@/services/questsService';
-// import { useSuggestions } from '@/contexts/SuggestionContext'; // Uncomment if needed later
 import styles from '@/app/styles/global';
 import { colors } from '@/app/styles/global';
 import { SettingsButton } from '@/components/ui/SettingsButton';
 import { useChatData } from '@/hooks/useChatData';
 import { useQuestUpdate } from '@/contexts/QuestUpdateContext';
 import { JournalPanel } from '@/components/journal/JournalPanel';
-import { useSupabase } from '@/contexts/SupabaseContext'; // Use refined context
+import { useAuth } from '@clerk/clerk-expo'; // Import Clerk useAuth
 import TriangularSpinner from '../loading/TriangularSpinner';
 import { useTasks } from '@/services/tasksService'; // Import useTasks
 
 export function DesktopLayout() {
   console.log(`[DesktopLayout] COMPONENT FUNCTION CALLED at ${new Date().toISOString()}`);
-  
+
   // Track render count for debugging
   const renderCount = useRef(0);
   renderCount.current += 1;
-  
+
   // Track component mount/unmount
   useEffect(() => {
     console.log(`[DesktopLayout] COMPONENT MOUNTED (render #${renderCount.current}) at ${new Date().toISOString()}`);
-    
+
     return () => {
       console.log(`[DesktopLayout] COMPONENT UNMOUNTED after ${renderCount.current} renders at ${new Date().toISOString()}`);
     };
   }, []);
 
-  // 1. Get Auth state FIRST (using the renamed isLoading from context)
-  const { session, isLoading: isAuthLoading, refreshSession } = useSupabase();
-  
+  // 1. Get Auth state FIRST (using Clerk)
+  const { isLoaded: isClerkLoaded, isSignedIn, userId } = useAuth();
+
   // DEBUG: Track auth state changes
-  const prevAuthLoadingRef = useRef(isAuthLoading);
-  const prevSessionRef = useRef(session);
-  
+  const prevClerkLoadedRef = useRef(isClerkLoaded);
+  const prevSignedInRef = useRef(isSignedIn);
+
   useEffect(() => {
-    if (prevAuthLoadingRef.current !== isAuthLoading) {
-      console.log(`[DesktopLayout] AUTH LOADING STATE CHANGED: ${prevAuthLoadingRef.current} -> ${isAuthLoading} at ${new Date().toISOString()}`);
-      console.log(`[DesktopLayout] Stack trace for isAuthLoading change:`, new Error().stack);
-      prevAuthLoadingRef.current = isAuthLoading;
+    if (prevClerkLoadedRef.current !== isClerkLoaded) {
+      console.log(`[DesktopLayout] CLERK LOADED STATE CHANGED: ${prevClerkLoadedRef.current} -> ${isClerkLoaded} at ${new Date().toISOString()}`);
+      prevClerkLoadedRef.current = isClerkLoaded;
     }
-  }, [isAuthLoading]);
-  
+  }, [isClerkLoaded]);
+
   useEffect(() => {
-    const prevSessionExists = !!prevSessionRef.current?.user?.id;
-    const currentSessionExists = !!session?.user?.id;
-    
-    if (prevSessionExists !== currentSessionExists) {
-      console.log(`[DesktopLayout] SESSION STATE CHANGED: ${prevSessionExists ? 'exists' : 'null'} -> ${currentSessionExists ? 'exists' : 'null'} at ${new Date().toISOString()}`);
-      if (currentSessionExists && session?.expires_at) {
-        console.log(`[DesktopLayout] New session user ID: ${session.user.id}`);
-        console.log(`[DesktopLayout] Session expires: ${new Date(session.expires_at * 1000).toISOString()}`);
+    if (prevSignedInRef.current !== isSignedIn) {
+      console.log(`[DesktopLayout] CLERK SIGNED_IN STATE CHANGED: ${prevSignedInRef.current} -> ${isSignedIn} at ${new Date().toISOString()}`);
+      if (isSignedIn && userId) {
+        console.log(`[DesktopLayout] New Clerk User ID: ${userId}`);
       }
-      prevSessionRef.current = session;
-    } else if (session && prevSessionRef.current && session !== prevSessionRef.current) {
-      // Same user but different session object
-      console.log(`[DesktopLayout] SESSION OBJECT CHANGED but same login state at ${new Date().toISOString()}`);
-      if (prevSessionRef.current.expires_at && session.expires_at) {
-        console.log(`[DesktopLayout] Previous expiry: ${new Date(prevSessionRef.current.expires_at * 1000).toISOString()}`);
-        console.log(`[DesktopLayout] New expiry: ${new Date(session.expires_at * 1000).toISOString()}`);
-      } else {
-        console.log('[DesktopLayout] Session expiry information unavailable');
-      }
-      prevSessionRef.current = session;
+      prevSignedInRef.current = isSignedIn;
     }
-  }, [session]);
+  }, [isSignedIn, userId]);
+
 
   const router = useRouter();
   const { themeColor, secondaryColor, textColor } = useTheme();
 
   // 2. Get Feature Hooks (they will guard themselves internally based on auth state)
-  const { mainQuest, loading: questsLoading, error: questsError, reload: reloadQuests } = useQuests();
-  const { tasks, loading: tasksLoading, error: tasksError, reload: reloadTasks } = useTasks();
+  // Pass userId directly if needed by the hook, or let them use useAuth internally
+  const { mainQuest, loading: questsLoading, error: questsError, reload: reloadQuests } = useQuests(); // Assuming useQuests handles auth internally or gets userId
+  const { tasks, loading: tasksLoading, error: tasksError, reload: reloadTasks } = useTasks(); // Assuming useTasks handles auth internally or gets userId
   const {
       messages, sendMessage, handleTyping, endSession, isTyping, deleteCurrentMessages,
       sessionEnded, checkupCreated, error: chatError, authenticated // Get authenticated state from hook
-  } = useChatData();
+  } = useChatData(); // Assuming useChatData handles auth internally or gets userId
 
   // DEBUG: Track data loading states
   useEffect(() => {
     console.log(`[DesktopLayout] QUESTS LOADING STATE: ${questsLoading} at ${new Date().toISOString()}`);
   }, [questsLoading]);
-  
+
   useEffect(() => {
     console.log(`[DesktopLayout] TASKS LOADING STATE: ${tasksLoading} at ${new Date().toISOString()}`);
   }, [tasksLoading]);
 
-  // 3. Combine Feature Data Loading States (exclude isAuthLoading here)
+  // 3. Combine Feature Data Loading States (exclude Clerk loading here)
   const isDataLoading = questsLoading || tasksLoading ;
-  
+
   // DEBUG: Track combined loading state
   useEffect(() => {
     console.log(`[DesktopLayout] COMBINED DATA LOADING STATE: ${isDataLoading} at ${new Date().toISOString()}`);
@@ -107,7 +93,7 @@ export function DesktopLayout() {
 
   // Other context hooks
   const { shouldUpdate, resetUpdate } = useQuestUpdate();
-  
+
   // DEBUG: Track update state
   useEffect(() => {
     console.log(`[DesktopLayout] SHOULD UPDATE STATE: ${shouldUpdate} at ${new Date().toISOString()}`);
@@ -128,37 +114,28 @@ export function DesktopLayout() {
     return `#${brightR.toString(16).padStart(2, '0')}${brightG.toString(16).padStart(2, '0')}${brightB.toString(16).padStart(2, '0')}`;
   }, []);
 
-  // Reload all data function - GUARDED
+  // Reload all data function - GUARDED by Clerk state
   const reloadAllData = useCallback(() => {
-    // Use the session state directly for the guard
-    if (!isAuthLoading && session?.user?.id) {
+    // Use Clerk state for the guard
+    if (isClerkLoaded && isSignedIn) {
       console.log(`[DesktopLayout] RELOADING ALL DATA at ${new Date().toISOString()}`);
       reloadQuests();
       reloadTasks();
       // Chat data might auto-reload via its hook or subscriptions
     } else {
-      console.log(`[DesktopLayout] SKIPPING RELOAD - auth not ready (${isAuthLoading}) or no session (${!!session?.user?.id}) at ${new Date().toISOString()}`);
+      console.log(`[DesktopLayout] SKIPPING RELOAD - Clerk not ready (${isClerkLoaded}) or not signed in (${isSignedIn}) at ${new Date().toISOString()}`);
     }
-  }, [isAuthLoading, session?.user?.id, reloadQuests, reloadTasks]);
+  }, [isClerkLoaded, isSignedIn, reloadQuests, reloadTasks]);
 
-  // DEBUG: Function to force a session refresh (helpful for debugging)
-  const forceSessionRefresh = useCallback(() => {
-    console.log(`[DesktopLayout] MANUALLY FORCING SESSION REFRESH at ${new Date().toISOString()}`);
-    refreshSession().then(newSession => {
-      console.log(`[DesktopLayout] MANUAL SESSION REFRESH COMPLETED at ${new Date().toISOString()}: `, 
-        newSession ? `Session valid until ${newSession.expires_at ? new Date(newSession.expires_at * 1000).toISOString() : 'session expires_at undefined'}` : 'No valid session');
-    }).catch(error => {
-      console.error(`[DesktopLayout] Error during session refresh: ${error}`);
-    });
-  }, [refreshSession]);
+  // Removed forceSessionRefresh function
 
   // --- Effects ---
-  // Effect for Quest Updates - GUARDED
+  // Effect for Quest Updates - GUARDED by Clerk state
   useEffect(() => {
-    console.log(`[DesktopLayout] QUEST UPDATE EFFECT RUNNING - isAuthLoading: ${isAuthLoading}, session: ${!!session?.user?.id}, shouldUpdate: ${shouldUpdate} at ${new Date().toISOString()}`);
-    
-    // Check initial auth loading AND session existence
-    if (!isAuthLoading && session?.user?.id && shouldUpdate) {
+    console.log(`[DesktopLayout] QUEST UPDATE EFFECT RUNNING - isClerkLoaded: ${isClerkLoaded}, isSignedIn: ${isSignedIn}, shouldUpdate: ${shouldUpdate} at ${new Date().toISOString()}`);
+
+    // Check Clerk loading AND signed-in status
+    if (isClerkLoaded && isSignedIn && shouldUpdate) {
       console.log(`[DesktopLayout] QUEST UPDATE TRIGGERED - reloading data at ${new Date().toISOString()}`);
       reloadQuests();
       reloadTasks(); // Also reload tasks
@@ -166,61 +143,64 @@ export function DesktopLayout() {
     } else {
       console.log(`[DesktopLayout] QUEST UPDATE EFFECT - conditions not met at ${new Date().toISOString()}`);
     }
-  }, [isAuthLoading, session?.user?.id, shouldUpdate, reloadQuests, reloadTasks, resetUpdate]);
+  }, [isClerkLoaded, isSignedIn, shouldUpdate, reloadQuests, reloadTasks, resetUpdate]);
 
   // DEBUG: Log current render path
   let renderPath = "UNKNOWN";
-  if (isAuthLoading) {
+  if (!isClerkLoaded) { // Clerk is loading
     renderPath = "INITIAL_AUTH_LOADING";
-  } else if (!session?.user?.id) {
+  } else if (!isSignedIn) { // Clerk loaded, but user not signed in
     renderPath = "LOGGED_OUT";
-  } else if (isDataLoading) {
+  } else if (isDataLoading) { // Clerk loaded, user signed in, data loading
     renderPath = "DATA_LOADING";
-  } else if (combinedError) {
+  } else if (combinedError) { // Clerk loaded, user signed in, error loading data
     renderPath = "ERROR";
-  } else {
+  } else { // Clerk loaded, user signed in, data loaded
     renderPath = "MAIN_CONTENT";
   }
-  
+
   console.log(`[DesktopLayout] RENDER PATH: ${renderPath} at ${new Date().toISOString()} (render #${renderCount.current})`);
 
   // --- Render Logic ---
 
-  // A. Render Initial Auth Loading State
-  if (isAuthLoading) {
-    console.log(`[DesktopLayout] RENDERING: Initial Auth Loading State (${new Date().toISOString()})`);
+  // A. Render Initial Auth Loading State (Clerk loading)
+  if (!isClerkLoaded) {
+    console.log(`[DesktopLayout] RENDERING: Initial Auth Loading State (Clerk) (${new Date().toISOString()})`);
     return (
       <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }]}>
         <TriangularSpinner size={50} color={themeColor} />
         <Text style={{ color: themeColor, marginTop: 15, fontSize: 16 }}>Initializing...</Text>
         <Text style={{ color: colors.textMuted, marginTop: 10, fontSize: 12 }}>
-          Auth Loading: {String(isAuthLoading)} | Render #{renderCount.current}
+          Clerk Loading: {String(!isClerkLoaded)} | Render #{renderCount.current}
         </Text>
       </View>
     );
   }
 
-  // B. Render Logged Out State (Auth is confirmed, but no session)
-  if (!session?.user?.id) {
-    console.log(`[DesktopLayout] RENDERING: Logged Out State (${new Date().toISOString()})`);
-    // AuthGuard should have redirected, but this provides UI feedback if needed.
+  // B. Render Logged Out State (Clerk loaded, but not signed in)
+  // NOTE: ClerkProvider/Expo Router should handle redirection, this is a fallback UI.
+  if (!isSignedIn) {
+    console.log(`[DesktopLayout] RENDERING: Logged Out State (Clerk) (${new Date().toISOString()})`);
+    // Ideally, the user should be redirected by the root layout (_layout.tsx)
+    // This UI might flash briefly or show if redirection fails.
     return (
       <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }]}>
-        <Text style={{ color: colors.textMuted, fontSize: 18 }}>Please log in.</Text>
-        <TouchableOpacity onPress={() => router.replace('/auth')} style={{ marginTop: 20, padding: 10, backgroundColor: themeColor, borderRadius: 5 }}>
+        <Text style={{ color: colors.textMuted, fontSize: 18 }}>Redirecting to login...</Text>
+        {/* Optional: Add a manual redirect button if needed */}
+        {/* <TouchableOpacity onPress={() => router.replace('/auth')} style={{ marginTop: 20, padding: 10, backgroundColor: themeColor, borderRadius: 5 }}>
           <Text style={{ color: textColor }}>Go to Login</Text>
-        </TouchableOpacity>
+        </TouchableOpacity> */}
         <Text style={{ color: colors.textMuted, marginTop: 20, fontSize: 12 }}>
-          Debug Info: Auth Loading: {String(isAuthLoading)} | Has Session: No | Render #{renderCount.current}
+          Debug Info: Clerk Loaded: {String(isClerkLoaded)} | Signed In: No | Render #{renderCount.current}
         </Text>
       </View>
     );
   }
 
-  // --- At this point, we know auth is NOT loading AND session exists ---
-  const userId = session.user.id; // Safe to get userId
-  
-  console.log(`[DesktopLayout] CONFIRMED USER ID: ${userId} at ${new Date().toISOString()}`);
+  // --- At this point, we know Clerk IS loaded AND user IS signed in ---
+  // userId is guaranteed to be available here if isSignedIn is true.
+
+  console.log(`[DesktopLayout] CONFIRMED CLERK USER ID: ${userId} at ${new Date().toISOString()}`);
 
   // C. Render Data Loading State (Auth confirmed, loading feature data)
   if (isDataLoading) {
@@ -230,11 +210,8 @@ export function DesktopLayout() {
         <TriangularSpinner size={50} color={themeColor} />
         <Text style={{ color: themeColor, marginTop: 15, fontSize: 16 }}>Loading Dashboard...</Text>
         <Text style={{ color: colors.textMuted, marginTop: 10, fontSize: 12 }}>
-          Auth Loading: {String(isAuthLoading)} | Data Loading: {String(isDataLoading)} | Render #{renderCount.current}
+          Clerk Loaded: {String(isClerkLoaded)} | Signed In: Yes | Data Loading: {String(isDataLoading)} | Render #{renderCount.current}
         </Text>
-        <TouchableOpacity onPress={forceSessionRefresh} style={{ marginTop: 20, padding: 10, backgroundColor: '#444', borderRadius: 5 }}>
-          <Text style={{ color: '#fff' }}>Force Session Refresh (Debug)</Text>
-        </TouchableOpacity>
       </View>
     );
   }
@@ -245,16 +222,13 @@ export function DesktopLayout() {
     return (
       <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', padding: 20, backgroundColor: colors.background }]}>
         <Text style={[styles.errorText, { color: colors.error, fontSize: 18, marginBottom: 20 }]}>Error loading dashboard:</Text>
-        <Text style={{ color: colors.textMuted, marginBottom: 30, textAlign: 'center' }}>{combinedError}</Text>
+        <Text style={{ color: colors.textMuted, marginBottom: 30, textAlign: 'center' }}>{String(combinedError)}</Text>
         <TouchableOpacity onPress={reloadAllData} style={{ paddingVertical: 10, paddingHorizontal: 20, backgroundColor: themeColor, borderRadius: 5 }}>
           <Text style={{ color: textColor, fontWeight: 'bold' }}>Try Again</Text>
         </TouchableOpacity>
         <Text style={{ color: colors.textMuted, marginTop: 20, fontSize: 12 }}>
-          Debug Info: Auth Loading: {String(isAuthLoading)} | Data Loading: {String(isDataLoading)} | Error State | Render #{renderCount.current}
+          Debug Info: Clerk Loaded: {String(isClerkLoaded)} | Signed In: Yes | Data Loading: {String(isDataLoading)} | Error State | Render #{renderCount.current}
         </Text>
-        <TouchableOpacity onPress={forceSessionRefresh} style={{ marginTop: 10, padding: 8, backgroundColor: '#444', borderRadius: 5 }}>
-          <Text style={{ color: '#fff', fontSize: 12 }}>Force Session Refresh (Debug)</Text>
-        </TouchableOpacity>
       </View>
     );
   }
@@ -274,19 +248,17 @@ export function DesktopLayout() {
         zIndex: 1000
       }}>
         <Text style={{ color: '#fff', fontSize: 10 }}>
-          Render #{renderCount.current} | Auth: {String(!isAuthLoading)} | User: {userId.slice(0,6)}...
+          Render #{renderCount.current} | Clerk: {String(isClerkLoaded)} | User: {userId ? userId.slice(0,6) : 'N/A'}...
         </Text>
-        <TouchableOpacity onPress={forceSessionRefresh} style={{ marginTop: 2, padding: 4, backgroundColor: '#333', borderRadius: 3 }}>
-          <Text style={{ color: '#fff', fontSize: 8 }}>Force Refresh</Text>
-        </TouchableOpacity>
+        {/* Removed force refresh button */}
       </View>
-      
+
       {/* Column 1: Quests & Tasks */}
       <View style={styles.column}>
         <KanbanBoard
           mainQuest={mainQuest}
           onViewAllQuests={() => router.push('/quests')}
-          userId={userId} // Pass confirmed userId
+          userId={userId} // Pass confirmed userId from Clerk
         />
         <TaskList compactMode={true} userId={userId} />
       </View>
@@ -303,7 +275,7 @@ export function DesktopLayout() {
           sessionEnded={sessionEnded}
           onDeleteMessages={deleteCurrentMessages}
           checkupCreated={checkupCreated}
-          userId={userId} // Pass confirmed userId
+          userId={userId} // Pass confirmed userId from Clerk
         />
       </View>
 
@@ -313,7 +285,7 @@ export function DesktopLayout() {
           themeColor={themeColor}
           textColor={textColor}
           fullColumnMode={true}
-          userId={userId}
+          userId={userId} // Pass confirmed userId from Clerk
         />
       </View>
       <SettingsButton />

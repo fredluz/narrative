@@ -13,7 +13,7 @@ import { CreateQuestModal } from '../modals/CreateQuestModal';
 import { EditQuestModal } from '../modals/EditQuestModal';
 import { CreateTaskModal } from '../modals/CreateTaskModal';
 import { EditTaskModal } from '../modals/EditTaskModal';
-import { useSupabase } from '@/contexts/SupabaseContext';
+import { useAuth } from '@clerk/clerk-expo'; // Import useAuth from Clerk
 
 type QuestStatus = 'Active' | 'On-Hold' | 'Completed';
 type TaskStatus = 'ToDo' | 'InProgress' | 'Done';
@@ -55,8 +55,8 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
   const windowHeight = Dimensions.get('window').height;
   const [updatingTaskId, setUpdatingTaskId] = useState<number | null>(null);
   const { reload } = useQuests(); // Get the reload function from useQuests
-  const { session } = useSupabase();
-  
+  const { userId } = useAuth(); // Get userId from Clerk
+
   // Update selectedQuest when currentMainQuest changes
   React.useEffect(() => {
     if (currentMainQuest) {
@@ -87,7 +87,7 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
     description: '', // Initialize description field
     status: 'Active',
     is_main: false,
-    user_id: session?.user?.id || ''  // Initialize user_id field
+    user_id: userId || ''  // Initialize user_id field with Clerk userId
   });
 
   const filteredQuests = quests.filter(q => q.status === activeTab);
@@ -131,14 +131,15 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
 
   // Open edit task modal and populate with existing task data
   const openEditTaskModal = (task: Task) => {
-    if (!session?.user?.id) {
-      console.warn("User not logged in. Cannot edit task.");
+    // Use Clerk userId for check
+    if (!userId) {
+      console.warn("User not logged in (Clerk). Cannot edit task.");
       return;
     }
-    
-    // Verify task ownership
-    if (task.user_id !== session.user.id) {
-      console.error("Cannot edit task: User does not own this task");
+
+    // Verify task ownership using Clerk userId
+    if (task.user_id !== userId) {
+      console.error("Cannot edit task: User does not own this task (Clerk check)");
       return;
     }
 
@@ -157,16 +158,20 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
 
   // Create a new task
   const handleCreateTask = async (data: any) => {
-    if (!selectedQuest || !session?.user?.id) return;
-    
+    // Use Clerk userId for check
+    if (!selectedQuest || !userId) {
+        console.error("Cannot create task: No selected quest or user not logged in (Clerk).");
+        return;
+    }
+
     try {
       setIsSubmitting(true);
       const taskData = {
         ...data,
         quest_id: selectedQuest.id,
-        user_id: session.user.id
+        user_id: userId // Use Clerk userId
       };
-      
+
       const newTask = await createTask(taskData);
       
       // Update local state
@@ -185,23 +190,34 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
 
   // Update an existing task
   const handleUpdateTask = async (data: any) => {
-    if (!taskBeingEdited || !session?.user?.id) return;
-    
+     // Use Clerk userId for check
+    if (!taskBeingEdited || !userId) {
+        console.error("Cannot update task: No task selected or user not logged in (Clerk).");
+        return;
+    }
+
     try {
       setIsSubmitting(true);
       const updatedTask = {
         ...data,
-        user_id: session.user.id,
+        user_id: userId, // Use Clerk userId
         updated_at: new Date().toISOString()
       };
-      
+
+      // Ensure the service function `updateTask` (or similar) is used,
+      // passing the userId for RLS. Avoid direct supabase calls here if possible.
+      // Assuming an updateTask function exists similar to createTask:
+      // await updateTask(taskBeingEdited.id, updatedTask, userId);
+
+      // Fallback to direct Supabase call if service function isn't ready/available
+      // Note: This requires passing the Clerk JWT in the service layer or modifying supabase client globally (less ideal)
       const { error } = await supabase
         .from('tasks')
         .update(updatedTask)
         .eq('id', taskBeingEdited.id)
-        .eq('user_id', session.user.id)
+        .eq('user_id', userId) // Use Clerk userId for RLS check
         .select();
-      
+
       if (error) throw error;
       
       // Update local state
@@ -224,14 +240,23 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
 
   // Add function to handle task status toggle
   const toggleTaskCompletion = async (task: Task) => {
-    if (!session?.user?.id) return;
+     // Use Clerk userId for check
+    if (!userId) {
+        console.error("Cannot toggle task completion: User not logged in (Clerk).");
+        return;
+    }
+     // Verify ownership before attempting update
+    if (task.user_id !== userId) {
+        console.error("Cannot toggle task completion: User does not own this task (Clerk check).");
+        return;
+    }
 
     try {
       setUpdatingTaskId(task.id);
       const newStatus = getNextStatus(task.status);
-      
-      await updateTaskStatus(task.id, newStatus, session.user.id);
-      
+
+      await updateTaskStatus(task.id, newStatus, userId); // Use Clerk userId
+
       // Update local state
       if (selectedQuest && selectedQuest.tasks) {
         selectedQuest.tasks = selectedQuest.tasks.map(t => 
@@ -281,8 +306,9 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
 
   // Reset form data for new quest
   const openCreateQuestModal = () => {
-    if (!session?.user?.id) {
-      console.warn("User not logged in. Cannot create quest.");
+    // Use Clerk userId for check
+    if (!userId) {
+      console.warn("User not logged in (Clerk). Cannot create quest.");
       return;
     }
     setQuestFormData({
@@ -292,21 +318,22 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
       status: 'Active',
       start_date: format(new Date(), 'yyyy-MM-dd'),
       is_main: false,
-      user_id: session.user.id
+      user_id: userId // Use Clerk userId
     });
     setCreateQuestModalVisible(true);
   };
 
   // Open edit quest modal and populate with existing quest data
   const openEditQuestModal = (quest: Quest) => {
-    if (!session?.user?.id) {
-      console.warn("User not logged in. Cannot edit quest.");
+     // Use Clerk userId for check
+    if (!userId) {
+      console.warn("User not logged in (Clerk). Cannot edit quest.");
       return;
     }
 
-    // Verify quest ownership
-    if (quest.user_id !== session.user.id) {
-      console.error("Cannot edit quest: User does not own this quest");
+    // Verify quest ownership using Clerk userId
+    if (quest.user_id !== userId) {
+      console.error("Cannot edit quest: User does not own this quest (Clerk check)");
       return;
     }
 
@@ -319,15 +346,16 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
       start_date: quest.start_date || '',
       end_date: quest.end_date || '',
       is_main: quest.is_main,
-      user_id: session.user.id
+      user_id: userId // Use Clerk userId
     });
     setEditQuestModalVisible(true);
   };
 
   // Create a new quest
   const handleCreateQuest = async (data: QuestFormData) => {
-    if (!session?.user?.id) {
-      console.error("User not logged in. Cannot create quest.");
+     // Use Clerk userId for check
+    if (!userId) {
+      console.error("User not logged in (Clerk). Cannot create quest.");
       return;
     }
 
@@ -335,12 +363,13 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
       setIsSubmitting(true);
       const questData = {
         ...data,
+        // user_id is already set in the form data from Clerk userId
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
-      
+
       // Pass userId as first parameter
-      await createQuest(session.user.id, questData);
+      await createQuest(userId, questData); // Use Clerk userId
       setCreateQuestModalVisible(false);
       reload();
     } catch (error) {
@@ -352,20 +381,27 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
 
   // Update an existing quest
   const handleUpdateQuest = async (data: QuestFormData) => {
-    if (!questBeingEdited || !session?.user?.id) {
-      console.error("User not logged in or no quest selected. Cannot update quest.");
+     // Use Clerk userId for check
+    if (!questBeingEdited || !userId) {
+      console.error("User not logged in (Clerk) or no quest selected. Cannot update quest.");
       return;
     }
-    
+     // Verify ownership before attempting update
+    if (questBeingEdited.user_id !== userId) {
+        console.error("Cannot update quest: User does not own this quest (Clerk check).");
+        return;
+    }
+
     try {
       setIsSubmitting(true);
       const questData = {
         ...data,
+        // user_id is already set in the form data from Clerk userId
         updated_at: new Date().toISOString()
       };
-      
+
       // Pass all required parameters: questId, userId, and questData
-      await updateQuest(questBeingEdited.id, session.user.id, questData);
+      await updateQuest(questBeingEdited.id, userId, questData); // Use Clerk userId
       setEditQuestModalVisible(false);
       reload();
     } catch (error) {
@@ -955,15 +991,15 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
         </Card>
       </View>
 
-      {/* Modal Components - Only render if we have a valid user ID */}
-      {session?.user?.id && (
+      {/* Modal Components - Only render if we have a valid user ID from Clerk */}
+      {userId && (
         <>
           <CreateQuestModal
             visible={isCreateQuestModalVisible}
             onClose={() => setCreateQuestModalVisible(false)}
             onSubmit={handleCreateQuest}
             isSubmitting={isSubmitting}
-            userId={session.user.id}
+            userId={userId} // Pass Clerk userId
           />
 
           <EditQuestModal
@@ -976,7 +1012,7 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
             onDelete={handleDeleteQuest}
             isSubmitting={isSubmitting}
             quest={questBeingEdited}
-            userId={session.user.id}
+            userId={userId} // Pass Clerk userId
           />
 
           <CreateTaskModal
@@ -984,7 +1020,7 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
             onClose={() => setCreateModalVisible(false)}
             onSubmit={handleCreateTask}
             isSubmitting={isSubmitting}
-            userId={session.user.id}
+            userId={userId} // Pass Clerk userId
           />
 
           <EditTaskModal
@@ -997,7 +1033,7 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
             onDelete={handleDeleteTask}
             isSubmitting={isSubmitting}
             task={taskBeingEdited}
-            userId={session.user.id}
+            userId={userId} // Pass Clerk userId
           />
         </>
       )}

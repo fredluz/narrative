@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react'; // Added useCallback
 import { supabase } from '@/lib/supabase';
 import type { Quest } from '@/app/types';
 import { RealtimePostgresChangesPayload } from '@supabase/supabase-js';
-import { useSupabase } from '@/contexts/SupabaseContext';
+// import { useSupabase } from '@/contexts/SupabaseContext'; // Removed Supabase session
+import { useAuth } from '@clerk/clerk-expo'; // Import useAuth from Clerk
 
 interface QuestUpdate {
   id: number;
@@ -337,36 +338,43 @@ export function useQuests() {
   const [quests, setQuests] = useState<Quest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { session } = useSupabase();
+  const { userId } = useAuth(); // Get userId from Clerk
   // Flag to track when we're in the middle of setting a main quest
   const [isSettingMainQuest, setIsSettingMainQuest] = useState(false);
 
-  const loadQuests = async () => {
-    if (!session?.user?.id) return;
+  const loadQuests = useCallback(async () => { // Wrap in useCallback
+    if (!userId) { // Use Clerk userId
+        setQuests([]); // Clear quests if no user
+        setLoading(false);
+        return;
+    }
     try {
       setLoading(true);
-      const allQuests = await fetchQuests(session.user.id);
+      const allQuests = await fetchQuests(userId); // Use Clerk userId
       setQuests(allQuests);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load quests');
     } finally {
       setLoading(false);
     }
-  };
+  }, [userId]); // Depend on Clerk userId
 
   useEffect(() => {
-    if (!session?.user?.id) return;
-    
-    loadQuests();
+    if (!userId) { // Use Clerk userId
+        setQuests([]); // Clear quests if user logs out
+        return;
+    }
+
+    loadQuests(); // Initial load
 
     const subscription = supabase
       .channel('quests_changes')
       .on('postgres_changes', 
         { 
           event: '*', 
-          schema: 'public', 
+          schema: 'public',
           table: 'quests',
-          filter: `user_id=eq.${session.user.id}`
+          filter: `user_id=eq.${userId}` // Use Clerk userId in filter
         },
         (payload: QuestRealtimePayload) => {
           console.log('Quest change received:', payload);
@@ -386,13 +394,13 @@ export function useQuests() {
     return () => {
       subscription.unsubscribe();
     };
-  }, [session?.user?.id, isSettingMainQuest]); // Add isSettingMainQuest as a dependency
+  }, [userId, isSettingMainQuest, loadQuests]); // Depend on Clerk userId and loadQuests
 
   return {
     mainQuest: quests.find(q => q.is_main) || null,
     quests,
     setQuestAsMain: async (questId: number) => {
-      if (!session?.user?.id) return;
+      if (!userId) return; // Use Clerk userId
       try {
         // Set flag to prevent realtime subscription from triggering during this operation
         setIsSettingMainQuest(true);
@@ -404,10 +412,10 @@ export function useQuests() {
             is_main: quest.id === questId
           }))
         );
-        
+
         // Then update the database
-        await updateMainQuest(questId, session.user.id);
-        
+        await updateMainQuest(questId, userId); // Use Clerk userId
+
         // Wait a bit before allowing automatic reloads again
         // This delay helps prevent race conditions with Supabase realtime updates
         setTimeout(() => setIsSettingMainQuest(false), 1000);

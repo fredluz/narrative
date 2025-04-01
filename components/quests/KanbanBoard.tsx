@@ -8,8 +8,7 @@ import { Task, Quest } from '@/app/types';
 import { useRouter } from 'expo-router';
 import { formatDateTime } from '@/utils/dateFormatters';
 import { updateTaskStatus, getNextStatus } from '@/services/tasksService';
-import { useSupabase } from '@/contexts/SupabaseContext';
-import { Session } from '@supabase/supabase-js';
+import { useAuth } from '@clerk/clerk-expo'; // Import useAuth from Clerk
 
 interface KanbanProps {
   mainQuest: Quest | null;
@@ -19,10 +18,10 @@ interface KanbanProps {
 
 type TaskStatus = 'ToDo' | 'InProgress' | 'Done';
 
-export function KanbanBoard({ mainQuest, onViewAllQuests, userId }: KanbanProps) {
+export function KanbanBoard({ mainQuest, onViewAllQuests, userId: propUserId }: KanbanProps) { // Renamed prop for clarity
   const router = useRouter();
   const { themeColor, secondaryColor } = useTheme();
-  const { session } = useSupabase() as { session: Session }; // Assert session exists
+  const { userId: authUserId } = useAuth(); // Get logged-in user's ID from Clerk
   const [activeColumn, setActiveColumn] = useState<TaskStatus | 'all' | 'active'>('active');
   const [updatingTaskId, setUpdatingTaskId] = useState<number | null>(null);
 
@@ -33,13 +32,17 @@ export function KanbanBoard({ mainQuest, onViewAllQuests, userId }: KanbanProps)
     Done: '#4CAF50'
   };
 
-  // Verify current user
-  const verifyCurrentUser = React.useMemo(() => {
-    if (!session?.user?.id || !userId) return false;
-    return session.user.id === userId;
-  }, [session?.user?.id, userId]);
+  // Verify current logged-in user matches the userId prop for this board
+  // This assumes the Kanban board is intended only for the user identified by the `userId` prop.
+  const isCurrentUserBoard = React.useMemo(() => {
+    // User must be logged in (authUserId exists) AND
+    // their ID must match the userId prop passed to this component.
+    return !!authUserId && !!propUserId && authUserId === propUserId;
+  }, [authUserId, propUserId]);
 
-  if (!verifyCurrentUser) {
+  // If the logged-in user doesn't match the board's intended user, show unauthorized.
+  // Also check if authUserId exists at all (i.e., user is logged in).
+  if (!authUserId || !isCurrentUserBoard) {
     return (
       <View style={{
         padding: 20,
@@ -108,17 +111,23 @@ export function KanbanBoard({ mainQuest, onViewAllQuests, userId }: KanbanProps)
 
   // Handle task status toggle
   const toggleTaskCompletion = async (task: Task) => {
-    if (!verifyCurrentUser || task.user_id !== userId) {
-      console.warn("Unauthorized task update attempt");
+    // Use isCurrentUserBoard for permission check
+    if (!isCurrentUserBoard) {
+      console.warn("Unauthorized task update attempt (Kanban)");
       return;
+    }
+     // Ensure the task actually belongs to the user (redundant check if isCurrentUserBoard is true, but safe)
+    if (task.user_id !== authUserId) {
+       console.warn("Task ownership mismatch (Kanban)");
+       return;
     }
 
     try {
       setUpdatingTaskId(task.id);
-      const userId = session.user.id;
+      // const userId = authUserId; // Already have authUserId from useAuth
       const newStatus = getNextStatus(task.status);
-      await updateTaskStatus(task.id, newStatus, userId);
-      
+      await updateTaskStatus(task.id, newStatus, authUserId); // Use authUserId
+
       // Update local state
       if (mainQuest && mainQuest.tasks) {
         mainQuest.tasks = mainQuest.tasks.map(t => 

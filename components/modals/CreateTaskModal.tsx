@@ -5,7 +5,6 @@ import { format } from 'date-fns';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Task } from '@/app/types';
 import { fetchQuests } from '@/services/questsService';
-import { useSupabase } from '@/contexts/SupabaseContext';
 
 type TaskStatus = 'ToDo' | 'InProgress' | 'Done';
 
@@ -43,7 +42,6 @@ export function CreateTaskModal({
   initialData // Can be undefined
 }: CreateTaskModalProps) {
   const { themeColor, secondaryColor } = useTheme();
-  const { session } = useSupabase();
   const [localQuests, setLocalQuests] = useState<Array<{ id: number; title: string }>>([]);
   const [showQuestDropdown, setShowQuestDropdown] = useState(false);
   
@@ -84,11 +82,15 @@ export function CreateTaskModal({
   // Load quests directly if none provided via props
   useEffect(() => {
     const loadQuests = async () => {
-      if (!session?.user?.id) return;
+      // Use userId prop for check
+      if (!userId) {
+          console.error("CreateTaskModal: No userId available for loading quests");
+          return;
+      }
       try {
-        const loadedQuests = await fetchQuests(session.user.id);
+        const loadedQuests = await fetchQuests(userId); // Use userId prop
         setLocalQuests(loadedQuests);
-        
+
         // If we have initialData with quest_id and it matches a loaded quest,
         // expand the dropdown to show the selection
         if (initialData?.quest_id && loadedQuests.some(q => q.id === initialData.quest_id)) {
@@ -102,7 +104,7 @@ export function CreateTaskModal({
     if (visible) {
       loadQuests();
     }
-  }, [visible, session?.user?.id, initialData?.quest_id]);
+  }, [visible, userId, initialData?.quest_id]); // Depend on userId prop
 
   const handleSubmit = async () => {
     console.log('📝 [CreateTaskModal] Submitting form data:', {

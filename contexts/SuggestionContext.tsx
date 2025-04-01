@@ -1,8 +1,10 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+// Removed duplicate import line
 import { TaskSuggestion, QuestSuggestion, SuggestionAgent } from '@/services/agents/SuggestionAgent';
 import { Quest, Task } from '@/app/types';
 import { globalSuggestionStore } from '@/services/globalSuggestionStore';
-import { useSupabase } from './SupabaseContext';
+// import { useSupabase } from './SupabaseContext'; // Removed Supabase auth context
+import { useAuth } from '@clerk/clerk-expo'; // Import useAuth from Clerk
 import { QuestAgent } from '@/services/agents/QuestAgent';
 import { fetchQuests } from '@/services/questsService';
 import { eventsService, EVENT_NAMES } from '@/services/eventsService';
@@ -72,12 +74,9 @@ const SuggestionContext = createContext<SuggestionContextType>({
 
 // Create the context provider component
 export const SuggestionProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Access the session for userId
-  const { session } = useSupabase();
-  
-  // Get the userId if available
-  const userId = session?.user?.id || '';
-  
+  // Get auth state and userId from Clerk
+  const { userId, isSignedIn } = useAuth(); // userId can be null if not signed in
+
   // Set up state for suggestions and tracking
   const [taskSuggestions, setTaskSuggestions] = useState<TaskSuggestion[]>([]);
   const [questSuggestions, setQuestSuggestions] = useState<QuestSuggestion[]>([]);
@@ -201,20 +200,26 @@ export const SuggestionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       console.log('🚫 Already analyzing, skipping duplicate event');
       return;
     }
+    // Ensure userId exists before proceeding with analysis that requires it
+    if (!data.userId) {
+        console.warn('🚫 [SuggestionContext] handleJournalAnalysis - No userId available, cannot process.');
+        return;
+    }
 
-    console.log('📢 [SuggestionContext] Processing journal analysis/chat message');
+    console.log(`📢 [SuggestionContext] Processing journal analysis/chat message for user ${data.userId}`);
     setIsAnalyzing(true);
 
     try {
       console.log('🎯 [SuggestionContext] handleJournalAnalysis - Further processing (if any)...');
-
+      // Example: Pass userId to suggestionAgent if needed
+      // await suggestionAgent.processEntry(data.entry, data.userId);
 
     } catch (error) {
       console.error('❌ Error in handleJournalAnalysis:', error);
     } finally {
       setIsAnalyzing(false);
     }
-  }, [suggestionAgent, addSuggestionToQueue, isAnalyzing, userId]);
+  }, [suggestionAgent, addSuggestionToQueue, isAnalyzing]); // Removed userId dependency here as it's passed in data
 
 
   const handleNewSuggestions = useCallback((data: NewSuggestionsEventData) => {
@@ -321,8 +326,10 @@ export const SuggestionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     // Action methods that use both local state and SuggestionAgent
     acceptTaskSuggestion: async (task: TaskSuggestion) => {
       console.log(`✅ [SuggestionContext] Accepting task suggestion: ${task.title} (ID: ${task.id})`);
-      if (!userId) {
-        console.error('No user ID available to accept task');
+      // Get current userId from Clerk hook inside the function
+      const currentUserId = userId;
+      if (!currentUserId) {
+        console.error('No user ID available (Clerk). Cannot accept task.');
         return null;
       }
       // **NEW: Check if task is pending quest creation**
@@ -342,11 +349,11 @@ export const SuggestionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
               await updateTask(task.continuesFromTask.id, {
                   status: 'Done' as const,
                   updated_at: new Date().toISOString()
-              }, userId);
+              }, currentUserId); // Pass currentUserId
           }
 
           // Call SuggestionAgent's accept logic (which handles create/update)
-          const result = await suggestionAgent.acceptTaskSuggestion(task, userId);
+          const result = await suggestionAgent.acceptTaskSuggestion(task, currentUserId); // Pass currentUserId
 
           if (result) {
               console.log(`✅ Task "${task.title}" accepted successfully (DB ID: ${result.id}). Removing suggestion.`);
@@ -372,8 +379,10 @@ export const SuggestionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     
     acceptQuestSuggestion: async (quest: QuestSuggestion) => {
       console.log(`✅ [SuggestionContext] Accepting quest suggestion: ${quest.title} (Client ID: ${quest.id})`);
-      if (!userId) {
-          console.error('No user ID available to accept quest');
+      // Get current userId from Clerk hook inside the function
+      const currentUserId = userId;
+      if (!currentUserId) {
+          console.error('No user ID available (Clerk). Cannot accept quest.');
           return null;
       }
 
@@ -381,7 +390,7 @@ export const SuggestionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
       try {
           // Call SuggestionAgent's accept logic to create the quest in DB
-          const createdQuest = await suggestionAgent.acceptQuestSuggestion(quest, userId);
+          const createdQuest = await suggestionAgent.acceptQuestSuggestion(quest, currentUserId); // Pass currentUserId
 
           if (createdQuest && createdQuest.id) {
               console.log(`✅ Quest "${quest.title}" created in DB (ID: ${createdQuest.id}). Updating associated tasks...`);
@@ -446,7 +455,13 @@ export const SuggestionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
     upgradeTaskToQuest: async (task: TaskSuggestion) => {
       console.log('⬆️ [SuggestionContext] Upgrading task to quest:', task.title);
-      const quest = await suggestionAgent.upgradeTaskToQuest(task, userId);
+      // Get current userId from Clerk hook inside the function
+      const currentUserId = userId;
+       if (!currentUserId) {
+          console.error('No user ID available (Clerk). Cannot upgrade task.');
+          return; // Or throw error
+      }
+      const quest = await suggestionAgent.upgradeTaskToQuest(task, currentUserId); // Pass currentUserId
       if (quest) {
         addSuggestionToQueue(quest);
         removeTaskSuggestion(task.id);
