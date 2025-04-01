@@ -223,12 +223,12 @@ export function JournalPanel({
           <Text style={{ 
             fontWeight: 'bold',
             color: '#EEEEEE',
-            fontSize: 18, // Slightly smaller to fit date
+            fontSize: 18,
           }}>
             {headerTitle}
           </Text>
           <View style={{
-            height: 2, // Slightly thinner underline
+            height: 2,
             width: 24,
             backgroundColor: themeColor,
             marginLeft: 8,
@@ -270,7 +270,7 @@ export function JournalPanel({
             <MaterialIcons name="chevron-right" size={24} color={themeColor} />
           </TouchableOpacity>
 
-          {/* Add Daily Entry Button */}
+          {/* Go to Journal Archive Button */}
           <TouchableOpacity
             style={{
               padding: 8,
@@ -278,27 +278,22 @@ export function JournalPanel({
               backgroundColor: '#333333',
               borderWidth: 1,
               borderColor: '#444444',
-              opacity: isLoading || hasDailyEntry ? 0.5 : 1, // Disable if loading or entry exists
               shadowColor: '#000',
               shadowOffset: { width: 0, height: 1 },
               shadowOpacity: 0.2,
               shadowRadius: 2,
               elevation: 1,
             }}
-            onPress={handleDailyEntry}
-            disabled={isLoading || hasDailyEntry} // Disable if loading or entry exists
+            onPress={() => router.push('/journal')} // Navigate to Journal Archive
           >
-            {localLoading ? (
-               <ActivityIndicator size="small" color={secondaryColor} />
-             ) : (
-               <MaterialIcons name="bedtime" size={24} color={secondaryColor} /> // Use bedtime icon and secondary color
-             )}
-           </TouchableOpacity>
+            <MaterialIcons name="auto-stories" size={24} color={themeColor} /> {/* Icon for archive */}
+          </TouchableOpacity>
+
+          {/* REMOVED Daily Entry Button from here */}
         </View>
       </View>
 
       <View style={{ flex: 1, backgroundColor: '#1A1A1A', padding: 15, position: 'relative' }}>
-        {/* Content Area */}
         <View style={{ flex: 1, flexDirection: 'column' }}>
           {errorToShow ? (
             <View style={{
@@ -321,85 +316,40 @@ export function JournalPanel({
             </View>
           ) : (
             <View style={{ flex: 1, flexDirection: 'column', gap: 10 }}>
-              {/* Main Content Area - Three Equal Sections */}
               <View style={{ flex: 1, minHeight: 0, flexDirection: 'column', gap: 15 }}>
-                {/* Today's Checkups Section - Top 1/3 */}
-                <View style={{ 
-                  flex: 1,
-                  backgroundColor: '#252525',
-                  borderRadius: 6,
-                  borderWidth: 1,
-                  borderColor: '#333333',
-                  maxHeight: '33%'
-                }}>
-                  {/* Header */}
-                  <View style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: 12,
-                    borderBottomWidth: 1,
-                    borderBottomColor: '#333333',
-                    backgroundColor: '#252525'
-                  }}>
+                <ScrollView style={{ flex: 1 }}>
+                  {!showAnalysis && checkups.length > 0 ? (
+                    <View style={{ padding: 12 }}>
+                      {checkups.map((checkup, index) => (
+                        <View key={checkup.id} style={{ marginBottom: index === checkups.length - 1 ? 0 : 12 }}>
+                          <CheckupItem
+                            checkup={checkup}
+                            themeColor={themeColor}
+                            secondaryColor={secondaryColor}
+                            onPress={() => toggleCheckupExpansion(checkup.id)}
+                            isExpanded={expandedCheckupId === checkup.id}
+                          />
+                        </View>
+                      ))}
+                    </View>
+                  ) : (
+                    !showAnalysis && !isLoading && (
                       <View style={{ 
-                        flexDirection: 'row',
-                        alignItems: 'center'
+                        flex: 1,
+                        padding: 32,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backgroundColor: '#1E1E1E',
+                        borderRadius: 4
                       }}>
-                        <MaterialIcons 
-                          name="history" 
-                          size={16} 
-                          color={secondaryColor} 
-                          style={{ marginRight: 6 }} 
-                        />
-                        <Text style={{ 
-                          color: '#EEEEEE', 
-                          fontWeight: 'bold', 
-                          fontSize: 14,
-                          textShadowColor: 'rgba(0, 0, 0, 0.25)',
-                          textShadowOffset: { width: 0, height: 1 },
-                          textShadowRadius: 2
-                        }}>
-                          TODAY'S CHECKUPS ({checkups.length})
+                        <MaterialIcons name="history" size={30} color="#444444" />
+                        <Text style={{ color: '#AAAAAA', marginTop: 10, fontSize: 14 }}>
+                          No check-ins logged for today yet
                         </Text>
                       </View>
-                  </View>
-                  {/* Scrollable Checkups */}
-                  <ScrollView style={{ flex: 1 }}>
-                    {!showAnalysis && checkups.length > 0 ? (
-                      <View style={{ padding: 12 }}>
-                        {checkups.map((checkup, index) => (
-                          <View key={checkup.id} style={{ marginBottom: index === checkups.length - 1 ? 0 : 12 }}>
-                            <CheckupItem
-                              checkup={checkup}
-                              
-                              themeColor={themeColor}
-                              secondaryColor={secondaryColor}
-                              onPress={() => toggleCheckupExpansion(checkup.id)}
-                              isExpanded={expandedCheckupId === checkup.id}
-                            />
-                          </View>
-                        ))}
-                      </View>
-                    ) : (
-                      !showAnalysis && !isLoading && (
-                        <View style={{ 
-          flex: 1,
-          padding: 32,
-          alignItems: 'center',
-          justifyContent: 'center',
-          backgroundColor: '#1E1E1E',
-          borderRadius: 4
-                        }}>
-                          <MaterialIcons name="history" size={30} color="#444444" />
-                          <Text style={{ color: '#AAAAAA', marginTop: 10, fontSize: 14 }}>
-                            No check-ins logged for today yet
-                          </Text>
-                        </View>
-                      )
-                    )}
-                  </ScrollView>
-                </View>
+                    )
+                  )}
+                </ScrollView>
                 {/* Journal Input Section - Fills remaining space */}
                 {!showAnalysis && (
                   <View style={{

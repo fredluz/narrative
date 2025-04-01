@@ -4,7 +4,8 @@
 // ================================================================
 import OpenAI from 'openai';
 import { QuestAgent } from './QuestAgent';
-import { journalService } from '../journalService';
+// Import CheckupEntry type from journalService
+import { journalService, CheckupEntry } from '../journalService';
 import { eventsService, EVENT_NAMES } from '../eventsService'; // Correct path if needed
 import { getPersonality } from './PersonalityPrompts';
 import { personalityService } from '../personalityService';
@@ -57,11 +58,10 @@ export class JournalAgent {
           response: entry.ai_response || '', // Provide default empty string
           updated_at: entry.updated_at
         })) || [];
-        
+
         // Create the prompt with consistent paired format
-        // The error occurs when passing `context` here:
         const prompt = await this.createResponsePrompt(currentEntry, context, userId, previousCheckupsContext);
-        
+
         console.log('📤 Sending prompt to AI for response...'); // Removed detailed prompt logging
 
         // Get current personality for this call
@@ -82,24 +82,13 @@ export class JournalAgent {
             }
           ],
           temperature: 0.7,
-          max_tokens: 8000 // Consider adjusting if responses are cut off
+          max_tokens: 1000 // Consider adjusting if responses are cut off
         });
 
         const aiResponse = response.choices[0].message?.content || `Hey choom, looks like my neural circuits are fried. Try again in a bit.`;
         console.log('📥 Received AI response (length):', aiResponse.length);
 
-        // After generating response, check for quest updates
-        const relevantQuests = await this.questAgent.findRelevantQuests(currentEntry, userId);
-
-        // For each relevant quest, analyze the entry for potential updates
-        for (const quest of relevantQuests) {
-          await this.questAgent.analyzeContentForQuest(
-            currentEntry,
-            quest.id,
-            userId,
-            'journal' // Indicate source is journal
-          );
-        }
+        
 
         return aiResponse;
       } catch (error) {
@@ -123,11 +112,10 @@ export class JournalAgent {
           response: entry.ai_response || '', // Provide default empty string
           updated_at: entry.updated_at
         })) || [];
-        
+
         // Create the prompt with consistent paired format
-        // The error occurs when passing `context` here:
         const prompt = await this.createResponsePrompt(currentEntry, context, userId, previousCheckupsContext);
-        
+
         console.log('📤 Sending analysis prompt to AI...'); // Removed detailed prompt logging
 
         // Get current personality for this call
@@ -238,8 +226,9 @@ export class JournalAgent {
 2. Focus on what's NEW or DIFFERENT compared to earlier checkups today.
 3. DO NOT repeat advice/commentary already given in your previous responses today.
 4. Maintain your characteristic personality style (sarcastic but supportive if Johnny, etc.).
-5. Keep responses concise and impactful.
-6. No emojis unless extremely fitting for the personality. Avoid overusing emotes (*action*).\n\n`;
+5. **Keep this response brief and focused, like a quick radio check-in or acknowledgement (1-2 paragraphs maximum). Save the deeper analysis for the end-of-day summary.**
+6. Keep responses concise and impactful overall.
+7. No emojis unless extremely fitting for the personality. Avoid overusing emotes (*action*).\n\n`;
 
       // --- Current Entry ---
       prompt += `USER'S LATEST CHECKUP ENTRY ([${currentDate}, ${currentTime}]):\n${currentEntry}\n`;
@@ -324,13 +313,14 @@ export class JournalAgent {
       }
     }
 
-    // Updated to recognize paired checkup/response format
-    async processEndOfDay(allCheckupEntriesWithResponses: string, userId: string): Promise<{ response: string; analysis: string }> {
-      console.log('🚀 JournalAgent.processEndOfDay called...');
+    // Updated to accept CheckupEntry array
+    async processEndOfDay(allTodaysCheckups: CheckupEntry[], userId: string): Promise<{ response: string; analysis: string }> {
+      console.log(`🚀 JournalAgent.processEndOfDay called with ${allTodaysCheckups.length} checkups...`);
 
       try {
-        const prompt = await this.createEndOfDayPrompt(allCheckupEntriesWithResponses, userId);
-        console.log('📤 Sending end-of-day prompt to AI...');
+        // Pass the array to the prompt creation function
+        const prompt = await this.createEndOfDayPrompt(allTodaysCheckups, userId);
+        console.log('📤 Sending end-of-day prompt to AI (length):', prompt.length); // Log prompt length for debugging
 
         // Get current personality for this call
         const personalityType = await personalityService.getUserPersonality(userId);
@@ -340,7 +330,7 @@ export class JournalAgent {
         console.log('🔄 Generating end-of-day response and analysis concurrently...');
         const [responseResult, analysisResult] = await Promise.all([
             this.openai.chat.completions.create({
-                model: "deepseek-chat",
+                model: "deepseek-reasoner",
                 messages: [
                     { role: "system", content: personality.prompts.endOfDay.system },
                     { role: "user", content: prompt }
@@ -349,7 +339,7 @@ export class JournalAgent {
                 max_tokens: 8000 // Adjust as needed
             }),
             this.openai.chat.completions.create({
-                model: "deepseek-chat", // Use same or different model for analysis
+                model: "deepseek-reasoner", // Use same or different model for analysis
                 messages: [
                     { role: "system", content: personality.prompts.analysis.system }, // Use analysis system prompt
                     { role: "user", content: prompt } // Same user prompt can work for analysis too
@@ -364,8 +354,21 @@ export class JournalAgent {
 
         console.log('📥 Received end-of-day response (length):', responseText.length);
         console.log('📥 Received end-of-day analysis (length):', analysisText.length);
+        // After generating response, check for quest updates
+        const questUpdates = responseText+analysisText; // Combine response and analysis for quest updates
+        const relevantQuests = await this.questAgent.findRelevantQuests(questUpdates, userId);
+        // For each relevant quest, analyze the entry for potential updates
+        for (const quest of relevantQuests) {
+          await this.questAgent.analyzeContentForQuest(
+            questUpdates,
+            quest.id,
+            userId,
+            'journal' // Indicate source is journal
+          );
+        }
 
         return { response: responseText, analysis: analysisText };
+        
       } catch (error) {
         console.error('❌ Error in processEndOfDay:', error);
         return {
@@ -375,12 +378,41 @@ export class JournalAgent {
       }
     }
 
-    private async createEndOfDayPrompt(allCheckupEntriesWithResponses: string, userId: string): Promise<string> {
+    // Updated to accept CheckupEntry array and format XML-like context
+    private async createEndOfDayPrompt(allTodaysCheckups: CheckupEntry[], userId: string): Promise<string> {
       console.log('🔧 Creating end-of-day prompt...');
 
-      // Fetch context concurrently
+      // Create the structured checkup log first
+      const structuredCheckupLog = allTodaysCheckups.map(checkup => {
+        const timestamp = new Date(checkup.created_at).toISOString(); // Use ISO string for consistency
+        const userEntry = checkup.content || '';
+        const aiResponse = checkup.ai_checkup_response || 'No response recorded';
+        // Basic XML escaping for content - corrected implementation
+        const escapeXml = (unsafe: string): string => { // Added return type
+            return unsafe.replace(/[<>&'"]/g, (c): string => { // Added return type
+                switch (c) {
+                    case '<': return '<';
+                    case '>': return '>';
+                    case '&': return '&';
+                    case '\'': return '\'';
+                    case '"': return '"';
+                    default: return c;
+                }
+            });
+        };
+
+        return `  <checkup timestamp="${timestamp}">
+    <user_entry>${escapeXml(userEntry)}</user_entry>
+    <ai_response>${escapeXml(aiResponse)}</ai_response>
+  </checkup>`;
+      }).join('\n');
+
+      const fullCheckupContext = `<todays_checkups>\n${structuredCheckupLog}\n</todays_checkups>`;
+
+      // Fetch other context concurrently using the user content from checkups
+      const userEntriesString = allTodaysCheckups.map(c => c.content || '').join('\n');
       const [relevantQuests, recentEntries] = await Promise.all([
-        this.questAgent.findRelevantQuests(allCheckupEntriesWithResponses, userId),
+        this.questAgent.findRelevantQuests(userEntriesString, userId), // Analyze based on user content
         journalService.getRecentEntries(3, userId)
       ]);
 
@@ -418,17 +450,19 @@ export class JournalAgent {
         prompt += 'Consider how today\'s discussions impacted these quests and tasks.\n\n';
       }
 
-      // --- Today's Checkups and Responses ---
-      prompt += `TODAY'S FULL CONVERSATION LOG (User Checkups & Your Responses):\n${allCheckupEntriesWithResponses}\n\n`;
+      // --- Today's Checkups (Structured Format) ---
+      prompt += `TODAY'S CHECKUPS:\n${fullCheckupContext}\n\n`;
 
       // --- Analysis/Response Instructions ---
       prompt += `YOUR TASK (End of Day Summary & Analysis):
-Based on ALL the context (historical, quests, today's full conversation), provide a thoughtful end-of-day summary and analysis. Address the user directly. Consider:
-1. Key themes or progress throughout the day.
-2. Connections between today's checkups and ongoing quests/tasks.
-3. Patterns compared to historical entries.
-4. Notable shifts in focus, mood, or goals.
-5. Actionable insights or recommendations for tomorrow.
+The checkups above contain pairs of '<user_entry>' and '<ai_response>'.
+**Focus your summary and analysis primarily on the content within the <user_entry> tags.** Use the <ai_response> tags mainly for context on the conversational flow, but do not simply repeat or summarize your own previous responses.
+Based on ALL the context (historical, quests, today's checkups log), provide a thoughtful end-of-day summary and analysis. Address the user directly. Consider:
+1. Key themes, progress, and feelings expressed in the **USER entries** (<user_entry> tags) throughout the day.
+2. Connections between the **USER entries** and ongoing quests/tasks.
+3. Patterns in the **USER entries** compared to historical entries.
+4. Notable shifts in focus, mood, or goals evident in the **USER entries**.
+5. Actionable insights or recommendations for tomorrow based on the **user's day**.
 Maintain your characteristic personality.`;
 
       console.log('✅ End-of-day prompt created (length):', prompt.length);

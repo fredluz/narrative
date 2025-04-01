@@ -1,73 +1,42 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { View, ScrollView, SafeAreaView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, ScrollView, SafeAreaView, TouchableOpacity, ActivityIndicator, Text } from 'react-native'; // Added Text
 import { Card } from 'react-native-paper';
-import { JournalPanel } from '@/components/journal/JournalPanel';
+// Removed JournalPanel import
 import { ThemedText } from '@/components/ui/ThemedText';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
 import { journalStyles } from '@/app/styles/journalStyles';
 import { useJournal } from '@/hooks/useJournal';
-import { createTask } from '@/services/tasksService';
-import { fetchQuests } from '@/services/questsService';
-import { useAuth } from '@clerk/clerk-expo'; // Import useAuth from Clerk
+import { useAuth } from '@clerk/clerk-expo';
+import { useRouter } from 'expo-router'; // Import useRouter
 
 export default function JournalScreen() {
-  const { userId } = useAuth(); // Get userId from Clerk
+  const router = useRouter(); // Initialize router
+  const { userId } = useAuth();
   const { themeColor, secondaryColor } = useTheme();
   const {
-    currentDate, 
-    latestAiResponse, 
-    checkups, 
-    refreshEntries,
+    currentDate,
+    // Removed latestAiResponse (part of dailyEntry now)
+    // Removed checkups
+    // Removed refreshEntries (assuming useJournal handles refresh internally)
     goToNextDay,
     goToPreviousDay,
-    dailyEntry
+    dailyEntry,
+    loading: journalLoading, // Use loading state from useJournal
+    error: journalError, // Use error state from useJournal
   } = useJournal();
-  
-  const [selectedSection, setSelectedSection] = useState<'entries' | 'analysis'>('entries');
-  const [quests, setQuests] = useState<Array<{ id: number; title: string }>>([]);
+
+  // Removed selectedSection state
+  // Removed quests state
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const [loading, setLoading] = useState(false);
-  const [expandedCheckupId, setExpandedCheckupId] = useState<string | null>(null);
+  // Removed loading state (using journalLoading)
+  // Removed expandedCheckupId state
 
-  // Load quests on mount with user ID
-  useEffect(() => {
-    const loadQuests = async () => {
-      // Use Clerk userId for check
-      if (!userId) {
-        console.warn("Cannot load quests: User not logged in (Clerk)");
-        setQuests([]); // Clear quests if logged out
-        return;
-      }
+  // Removed useEffect for loading quests
+  // Removed handleCreateTask callback
 
-      try {
-        const loadedQuests = await fetchQuests(userId); // Use Clerk userId
-        setQuests(loadedQuests.map(q => ({ id: q.id, title: q.title })));
-      } catch (err) {
-        console.error('Error loading quests:', { error: err, userId: userId });
-      }
-    };
-    loadQuests();
-  }, [userId]); // Depend on Clerk userId
-
-  // Handle task creation from recommendations with user ID
-  const handleCreateTask = useCallback(async (taskData: any) => {
-    // Use Clerk userId for check
-    if (!userId) {
-      console.warn("Cannot create task: User not logged in (Clerk)");
-      return;
-    }
-
-    try {
-      await createTask({
-        ...taskData,
-        created_at: new Date().toISOString(),
-        clerk_id: userId // Use Clerk userId
-      });
-    } catch (err) {
-      console.error('Error creating task:', { error: err, userId: userId });
-    }
-  }, [userId]); // Depend on Clerk userId
+  // State for AI content toggle
+  const [aiViewMode, setAiViewMode] = useState<'response' | 'analysis'>('response');
 
   // Get dates for the quick date selector
   const getDatesForSelector = () => {
@@ -80,478 +49,337 @@ export default function JournalScreen() {
     return dates;
   };
 
+  // Restored date selection logic to update useJournal's currentDate
   const handleDateSelect = (date: Date) => {
-    setSelectedDate(date);
-    if (date.getTime() < currentDate.getTime()) {
-      const daysDiff = Math.floor((currentDate.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
-      for (let i = 0; i < daysDiff; i++) {
+    // Prevent unnecessary updates if the date is already selected
+    if (date.toDateString() === currentDate.toDateString()) {
+      return;
+    }
+
+    setSelectedDate(date); // Keep local state for UI highlighting
+
+    // Calculate difference in days (ignoring time)
+    const startOfSelectedDay = new Date(date.setHours(0, 0, 0, 0));
+    const startOfCurrentDay = new Date(currentDate.setHours(0, 0, 0, 0));
+    const timeDiff = startOfSelectedDay.getTime() - startOfCurrentDay.getTime();
+    const daysDiff = Math.round(timeDiff / (1000 * 60 * 60 * 24)); // Use Math.round for robustness
+
+    if (daysDiff < 0) {
+      // Selected date is in the past
+      for (let i = 0; i < Math.abs(daysDiff); i++) {
         goToPreviousDay();
       }
-    } else if (date.getTime() > currentDate.getTime()) {
-      const daysDiff = Math.floor((date.getTime() - currentDate.getTime()) / (1000 * 60 * 60 * 24));
+    } else if (daysDiff > 0) {
+      // Selected date is in the future
       for (let i = 0; i < daysDiff; i++) {
         goToNextDay();
       }
     }
+    // If daysDiff is 0, no change needed (handled by initial check)
   };
 
-  // Toggle checkup expansion
-  const toggleCheckupExpansion = useCallback((id: string) => {
-    setExpandedCheckupId(prevId => prevId === id ? null : id);
-  }, []);
+  // Removed toggleCheckupExpansion callback
 
   // Format date display
-  const formattedSelectedDate = selectedDate.toLocaleDateString('en-US', { 
-    weekday: 'long', 
-    month: 'long', 
-    day: 'numeric' 
+  const formattedSelectedDate = selectedDate.toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric'
   });
 
-  // Generate a bright accent color for cyberpunk text effect
-  const getBrightAccent = (baseColor: string) => {
-    const hex = baseColor.replace('#', '');
-    const r = parseInt(hex.substring(0, 2), 16);
-    const g = parseInt(hex.substring(2, 4), 16);
-    const b = parseInt(hex.substring(4, 6), 16);
-    
-    if (r + g + b > 500) {
-      return '#FFFFFF';
-    }
-    
-    const brightR = Math.min(255, r + 100);
-    const brightG = Math.min(255, g + 100);
-    const brightB = Math.min(255, b + 100);
-    
-    return `#${brightR.toString(16).padStart(2, '0')}${
-      brightG.toString(16).padStart(2, '0')}${
-      brightB.toString(16).padStart(2, '0')}`;
-  };
-  
-  const brightAccent = getBrightAccent(themeColor);
+  // Removed getBrightAccent function
 
-  // Keep useJournal in sync with selectedDate
+  // Keep selectedDate in sync with currentDate from the hook
   useEffect(() => {
     if (currentDate.toDateString() !== selectedDate.toDateString()) {
       setSelectedDate(currentDate);
     }
   }, [currentDate]);
 
+  // Helper to render AI content based on view mode
+  const renderAiContent = () => {
+    if (!dailyEntry) return null;
+
+    const content = aiViewMode === 'response' ? dailyEntry.ai_response : dailyEntry.ai_analysis;
+    const title = aiViewMode === 'response' ? "SILVERHAND'S RESPONSE" : "SILVERHAND'S ANALYSIS";
+    const iconName = aiViewMode === 'response' ? "chat" : "analytics";
+    const accentColor = aiViewMode === 'response' ? themeColor : secondaryColor;
+
+    if (!content) {
+      return (
+        <Card style={[journalStyles.insightCard, { marginTop: 20, borderLeftColor: accentColor }]}>
+          <ThemedText style={{ color: '#AAA', textAlign: 'center' }}>
+            No {aiViewMode === 'response' ? 'response' : 'analysis'} available for this date.
+          </ThemedText>
+        </Card>
+      );
+    }
+
+    return (
+      <View style={{
+        marginTop: 20,
+        backgroundColor: '#252525', // Match Kanban card background
+        borderRadius: 6,
+        borderWidth: 1,
+        borderColor: '#333333',
+        borderLeftWidth: 4,
+        borderLeftColor: accentColor, // Use dynamic accent color
+        padding: 15,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.2,
+        shadowRadius: 2,
+        elevation: 1,
+      }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
+          <MaterialIcons name={iconName} size={18} color={accentColor} style={{ marginRight: 8 }} />
+          <ThemedText style={{
+            fontSize: 16,
+            fontWeight: 'bold',
+            color: accentColor, // Use dynamic accent color
+          }}>
+            {title}
+          </ThemedText>
+        </View>
+        <ThemedText style={{
+          fontSize: 16,
+          color: '#E0E0E0',
+          lineHeight: 24,
+          fontStyle: 'italic', // Keep italic style for AI content
+        }}>
+          {content}
+        </ThemedText>
+      </View>
+    );
+  };
+
   return (
     <SafeAreaView style={journalStyles.container}>
-      {/* Use Clerk userId for login check */}
-      {!userId ? (
-        <View style={journalStyles.contentContainer}>
-          <Card style={[journalStyles.insightCard, { borderLeftColor: secondaryColor }]}>
-            <ThemedText style={journalStyles.insightText}>
-              Please log in to view your journal entries.
-            </ThemedText>
-          </Card>
+      {/* Header Section - Moved outside main flex container */}
+      <View style={{
+        paddingHorizontal: 15, // Keep horizontal padding
+        paddingVertical: 10, // Adjust vertical padding if needed
+        borderBottomWidth: 1,
+        borderBottomColor: '#333333',
+        backgroundColor: '#252525', // Match Kanban header
+        flexDirection: 'row', // Make header row for button
+        alignItems: 'center', // Align items vertically
+        justifyContent: 'space-between' // Space out title and button
+      }}>
+        {/* Title Section */}
+        <View style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+        }}>
+          {/* Underline effect container */}
+          <View style={{
+            paddingBottom: 8,
+            borderBottomWidth: 2,
+            borderBottomColor: themeColor,
+            flexDirection: 'row', // Keep icon and text together
+            alignItems: 'center'
+          }}>
+            <MaterialIcons name="auto-stories" size={24} color={themeColor} style={{ marginRight: 10 }} />
+            <Text style={{ // Use standard Text for header consistency
+              fontSize: 20,
+              color: '#EEEEEE',
+              fontWeight: 'bold',
+            }}>
+              JOURNAL ARCHIVE
+            </Text>
+            {/* Underline element (optional, could be part of the container's border) */}
+            {/* <View style={{ height: 3, width: 24, backgroundColor: themeColor, marginLeft: 8, borderRadius: 2 }} /> */}
+          </View>
         </View>
-      ) : (
-        <ScrollView style={{ flex: 1 }}>
-          <View style={journalStyles.contentContainer}>
-            {/* Header Section */}
-            <View style={[journalStyles.headerContainer, { borderLeftColor: themeColor }]}>
-              <MaterialIcons name="auto-stories" size={24} color={themeColor} style={{ marginRight: 10 }} />
-              <ThemedText style={[journalStyles.headerTitle, {
-                textShadowColor: themeColor,
-                textShadowOffset: { width: 1, height: 1 },
-                textShadowRadius: 5
-              }]}>JOURNAL ARCHIVE</ThemedText>
-            </View>
 
-            {/* Quick Date Selector */}
-            <ScrollView 
-              horizontal 
-              showsHorizontalScrollIndicator={false} 
-              style={journalStyles.dateList}
-            >
-              {getDatesForSelector().map((date, index) => (
+        {/* Dashboard Button */}
+        <TouchableOpacity
+          onPress={() => router.push('/')} // Navigate to dashboard route
+          style={{
+            padding: 8,
+            borderRadius: 6,
+            backgroundColor: '#333333',
+            borderWidth: 1,
+            borderColor: '#444444',
+          }}
+        >
+          <MaterialIcons name="chevron-left" size={24} color={themeColor} />
+        </TouchableOpacity>
+      </View>
+
+      <View style={{ flex: 1, flexDirection: 'row', backgroundColor: '#1A1A1A' }}>
+        {/* Left Pane: Date List */}
+        <View style={{
+          width: 150,
+          borderRightWidth: 1,
+          borderRightColor: '#333333',
+          backgroundColor: '#1E1E1E',
+          paddingTop: 10,
+        }}>
+          <ScrollView showsVerticalScrollIndicator={false}>
+            {getDatesForSelector().map((date) => {
+              const isActive = date.toDateString() === selectedDate.toDateString();
+              return (
                 <TouchableOpacity
                   key={date.toISOString()}
-                  style={[
-                    journalStyles.dateButton,
-                    date.toDateString() === selectedDate.toDateString() && {
-                      borderColor: themeColor,
-                      backgroundColor: 'rgba(30, 30, 30, 0.9)',
-                    }
-                  ]}
+                  style={{
+                    paddingVertical: 10,
+                    paddingHorizontal: 15,
+                    backgroundColor: isActive ? '#333333' : 'transparent',
+                    borderLeftWidth: isActive ? 3 : 0,
+                    borderLeftColor: themeColor, // Highlight active date
+                    marginBottom: 2, // Spacing between dates
+                  }}
                   onPress={() => handleDateSelect(date)}
                 >
-                  <ThemedText style={[
-                    journalStyles.dateText,
-                    date.toDateString() === selectedDate.toDateString() && {
-                      color: themeColor,
-                    }
-                  ]}>
-                    {date.toLocaleDateString('en-US', { 
-                      weekday: 'short',
-                      month: 'short',
-                      day: 'numeric'
-                    })}
+                  <ThemedText style={{
+                    color: isActive ? themeColor : '#AAAAAA',
+                    fontSize: 13,
+                    fontWeight: isActive ? 'bold' : 'normal',
+                  }}>
+                    {date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                  </ThemedText>
+                  <ThemedText style={{
+                    color: isActive ? themeColor : '#888888',
+                    fontSize: 11,
+                  }}>
+                    {date.toLocaleDateString('en-US', { weekday: 'long' })}
                   </ThemedText>
                 </TouchableOpacity>
-              ))}
-            </ScrollView>
+              );
+            })}
+          </ScrollView>
+        </View>
 
-            {/* Tab Selector */}
-            <View style={{
-              flexDirection: 'row',
-              marginBottom: 20,
-              backgroundColor: 'rgba(20, 20, 20, 0.7)',
-              borderRadius: 8,
-              padding: 4
-            }}>
-              <TouchableOpacity
-                style={{
-                  flex: 1,
-                  padding: 12,
-                  borderRadius: 6,
-                  backgroundColor: selectedSection === 'entries' ? 'rgba(30, 30, 30, 0.9)' : 'transparent',
-                  borderWidth: 1,
-                  borderColor: selectedSection === 'entries' ? themeColor : 'transparent',
-                }}
-                onPress={() => setSelectedSection('entries')}
-              >
-                <ThemedText style={{
-                  color: selectedSection === 'entries' ? themeColor : '#AAA',
-                  textAlign: 'center',
-                  fontWeight: 'bold'
-                }}>DAILY ENTRIES</ThemedText>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={{
-                  flex: 1,
-                  padding: 12,
-                  borderRadius: 6,
-                  backgroundColor: selectedSection === 'analysis' ? 'rgba(30, 30, 30, 0.9)' : 'transparent',
-                  borderWidth: 1,
-                  borderColor: selectedSection === 'analysis' ? secondaryColor : 'transparent',
-                }}
-                onPress={() => setSelectedSection('analysis')}
-              >
-                <ThemedText style={{
-                  color: selectedSection === 'analysis' ? secondaryColor : '#AAA',
-                  textAlign: 'center',
-                  fontWeight: 'bold'
-                }}>AI ANALYSIS</ThemedText>
-              </TouchableOpacity>
-            </View>
-
-            {/* Description Card */}
+        {/* Right Pane: Journal Content */}
+        <View style={{ flex: 1, padding: 15 }}>
+          {!userId ? (
             <Card style={[journalStyles.insightCard, { borderLeftColor: secondaryColor }]}>
-              <View style={journalStyles.insightHeader}>
-                <MaterialIcons name="psychology" size={20} color={secondaryColor} style={{ marginRight: 8 }} />
-                <ThemedText style={[journalStyles.insightTitle, { color: secondaryColor }]}>
-                  {selectedSection === 'entries' ? "TODAY'S JOURNAL" : "SILVERHAND'S INSIGHT"}
-                </ThemedText>
-              </View>
               <ThemedText style={journalStyles.insightText}>
-                {selectedSection === 'entries' 
-                  ? "Review and reflect on your daily checkups and entries. Each entry captures your thoughts and progress throughout the day."
-                  : "Explore patterns and insights from your journal entries. I analyze your entries to help you understand your journey better."}
+                Please log in to view your journal archive.
               </ThemedText>
             </Card>
-
-            {/* Date display */}
-            <View style={[journalStyles.headerContainer, { 
-              marginTop: 20, 
-              marginBottom: 20,
-              borderLeftColor: selectedSection === 'entries' ? themeColor : secondaryColor
-            }]}>
-              <MaterialIcons 
-                name={selectedSection === 'entries' ? "event" : "analytics"} 
-                size={20} 
-                color={selectedSection === 'entries' ? themeColor : secondaryColor} 
-                style={{ marginRight: 8 }} 
-              />
-              <ThemedText style={{
-                fontSize: 18,
-                fontWeight: 'bold',
-                color: selectedSection === 'entries' ? themeColor : secondaryColor,
-                textShadowColor: selectedSection === 'entries' ? themeColor : secondaryColor,
-                textShadowOffset: { width: 0, height: 0 },
-                textShadowRadius: 5
-              }}>
-                {formattedSelectedDate}
-              </ThemedText>
-            </View>
-
-            {loading ? (
-              <View style={{ padding: 30, alignItems: 'center' }}>
-                <ActivityIndicator size="large" color={selectedSection === 'entries' ? themeColor : secondaryColor} />
+          ) : (
+            <>
+              {/* Selected Date Display */}
+              <View style={[journalStyles.headerContainer, {
+                marginTop: 0,
+                marginBottom: 15,
+                paddingLeft: 0,
+                borderLeftWidth: 0,
+              }]}
+              >
+                <MaterialIcons
+                  name={"event"}
+                  size={20}
+                  color={themeColor}
+                  style={{ marginRight: 8 }}
+                />
+                <ThemedText style={{
+                  fontSize: 18,
+                  fontWeight: 'bold',
+                  color: themeColor,
+                }}>
+                  {formattedSelectedDate}
+                </ThemedText>
               </View>
-            ) : (
-              <>
-                {/* Journal Content Based on Selected Tab */}
-                {selectedSection === 'entries' ? (
-                  <View>
-                    {/* Daily Entry */}
-                    {dailyEntry && (
-                      <Card style={[journalStyles.entryContainer, { borderLeftColor: themeColor }]}>
-                        <View style={journalStyles.entryScrollView}>
-                          <ThemedText style={{
-                            fontSize: 18,
-                            fontWeight: 'bold',
-                            color: '#FFF',
-                            marginBottom: 15,
-                            textShadowColor: themeColor,
-                            textShadowOffset: { width: 0, height: 0 },
-                            textShadowRadius: 4
-                          }}>
-                            Daily Journal
-                          </ThemedText>
-                          <ThemedText style={journalStyles.entryText}>
-                            {dailyEntry.user_entry || "No daily entry yet."}
-                          </ThemedText>
-                          
-                          <View style={{
-                            backgroundColor: 'rgba(15, 15, 15, 0.8)',
-                            borderRadius: 5,
-                            borderLeftWidth: 3,
-                            borderColor: secondaryColor,
-                            padding: 10,
-                            marginTop: 20,
-                          }}>
-                            <View style={{ 
-                              flexDirection: 'row', 
-                              alignItems: 'center', 
-                              padding: 8,
-                              borderBottomWidth: 1,
-                              borderBottomColor: 'rgba(255, 255, 255, 0.1)',
-                              marginBottom: 10
-                            }}>
-                              <MaterialIcons name="psychology" size={20} color={secondaryColor} style={{ marginRight: 8 }} />
-                              <ThemedText style={{
-                                fontSize: 16,
-                                fontWeight: 'bold',
-                                color: secondaryColor,
-                              }}>
-                                SILVERHAND
-                              </ThemedText>
-                            </View>
-                            <ThemedText style={{
-                              fontSize: 16,
-                              color: '#E0E0E0',
-                              fontStyle: 'italic',
-                              lineHeight: 24,
-                              textShadowColor: secondaryColor,
-                              textShadowOffset: { width: 0, height: 0 },
-                              textShadowRadius: 2
-                            }}>
-                              {dailyEntry.ai_response || "No response yet."}
-                            </ThemedText>
-                          </View>
-                        </View>
-                      </Card>
-                    )}
 
-                    {/* Checkups */}
-                    {checkups.length > 0 && (
-                      <View style={{ marginTop: 20 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-                          <MaterialIcons name="history" size={16} color={themeColor} style={{ marginRight: 8 }} />
-                          <ThemedText style={{ 
-                            color: themeColor, 
-                            fontWeight: 'bold', 
-                            fontSize: 16 
-                          }}>
-                            CHECKUPS ({checkups.length})
-                          </ThemedText>
-                        </View>
+              {/* Content Area */}
+              {journalLoading ? (
+                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                  <ActivityIndicator size="large" color={themeColor} />
+                  <ThemedText style={{ marginTop: 10, color: '#AAA' }}>Loading daily summary...</ThemedText>
+                </View>
+              ) : journalError ? (
+                 <Card style={[journalStyles.insightCard, { borderLeftColor: '#FF6B6B' }]}>
+                   <ThemedText style={{ color: '#FF6B6B', textAlign: 'center' }}>
+                     Error loading journal entry: {journalError}
+                   </ThemedText>
+                 </Card>
+              ) : dailyEntry ? (
+                <View style={{ flex: 1, flexDirection: 'column', backgroundColor: '#1E1E1E', borderRadius: 8, borderWidth: 1, borderColor: '#333333', overflow: 'hidden' }}>
+                  {/* Top Section: User Entry */}
+                  <View style={{ flex: 1, borderBottomWidth: 1, borderBottomColor: '#333333' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', padding: 10, backgroundColor: '#252525' }}>
+                       <MaterialIcons name="notes" size={16} color={themeColor} style={{ marginRight: 8 }} />
+                       <ThemedText style={{ fontSize: 14, fontWeight: 'bold', color: themeColor }}>
+                         YOUR DAILY SUMMARY
+                       </ThemedText>
+                     </View>
+                    <ScrollView style={{ padding: 10 }}>
+                      <ThemedText style={{ fontSize: 15, color: '#DDDDDD', lineHeight: 22 }}>
+                        {dailyEntry.user_entry || "No summary text recorded for this day."}
+                      </ThemedText>
+                    </ScrollView>
+                  </View>
 
-                        {checkups.map(checkup => {
-                          const checkupTime = new Date(checkup.created_at).toLocaleTimeString('en-US', { 
-                            hour: '2-digit', 
-                            minute: '2-digit',
-                            hour12: false
-                          });
-                          const isExpanded = expandedCheckupId === checkup.id;
-                          
+                  {/* Separator and Toggle */}
+                  <View style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    paddingVertical: 5,
+                    paddingHorizontal: 10,
+                    backgroundColor: '#252525',
+                    borderTopWidth: 1,
+                    borderBottomWidth: 1,
+                    borderColor: '#333333',
+                  }}>
+                    <TouchableOpacity
+                      style={{ flexDirection: 'row', alignItems: 'center', padding: 5, opacity: aiViewMode === 'response' ? 1 : 0.6 }}
+                      onPress={() => setAiViewMode('response')}
+                    >
+                      <MaterialIcons name="chat" size={16} color={themeColor} style={{ marginRight: 4 }} />
+                      <Text style={{ color: themeColor, fontSize: 13, fontWeight: aiViewMode === 'response' ? 'bold' : 'normal' }}>
+                        AI Response
+                      </Text>
+                    </TouchableOpacity>
+                    <View style={{ width: 1, height: '60%', backgroundColor: '#444444', marginHorizontal: 10 }} />
+                    <TouchableOpacity
+                      style={{ flexDirection: 'row', alignItems: 'center', padding: 5, opacity: aiViewMode === 'analysis' ? 1 : 0.6 }}
+                      onPress={() => setAiViewMode('analysis')}
+                    >
+                      <MaterialIcons name="analytics" size={16} color={secondaryColor} style={{ marginRight: 4 }} />
+                      <Text style={{ color: secondaryColor, fontSize: 13, fontWeight: aiViewMode === 'analysis' ? 'bold' : 'normal' }}>
+                        AI Analysis
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Bottom Section: AI Content */}
+                  <View style={{ flex: 1 }}>
+                    <ScrollView style={{ padding: 10 }}>
+                      {(() => {
+                        if (!dailyEntry) return null;
+                        const content = aiViewMode === 'response' ? dailyEntry.ai_response : dailyEntry.ai_analysis;
+                        const accentColor = aiViewMode === 'response' ? themeColor : secondaryColor;
+                        if (!content) {
                           return (
-                            <TouchableOpacity
-                              key={checkup.id}
-                              onPress={() => toggleCheckupExpansion(checkup.id)}
-                              style={{
-                                padding: 15,
-                                backgroundColor: 'rgba(20, 20, 20, 0.7)',
-                                borderRadius: 4,
-                                marginBottom: 12,
-                                borderLeftWidth: 2,
-                                borderLeftColor: themeColor,
-                              }}
-                            >
-                              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <ThemedText style={{ color: '#AAA', fontSize: 14, fontWeight: 'bold' }}>
-                                  {checkupTime}
-                                </ThemedText>
-                                <MaterialIcons
-                                  name={isExpanded ? "expand-less" : "expand-more"}
-                                  size={20}
-                                  color="#AAA"
-                                />
-                              </View>
-                              
-                              {isExpanded ? (
-                                <View style={{ marginTop: 10 }}>
-                                  <ThemedText style={{ 
-                                    color: '#FFB74D',
-                                    fontSize: 16,
-                                    marginBottom: 15,
-                                    lineHeight: 24
-                                  }}>
-                                    {checkup.content}
-                                  </ThemedText>
-                                  
-                                  {checkup.ai_checkup_response && (
-                                    <View style={{
-                                      marginTop: 15,
-                                      backgroundColor: 'rgba(15, 15, 15, 0.8)',
-                                      borderRadius: 5,
-                                      borderLeftWidth: 3,
-                                      borderColor: secondaryColor,
-                                    }}>
-                                      <View style={{ 
-                                        flexDirection: 'row', 
-                                        alignItems: 'center', 
-                                        padding: 10,
-                                        borderBottomWidth: 1,
-                                        borderBottomColor: 'rgba(255, 255, 255, 0.1)',
-                                      }}>
-                                        <MaterialIcons 
-                                          name="psychology" 
-                                          size={16} 
-                                          color={secondaryColor}
-                                          style={{ marginRight: 8 }} 
-                                        />
-                                        <ThemedText style={{
-                                          fontSize: 14,
-                                          fontWeight: 'bold',
-                                          color: secondaryColor,
-                                        }}>
-                                          SILVERHAND
-                                        </ThemedText>
-                                      </View>
-                                      
-                                      <ScrollView style={{ padding: 10, maxHeight: 200 }}>
-                                        <ThemedText style={{
-                                          fontSize: 15,
-                                          color: secondaryColor,
-                                          fontStyle: 'italic',
-                                          lineHeight: 22,
-                                          textShadowColor: secondaryColor,
-                                          textShadowOffset: { width: 0, height: 0 },
-                                          textShadowRadius: 3
-                                        }}>
-                                          {checkup.ai_checkup_response}
-                                        </ThemedText>
-                                      </ScrollView>
-                                    </View>
-                                  )}
-                                </View>
-                              ) : (
-                                <ThemedText style={{ 
-                                  color: '#FFB74D',
-                                  marginTop: 6,
-                                  fontSize: 15,
-                                }} numberOfLines={2}>
-                                  {checkup.content}
-                                </ThemedText>
-                              )}
-                            </TouchableOpacity>
+                            <ThemedText style={{ color: '#AAA', textAlign: 'center', fontStyle: 'italic', paddingTop: 20 }}>
+                              No {aiViewMode} available for this date.
+                            </ThemedText>
                           );
-                        })}
-                      </View>
-                    )}
-
-                    {!dailyEntry && checkups.length === 0 && (
-                      <Card style={[journalStyles.insightCard, { marginTop: 20 }]}>
-                        <ThemedText style={{ color: '#AAA', textAlign: 'center' }}>
-                          No journal entries for this date.
-                        </ThemedText>
-                      </Card>
-                    )}
+                        }
+                        return (
+                          <ThemedText style={{ fontSize: 15, color: '#E0E0E0', lineHeight: 22, fontStyle: 'italic' }}>
+                            {content}
+                          </ThemedText>
+                        );
+                      })()}
+                    </ScrollView>
                   </View>
-                ) : (
-                  /* AI Analysis View */
-                  <View>
-                    {dailyEntry && dailyEntry.ai_analysis ? (
-                      <Card style={[journalStyles.entryContainer, { borderLeftColor: secondaryColor }]}>
-                        <View style={{ 
-                          flexDirection: 'row', 
-                          alignItems: 'center',
-                          marginBottom: 15
-                        }}>
-                          <MaterialIcons 
-                            name="analytics" 
-                            size={20} 
-                            color={secondaryColor}
-                            style={{ marginRight: 8 }} 
-                          />
-                          <ThemedText style={{
-                            fontSize: 18,
-                            fontWeight: 'bold',
-                            color: secondaryColor,
-                            textShadowColor: secondaryColor,
-                            textShadowOffset: { width: 0, height: 0 },
-                            textShadowRadius: 4
-                          }}>
-                            JOHNNY'S ANALYSIS
-                          </ThemedText>
-                        </View>
-                        
-                        <ThemedText style={{
-                          fontSize: 17,
-                          lineHeight: 26,
-                          color: '#E0E0E0',
-                          fontStyle: 'italic',
-                          textShadowColor: 'rgba(255, 100, 100, 0.3)',
-                          textShadowOffset: { width: 0, height: 0 },
-                          textShadowRadius: 3
-                        }}>
-                          {dailyEntry.ai_analysis}
-                        </ThemedText>
-                        
-                        <View style={{
-                          backgroundColor: 'rgba(25, 25, 25, 0.9)',
-                          marginTop: 25,
-                          padding: 15,
-                          borderRadius: 5,
-                          borderLeftWidth: 3,
-                          borderLeftColor: themeColor
-                        }}>
-                          <ThemedText style={{
-                            fontSize: 16,
-                            fontWeight: 'bold',
-                            color: themeColor,
-                            marginBottom: 8
-                          }}>
-                            YOUR JOURNAL ENTRY
-                          </ThemedText>
-                          
-                          <ThemedText style={{
-                            fontSize: 15,
-                            color: '#BBB',
-                            fontStyle: 'normal',
-                          }}>
-                            {dailyEntry.user_entry}
-                          </ThemedText>
-                        </View>
-                      </Card>
-                    ) : (
-                      <Card style={[journalStyles.insightCard, { marginTop: 20 }]}>
-                        <ThemedText style={{ color: '#AAA', textAlign: 'center' }}>
-                          No analysis available for this date.
-                        </ThemedText>
-                      </Card>
-                    )}
-                  </View>
-                )}
-              </>
-            )}
-          </View>
-        </ScrollView>
-      )}
+                </View>
+              ) : (
+                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                  <MaterialIcons name="find-in-page" size={40} color="#444444" />
+                  <ThemedText style={{ color: '#AAA', textAlign: 'center', marginTop: 10 }}>
+                    No daily summary available for this date.
+                  </ThemedText>
+                </View>
+              )}
+            </>
+          )}
+        </View>
+      </View>
     </SafeAreaView>
   );
 }

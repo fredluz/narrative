@@ -438,30 +438,30 @@ export const journalService = {
          throw new Error('No checkup entries available to create a daily summary.');
       }
 
-      // Format checkups + responses for end-of-day processing
-      console.log('[journalService] 🔄 Formatting checkups with responses for daily entry content');
-      const formattedContent = allTodaysCheckups
+      // Format ONLY user checkups for saving to the daily entry's user_entry field
+      console.log('[journalService] 🔄 Formatting ONLY user checkups for daily entry user_entry field');
+      const userOnlyFormattedContent = allTodaysCheckups
         .map(entry => {
           const entryTime = new Date(entry.created_at).toLocaleTimeString('en-US', {
             hour: '2-digit', minute: '2-digit', hour12: false
           });
-          // Ensure content and response are not null before using them
           const userContent = entry.content || '';
-          const aiResp = entry.ai_checkup_response || 'No response recorded';
-          return `[${entryTime}] USER:\n${userContent}\nASSISTANT:\n${aiResp}`;
+          // Exclude the ai_checkup_response here
+          return `[${entryTime}] ${userContent}`; // Simpler format, only user content
         })
-        .join('\n\n');
+        .join('\n\n'); // Join with double newline for separation
 
-      // Generate end-of-day AI response and analysis via JournalAgent
-      console.log('[journalService] 🤖 Generating end-of-day response & analysis via JournalAgent');
-      const { response: dailyResponse, analysis: dailyAnalysis } = await journalAgent.processEndOfDay(formattedContent, userId);
+      // Generate end-of-day AI response and analysis via JournalAgent, passing the full checkup objects
+      console.log('[journalService] 🤖 Generating end-of-day response & analysis via JournalAgent (passing full checkup objects)');
+      // Pass the raw array of checkup objects instead of the formatted string
+      const { response: dailyResponse, analysis: dailyAnalysis } = await journalAgent.processEndOfDay(allTodaysCheckups, userId);
 
       // Create the daily entry
       const entryTimestamp = new Date().toISOString(); // Use current time for the summary entry
       const dailyEntryData = {
           created_at: entryTimestamp,
           updated_at: entryTimestamp,
-          user_entry: formattedContent, // Store the combined checkups+responses
+          user_entry: userOnlyFormattedContent, // Store ONLY the user's formatted checkups
           title: `Daily Summary - ${date}`,
           tags: null, // Or derive tags if needed
           ai_response: dailyResponse,
