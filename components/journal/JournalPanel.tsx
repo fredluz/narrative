@@ -173,6 +173,20 @@ export function JournalPanel({
   const isToday = formatDate(currentDate) === formatDate(new Date());
   const errorToShow = localError || journalError;
 
+  // Format date for header display (e.g., "Apr 01")
+  const formattedHeaderDate = currentDate.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric'
+  });
+
+  // Determine header title
+  const headerTitle = showAnalysis
+    ? `ANALYSIS - ${formattedHeaderDate}`
+    : isToday
+    ? `TODAY'S JOURNAL - ${formattedHeaderDate}`
+    : `YOUR JOURNAL - ${formattedHeaderDate}`;
+
+
   return (
     <Card style={{
       backgroundColor: '#1E1E1E',
@@ -207,14 +221,14 @@ export function JournalPanel({
           borderBottomColor: themeColor
         }}>
           <Text style={{ 
-            fontSize: 20,
             fontWeight: 'bold',
             color: '#EEEEEE',
+            fontSize: 18, // Slightly smaller to fit date
           }}>
-            {showAnalysis ? 'ANALYSIS' : "TODAY'S JOURNAL"}
+            {headerTitle}
           </Text>
           <View style={{
-            height: 3,
+            height: 2, // Slightly thinner underline
             width: 24,
             backgroundColor: themeColor,
             marginLeft: 8,
@@ -283,7 +297,7 @@ export function JournalPanel({
         </View>
       </View>
 
-      <View style={{ flex: 1, backgroundColor: '#1A1A1A', padding: 15 }}>
+      <View style={{ flex: 1, backgroundColor: '#1A1A1A', padding: 15, position: 'relative' }}>
         {/* Content Area */}
         <View style={{ flex: 1, flexDirection: 'column' }}>
           {errorToShow ? (
@@ -423,12 +437,15 @@ export function JournalPanel({
                       shadowOpacity: 0.2,
                       shadowRadius: 2,
                       elevation: 1,
+                          opacity: (!localEntryText.trim() || isLoading) ? 0.5 : 1, // Grey out if disabled
                         }}
                         onPress={handleSaveCheckup}
-                        disabled={!localEntryText.trim() || isLoading}
+                        disabled={!localEntryText.trim() || isLoading} // Disable if text is empty/whitespace or loading
                       >
-                        {isLoading ? (
-                          <ActivityIndicator size="small" color={themeColor} />
+                        {localLoading ? ( // Use localLoading for this specific button's indicator
+                          <ActivityIndicator size="small" color={themeColor} /> 
+                        ) : journalLoading ? ( // Show indicator if journal hook is loading generally
+                           <ActivityIndicator size="small" color={themeColor} />
                         ) : (
                           <MaterialIcons name="save" size={24} color={themeColor} />
                         )}
@@ -513,6 +530,28 @@ export function JournalPanel({
             </View>
           )}
         </View>
+
+        {/* Loading Overlay for Daily Entry Generation */}
+        {localLoading && (
+          <View style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.7)', // Semi-transparent overlay
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 10, // Ensure it's on top
+            borderRadius: 8, // Match card's border radius if needed inside padding
+            margin: -15 // Adjust if padding affects overlay coverage
+          }}>
+            <ActivityIndicator size="large" color={secondaryColor} />
+            <Text style={{ color: secondaryColor, marginTop: 10, fontWeight: 'bold' }}>
+              Generating Daily Summary...
+            </Text>
+          </View>
+        )}
       </View>
     </Card>
   );

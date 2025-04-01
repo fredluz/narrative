@@ -345,7 +345,7 @@ export function ChatInterface({
               color: '#EEEEEE',
               letterSpacing: 0.5,
             }}>
-              Chat Assistant
+              CHAT INTERFACE
             </Text>
             <View style={{
               height: 3,
