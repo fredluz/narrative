@@ -128,20 +128,34 @@ export function TaskList({ compactMode = false, userId: propUserId }: TaskListPr
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        marginBottom: compactMode ? 5 : 10,
         paddingHorizontal: compactMode ? 15 : 15,
         paddingVertical: compactMode ? 15 : 15,
         borderBottomWidth: 1,
         borderBottomColor: '#333333',
         backgroundColor: '#252525',
       }}>
-        <Text style={{ 
-          fontSize: compactMode ? 16 : 20,
-          fontWeight: 'bold',
-          color: '#EEEEEE',
+        <View style={{ 
+          flexDirection: 'row', 
+          alignItems: 'center',
+          paddingBottom: 8,
+          borderBottomWidth: 2,
+          borderBottomColor: themeColor
         }}>
-          Active Tasks
-        </Text>
+          <Text style={{ 
+            fontSize: compactMode ? 16 : 20,
+            fontWeight: 'bold',
+            color: '#EEEEEE',
+          }}>
+            ACTIVE TASKS
+          </Text>
+          <View style={{
+            height: 3,
+            width: 24,
+            backgroundColor: themeColor,
+            marginLeft: 8,
+            borderRadius: 2,
+          }} />
+        </View>
         
         <TouchableOpacity 
           onPress={loadTasks}
@@ -151,9 +165,19 @@ export function TaskList({ compactMode = false, userId: propUserId }: TaskListPr
             backgroundColor: '#333333',
             borderWidth: 1,
             borderColor: '#444444',
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 1 },
+            shadowOpacity: 0.2,
+            shadowRadius: 2,
+            elevation: 1,
           }}
         >
-          <MaterialIcons name="refresh" size={compactMode ? 18 : 20} color="#AAAAAA" />
+          <MaterialIcons 
+            name="refresh" 
+            size={compactMode ? 18 : 20} 
+            color={themeColor}
+            style={{ transform: [{ rotate: '0deg' }] }}
+          />
         </TouchableOpacity>
       </View>
 
@@ -213,9 +237,15 @@ export function TaskList({ compactMode = false, userId: propUserId }: TaskListPr
                       borderRadius: 6,
                       marginBottom: compactMode ? 8 : 10,
                       padding: compactMode ? 12 : 14,
-                      borderLeftWidth: 3,
-                      borderLeftColor: task.status === 'Done' ? '#4CAF50' :
-                                    task.status === 'InProgress' ? '#2196F3' : '#9E9E9E',
+                      borderLeftWidth: 4,
+                      borderLeftColor: task.status === 'Done' ? themeColor :
+                                    task.status === 'InProgress' ? secondaryColor : '#9E9E9E',
+                      borderRightWidth: 1,
+                      borderRightColor: '#333333',
+                      borderTopWidth: 1,
+                      borderTopColor: '#333333',
+                      borderBottomWidth: 1,
+                      borderBottomColor: '#333333',
                       shadowColor: '#000',
                       shadowOffset: { width: 0, height: 1 },
                       shadowOpacity: 0.2,
@@ -238,8 +268,8 @@ export function TaskList({ compactMode = false, userId: propUserId }: TaskListPr
                           size={compactMode ? 18 : 22}
                           color={
                             !canUpdateTasks ? '#444444' : // Use canUpdateTasks for color logic
-                            task.status === 'Done' ? '#4CAF50' :
-                            task.status === 'InProgress' ? '#2196F3' :
+                            task.status === 'Done' ? themeColor :
+                            task.status === 'InProgress' ? secondaryColor :
                             '#9E9E9E'
                           }
                         />
@@ -248,7 +278,6 @@ export function TaskList({ compactMode = false, userId: propUserId }: TaskListPr
                         <Text style={{ 
                           fontSize: compactMode ? 15 : 16,
                           color: task.status === 'Done' ? '#AAAAAA' : '#DDDDDD',
-                          textDecorationLine: task.status === 'Done' ? 'line-through' : 'none',
                           opacity: task.status === 'Done' ? 0.7 : 1,
                           fontWeight: '500',
                         }}>
@@ -271,19 +300,19 @@ export function TaskList({ compactMode = false, userId: propUserId }: TaskListPr
                             marginTop: compactMode ? 4 : 6,
                             backgroundColor: '#333333',
                             paddingHorizontal: 6,
-                            paddingVertical: 2,
+                            paddingVertical: 3,
                             borderRadius: 4,
                             alignSelf: 'flex-start',
                           }}>
                             <MaterialIcons 
                               name="folder" 
                               size={compactMode ? 12 : 14}
-                              color={task.status === 'Done' ? '#888888' : '#BBBBBB'} 
+                              color="#BBBBBB"
                               style={{ marginRight: 4 }} 
                             />
                             <Text style={{ 
                               fontSize: compactMode ? 12 : 13,
-                              color: task.status === 'Done' ? '#888888' : '#BBBBBB',
+                              color: task.quest.is_main ? secondaryColor : '#BBBBBB',
                             }}>
                               {task.quest.title}
                             </Text>

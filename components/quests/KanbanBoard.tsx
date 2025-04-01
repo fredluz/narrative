@@ -8,7 +8,7 @@ import { Task, Quest } from '@/app/types';
 import { useRouter } from 'expo-router';
 import { formatDateTime } from '@/utils/dateFormatters';
 import { updateTaskStatus, getNextStatus } from '@/services/tasksService';
-import { useAuth } from '@clerk/clerk-expo'; // Import useAuth from Clerk
+import { useAuth } from '@clerk/clerk-expo';
 
 interface KanbanProps {
   mainQuest: Quest | null;
@@ -18,30 +18,24 @@ interface KanbanProps {
 
 type TaskStatus = 'ToDo' | 'InProgress' | 'Done';
 
-export function KanbanBoard({ mainQuest, onViewAllQuests, userId: propUserId }: KanbanProps) { // Renamed prop for clarity
+export function KanbanBoard({ mainQuest, onViewAllQuests, userId: propUserId }: KanbanProps) {
   const router = useRouter();
   const { themeColor, secondaryColor } = useTheme();
-  const { userId: authUserId } = useAuth(); // Get logged-in user's ID from Clerk
+  const { userId: authUserId } = useAuth();
   const [activeColumn, setActiveColumn] = useState<TaskStatus | 'all' | 'active'>('active');
   const [updatingTaskId, setUpdatingTaskId] = useState<number | null>(null);
 
-  // Define status colors
+  // Enhanced status colors with theme integration
   const statusColors = {
     ToDo: '#9E9E9E',
-    InProgress: '#2196F3',
-    Done: '#4CAF50'
+    InProgress: secondaryColor || '#2196F3',
+    Done: themeColor || '#4CAF50'
   };
 
-  // Verify current logged-in user matches the userId prop for this board
-  // This assumes the Kanban board is intended only for the user identified by the `userId` prop.
   const isCurrentUserBoard = React.useMemo(() => {
-    // User must be logged in (authUserId exists) AND
-    // their ID must match the userId prop passed to this component.
     return !!authUserId && !!propUserId && authUserId === propUserId;
   }, [authUserId, propUserId]);
 
-  // If the logged-in user doesn't match the board's intended user, show unauthorized.
-  // Also check if authUserId exists at all (i.e., user is logged in).
   if (!authUserId || !isCurrentUserBoard) {
     return (
       <View style={{
@@ -59,31 +53,27 @@ export function KanbanBoard({ mainQuest, onViewAllQuests, userId: propUserId }: 
 
   if (!mainQuest) {
     return (
-      <View
-        style={{
-          padding: 20,
-          alignItems: 'center',
-          backgroundColor: '#1E1E1E',
-          borderRadius: 8,
-          borderWidth: 1,
-          borderColor: '#333333',
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: 0.2,
-          shadowRadius: 3,
-          elevation: 2,
-        }}
-      >
+      <View style={{
+        padding: 20,
+        alignItems: 'center',
+        backgroundColor: '#1E1E1E',
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: '#333333',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 3,
+        elevation: 2,
+      }}>
         <MaterialIcons name="assignment-late" size={50} color="#444444" />
-        <Text
-          style={{
-            color: '#DDDDDD',
-            textAlign: 'center',
-            marginTop: 15,
-            fontSize: 18,
-            fontWeight: 'bold',
-          }}
-        >
+        <Text style={{
+          color: '#DDDDDD',
+          textAlign: 'center',
+          marginTop: 15,
+          fontSize: 18,
+          fontWeight: 'bold',
+        }}>
           No Main Project Selected
         </Text>
         <TouchableOpacity
@@ -101,7 +91,13 @@ export function KanbanBoard({ mainQuest, onViewAllQuests, userId: propUserId }: 
             elevation: 2,
           }}
         >
-          <Text style={{ color: '#FFFFFF', fontWeight: '600' }}>
+          <Text style={{ 
+            color: '#FFFFFF', 
+            fontWeight: '600',
+            textShadowColor: 'rgba(0,0,0,0.2)',
+            textShadowOffset: { width: 0, height: 1 },
+            textShadowRadius: 2
+          }}>
             Select Main Project
           </Text>
         </TouchableOpacity>
@@ -109,33 +105,19 @@ export function KanbanBoard({ mainQuest, onViewAllQuests, userId: propUserId }: 
     );
   }
 
-  // Handle task status toggle
   const toggleTaskCompletion = async (task: Task) => {
-    // Use isCurrentUserBoard for permission check
-    if (!isCurrentUserBoard) {
-      console.warn("Unauthorized task update attempt (Kanban)");
-      return;
-    }
-     // Ensure the task actually belongs to the user (redundant check if isCurrentUserBoard is true, but safe)
-    if (task.clerk_id !== authUserId) {
-       console.warn("Task ownership mismatch (Kanban)");
-       return;
-    }
+    if (!isCurrentUserBoard || task.clerk_id !== authUserId) return;
 
     try {
       setUpdatingTaskId(task.id);
-      // const userId = authUserId; // Already have authUserId from useAuth
       const newStatus = getNextStatus(task.status);
-      await updateTaskStatus(task.id, newStatus, authUserId); // Use authUserId
+      await updateTaskStatus(task.id, newStatus, authUserId);
 
-      // Update local state
-      if (mainQuest && mainQuest.tasks) {
+      if (mainQuest?.tasks) {
         mainQuest.tasks = mainQuest.tasks.map(t => 
           t.id === task.id ? { ...t, status: newStatus } : t
         );
       }
-      
-      // Force a re-render
       setActiveColumn(prev => prev);
     } catch (error) {
       console.error('Failed to update task status:', error);
@@ -144,14 +126,12 @@ export function KanbanBoard({ mainQuest, onViewAllQuests, userId: propUserId }: 
     }
   };
 
-  // Extract and filter tasks
   const tasks = mainQuest?.tasks || [];
   const filteredTasks = 
     activeColumn === 'all' ? tasks :
     activeColumn === 'active' ? tasks.filter((task) => task.status === 'ToDo' || task.status === 'InProgress') :
     tasks.filter((task) => task.status === activeColumn);
 
-  // No tasks UI
   if (tasks.length === 0) {
     return (
       <Card style={{
@@ -166,18 +146,27 @@ export function KanbanBoard({ mainQuest, onViewAllQuests, userId: propUserId }: 
         shadowRadius: 3,
         elevation: 2,
       }}>
+        {/* Enhanced header with theme color */}
         <View style={{
           padding: 15,
           borderBottomWidth: 1,
           borderBottomColor: '#333333',
           backgroundColor: '#252525',
         }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <View style={{ 
+            flexDirection: 'row', 
+            alignItems: 'center',
+            paddingBottom: 8,
+            borderBottomWidth: 2,
+            borderBottomColor: themeColor
+          }}>
             <Text style={{
               fontSize: 20,
               color: '#EEEEEE',
               fontWeight: 'bold',
-            }}>MAIN PROJECT</Text>
+            }}>
+              MAIN PROJECT
+            </Text>
             <View style={{
               height: 3,
               width: 24,
@@ -188,29 +177,23 @@ export function KanbanBoard({ mainQuest, onViewAllQuests, userId: propUserId }: 
           </View>
         </View>
         <View style={{ padding: 15 }}>
-          <Text
-            style={{
-              color: '#DDDDDD',
-              marginBottom: 5,
-              fontSize: 18,
-              fontWeight: '600',
-            }}
-          >
+          <Text style={{
+            color: '#DDDDDD',
+            marginBottom: 5,
+            fontSize: 18,
+            fontWeight: '600',
+          }}>
             {mainQuest.title}
           </Text>
 
           {mainQuest.start_date && (
-            <Text
-              style={{ color: '#AAAAAA', marginBottom: 3, fontSize: 14 }}
-            >
+            <Text style={{ color: '#AAAAAA', marginBottom: 3, fontSize: 14 }}>
               Started: {formatDateTime(mainQuest.start_date)}
             </Text>
           )}
 
           {mainQuest.end_date && (
-            <Text
-              style={{ color: '#AAAAAA', marginBottom: 10, fontSize: 14 }}
-            >
+            <Text style={{ color: '#AAAAAA', marginBottom: 10, fontSize: 14 }}>
               Target completion: {formatDateTime(mainQuest.end_date)}
             </Text>
           )}
@@ -233,12 +216,10 @@ export function KanbanBoard({ mainQuest, onViewAllQuests, userId: propUserId }: 
             <MaterialIcons
               name="assignment"
               size={18}
-              color="#AAAAAA"
+              color={themeColor}
               style={{ marginRight: 6 }}
             />
-            <Text
-              style={{ color: '#AAAAAA', fontSize: 14, fontWeight: '500' }}
-            >
+            <Text style={{ color: '#AAAAAA', fontSize: 14, fontWeight: '500' }}>
               View All Projects
             </Text>
           </TouchableOpacity>
@@ -253,34 +234,37 @@ export function KanbanBoard({ mainQuest, onViewAllQuests, userId: propUserId }: 
   }
 
   return (
-    <Card
-      style={{
-        backgroundColor: '#1E1E1E',
-        borderRadius: 8,
-        overflow: 'hidden',
-        borderWidth: 1,
-        borderColor: '#333333',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.2,
-        shadowRadius: 3,
-        elevation: 2,
-      }}
-    >
+    <Card style={{
+      backgroundColor: '#1E1E1E',
+      borderRadius: 8,
+      overflow: 'hidden',
+      borderWidth: 1,
+      borderColor: '#333333',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.2,
+      shadowRadius: 3,
+      elevation: 2,
+    }}>
+      {/* Enhanced header with theme color underline */}
       <View style={{
         padding: 15,
         borderBottomWidth: 1,
         borderBottomColor: '#333333',
         backgroundColor: '#252525',
       }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <Text
-            style={{
-              fontSize: 20,
-              color: '#EEEEEE',
-              fontWeight: 'bold',
-            }}
-          >
+        <View style={{ 
+          flexDirection: 'row', 
+          alignItems: 'center',
+          paddingBottom: 8,
+          borderBottomWidth: 2,
+          borderBottomColor: themeColor
+        }}>
+          <Text style={{
+            fontSize: 20,
+            color: '#EEEEEE',
+            fontWeight: 'bold',
+          }}>
             MAIN PROJECT
           </Text>
           <View style={{
@@ -292,17 +276,17 @@ export function KanbanBoard({ mainQuest, onViewAllQuests, userId: propUserId }: 
           }} />
         </View>
       </View>
+
       <View style={{ padding: 15 }}>
-        <Text
-          style={{
-            color: '#DDDDDD',
-            marginBottom: 5,
-            fontSize: 18,
-            fontWeight: '600',
-          }}
-        >
+        <Text style={{
+          color: '#DDDDDD',
+          marginBottom: 5,
+          fontSize: 18,
+          fontWeight: '600',
+        }}>
           {mainQuest.title}
         </Text>
+
         {mainQuest.start_date && (
           <Text style={{ color: '#AAAAAA', marginBottom: 3, fontSize: 14 }}>
             Started: {formatDateTime(mainQuest.start_date)}
@@ -336,14 +320,16 @@ export function KanbanBoard({ mainQuest, onViewAllQuests, userId: propUserId }: 
           </Text>
         </TouchableOpacity>
 
-        {/* Status Filters */}
+        {/* Enhanced status filters with theme colors */}
         <View style={{ 
           flexDirection: 'row', 
           marginBottom: 15, 
           justifyContent: 'space-between',
           backgroundColor: '#1A1A1A',
           borderRadius: 8,
-          padding: 5
+          padding: 5,
+          borderWidth: 1,
+          borderColor: '#333333'
         }}>
           {[
             { key: 'active', label: 'Active', icon: 'bolt' },
@@ -362,6 +348,8 @@ export function KanbanBoard({ mainQuest, onViewAllQuests, userId: propUserId }: 
                 flexDirection: 'row',
                 alignItems: 'center',
                 justifyContent: 'center',
+                borderWidth: activeColumn === item.key ? 1 : 0,
+                borderColor: themeColor
               }}
               onPress={() => setActiveColumn(item.key as TaskStatus | 'all' | 'active')}
             >
@@ -375,7 +363,7 @@ export function KanbanBoard({ mainQuest, onViewAllQuests, userId: propUserId }: 
                     ? statusColors.InProgress 
                     : item.key === 'Done' 
                     ? statusColors.Done 
-                    : secondaryColor)
+                    : themeColor)
                   : '#888888'} 
                 style={{ marginRight: 4 }} 
               />
@@ -387,10 +375,10 @@ export function KanbanBoard({ mainQuest, onViewAllQuests, userId: propUserId }: 
                     ? statusColors.InProgress 
                     : item.key === 'Done' 
                     ? statusColors.Done 
-                    : '#DDDDDD')
+                    : themeColor)
                   : '#888888',
                 fontSize: 12,
-                fontWeight: activeColumn === item.key ? '500' : 'normal'
+                fontWeight: activeColumn === item.key ? '600' : 'normal'
               }}>
                 {item.label}
               </Text>
@@ -421,21 +409,44 @@ export function KanbanBoard({ mainQuest, onViewAllQuests, userId: propUserId }: 
                       },
                       task.status === 'Done'
                         ? {
-                            borderLeftWidth: 3,
+                            borderLeftWidth: 4,
                             borderLeftColor: statusColors.Done,
+                            borderRightWidth: 1,
+                            borderRightColor: '#333333',
+                            borderTopWidth: 1,
+                            borderTopColor: '#333333',
+                            borderBottomWidth: 1,
+                            borderBottomColor: '#333333'
                           }
                         : task.status === 'InProgress'
                         ? {
-                            borderLeftWidth: 3,
+                            borderLeftWidth: 4,
                             borderLeftColor: statusColors.InProgress,
+                            borderRightWidth: 1,
+                            borderRightColor: '#333333',
+                            borderTopWidth: 1,
+                            borderTopColor: '#333333',
+                            borderBottomWidth: 1,
+                            borderBottomColor: '#333333'
                           }
                         : {
-                            borderLeftWidth: 3,
+                            borderLeftWidth: 4,
                             borderLeftColor: statusColors.ToDo,
+                            borderRightWidth: 1,
+                            borderRightColor: '#333333',
+                            borderTopWidth: 1,
+                            borderTopColor: '#333333',
+                            borderBottomWidth: 1,
+                            borderBottomColor: '#333333'
                           },
                     ]}
                   >
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', padding: 12 }}>
+                    <View style={{ 
+                      flexDirection: 'row', 
+                      justifyContent: 'space-between', 
+                      padding: 12,
+                      backgroundColor: '#252525'
+                    }}>
                       <View style={{ flex: 1 }}>
                         <Text
                           style={[

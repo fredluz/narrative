@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, TextInput } from 'react-native';
+import { View, TextInput, TouchableOpacity, Text } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
 
 interface JournalEntryInputProps {
   value: string;
@@ -11,43 +12,70 @@ interface JournalEntryInputProps {
   themeColor: string;
 }
 
-export const JournalEntryInput: React.FC<JournalEntryInputProps> = ({
-  value,
-  tagsValue,
-  onChangeText,
-  onChangeTags,
-  loading,
-  fullColumnMode,
+export function JournalEntryInput({ 
+  value, 
+  tagsValue, 
+  onChangeText, 
+  onChangeTags, 
+  loading, 
+  fullColumnMode = false,
   themeColor
-}) => (
-  <View style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%' }}>
+}: JournalEntryInputProps) {
+  return (
     <View style={{
-      flex: 1,
-      backgroundColor: 'rgba(20, 20, 20, 0.9)',
+      backgroundColor: '#252525',
+      borderRadius: 6,
       borderWidth: 1,
-      borderColor: themeColor,
-      borderLeftWidth: 2,
-      borderLeftColor: themeColor,
-      borderRadius: 4,
-      marginBottom: 5,
+      borderColor: '#333333',
+      overflow: 'hidden',
     }}>
-      <TextInput
-        style={{
-          flex: 1,
-          color: '#FFFFFF',
-          padding: 12,
-          fontSize: fullColumnMode ? 18 : 16,
-          fontWeight: 'normal',
-          textAlignVertical: 'top',
-          height: '100%',
-        }}
-        multiline
-        value={value}
-        onChangeText={onChangeText}
-        placeholder="How's your day going, samurai?"
-        placeholderTextColor="#666"
-        editable={!loading}
-      />
+      {/* Header */}
+      <View style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: '#333333',
+        backgroundColor: '#2A2A2A',
+      }}>
+        <MaterialIcons 
+          name="edit" 
+          size={16} 
+          color={themeColor}
+          style={{ marginRight: 8 }} 
+        />
+        <Text style={{ 
+          color: '#EEEEEE',
+          fontSize: 14,
+          fontWeight: '600',
+        }}>
+          NEW ENTRY
+        </Text>
+      </View>
+
+      {/* Content */}
+      <View style={{ padding: 12 }}>
+        <TextInput
+          multiline
+          value={value}
+          onChangeText={onChangeText}
+          placeholder="What's on your mind?"
+          placeholderTextColor="#666666"
+          style={{
+            color: '#DDDDDD',
+            fontSize: 14,
+            lineHeight: 20,
+            minHeight: 80,
+            textAlignVertical: 'top',
+            backgroundColor: '#1E1E1E',
+            borderRadius: 4,
+            padding: 10,
+            borderWidth: 1,
+            borderColor: '#333333',
+          }}
+          editable={!loading}
+        />
+      </View>
     </View>
-  </View>
-);
+  );
+}

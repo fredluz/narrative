@@ -382,37 +382,7 @@ export function ChatInterface({
                 fontSize: 12,
                 fontWeight: 'bold',
               }}>
-                End Session
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={{
-                marginLeft: 15,
-                backgroundColor: 'rgba(255, 107, 107, 0.1)',
-                borderWidth: 1,
-                borderColor: '#FF6B6B',
-                borderRadius: 4,
-                paddingVertical: 4,
-                paddingHorizontal: 8,
-                flexDirection: 'row',
-                alignItems: 'center',
-              }}
-              onPress={onDeleteMessages}
-              disabled={!userId}
-            >
-              <MaterialIcons 
-                name="delete" 
-                size={16} 
-                color="#FF6B6B"
-                style={{ marginRight: 4 }} 
-              />
-              <Text style={{
-                color: '#FF6B6B',
-                fontSize: 12,
-                fontWeight: 'bold',
-              }}>
-                Delete Chat
+                Finish Chat
               </Text>
             </TouchableOpacity>
           </View>

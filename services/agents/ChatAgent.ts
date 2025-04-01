@@ -168,7 +168,7 @@ export class ChatAgent {
         );
 
         if (allCheckups.length > 0) {
-            checkupContext = '\nRECENT CHECKUPS (Last 7 Days):\n' + allCheckups.map((checkup: CheckupEntry) => {
+            checkupContext = '\nRECENT CHECKUPS (Last 7 Days) DON\'T WRITE LIKE THIS, USE ONLY FOR MEMORY CONTEXT:\n' + allCheckups.map((checkup: CheckupEntry) => {
                 const checkupDate = new Date(checkup.created_at);
                 const formattedDate = checkupDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
                 const time = checkupDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
@@ -208,7 +208,7 @@ export class ChatAgent {
                     model: "deepseek-chat",
                     messages: messages,
                     // <<< FIX: Added temperature and max_tokens back
-                    temperature: 0.6,
+                    temperature: 0.7,
                     max_tokens: 1020
                 }).catch((err: any) => {
                     // <<< FIX: Added error logging back

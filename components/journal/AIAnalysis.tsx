@@ -1,139 +1,101 @@
 import React from 'react';
-import { View, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { ThemedText } from '@/components/ui/ThemedText';
-import { useTheme } from '@/contexts/ThemeContext';
-import { useAuth } from '@clerk/clerk-expo'; // Import useAuth from Clerk
 
 interface AIAnalysisProps {
-  analysis: string | null;
+  response: string | null;
   loading: boolean;
-  fullColumnMode?: boolean;
-  themeColor: string;
-  expanded?: boolean;
-  quests?: Array<{ id: string; title: string; clerk_id: string; }>;
-  onCreateTask?: (taskData: any) => Promise<void>;
-  entryUserId?: string; // Add this to verify ownership
+  aiGenerating: boolean;
+  secondaryColor: string;
 }
 
 export function AIAnalysis({ 
-  analysis, 
-  loading,
-  entryUserId,
-  fullColumnMode,
-  themeColor,
-  expanded = false,
-  quests = [],
-  onCreateTask
+  response, 
+  loading, 
+  aiGenerating,
+  secondaryColor
 }: AIAnalysisProps) {
-  const { userId: authUserId } = useAuth(); // Get logged-in user's ID
-  const { secondaryColor } = useTheme();
 
-  // Perform ownership check directly using Clerk's authUserId and the entryUserId prop
-  const isOwner = React.useMemo(() => {
-    // User must be logged in (authUserId exists) AND their ID must match the entry's user ID
-    return !!authUserId && !!entryUserId && authUserId === entryUserId;
-  }, [authUserId, entryUserId]);
-
-  const handleCreateTask = React.useCallback(async (taskData: any) => {
-    // Use authUserId for check
-    if (!authUserId) {
-      console.warn("Cannot create task: User not logged in (Clerk)");
-      return;
-    }
-
-    // Use isOwner for permission check
-    if (!isOwner) {
-      console.error("Cannot create task: User does not own this entry");
-      return;
-    }
-
-    if (onCreateTask) {
-      await onCreateTask({
-        ...taskData,
-        clerk_id: authUserId // Use Clerk userId
-      });
-    }
-  }, [onCreateTask, authUserId, isOwner]); // Depend on Clerk userId and ownership status
-
-  // If the logged-in user is not the owner, display an unauthorized message
-  if (!isOwner) {
-    // Define a simple message for unauthorized access
-    const message = "You do not have permission to view this analysis.";
+  if (!response && !loading && !aiGenerating) {
     return (
-      <View style={{ 
-        backgroundColor: 'rgba(15, 15, 15, 0.8)',
-        borderRadius: 5,
-        borderLeftWidth: 3,
-        borderColor: themeColor,
-        padding: 10
+      <View style={{
+        backgroundColor: '#252525',
+        borderRadius: 6,
+        padding: 20,
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: '#333333',
       }}>
-        <ThemedText style={{ color: '#666', fontStyle: 'italic' }}>
-          {message}
-        </ThemedText>
+        <MaterialIcons name="analytics" size={30} color="#444444" />
+        <Text style={{ color: '#AAAAAA', marginTop: 10, fontSize: 14 }}>
+          No analysis available
+        </Text>
       </View>
     );
   }
 
   return (
-    <View style={{ 
-      backgroundColor: 'rgba(15, 15, 15, 0.8)',
-      borderRadius: 5,
-      borderLeftWidth: 3,
-      borderColor: themeColor,
-      flex: expanded ? 2 : 1,
-      maxHeight: expanded ? undefined : 200
+    <View style={{
+      backgroundColor: '#252525',
+      borderRadius: 6,
+      borderWidth: 1,
+      borderColor: '#333333',
+      overflow: 'hidden',
     }}>
-      <View style={{ 
-        flexDirection: 'row', 
-        alignItems: 'center', 
-        padding: 10,
+      {/* Header */}
+      <View style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 12,
         borderBottomWidth: 1,
-        borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+        borderBottomColor: '#333333',
+        backgroundColor: '#2A2A2A',
       }}>
         <MaterialIcons 
-          name={expanded ? "analytics" : "insights"} 
+          name="analytics" 
           size={16} 
-          color={themeColor}
+          color={secondaryColor}
           style={{ marginRight: 8 }} 
         />
-        <ThemedText style={{
-          fontSize: expanded ? 16 : 14,
-          fontWeight: 'bold',
-          color: themeColor,
+        <Text style={{ 
+          color: '#EEEEEE',
+          fontSize: 14,
+          fontWeight: '600',
         }}>
-          {expanded ? 'DETAILED ANALYSIS' : 'DAILY INSIGHT'}
-        </ThemedText>
+          JOURNAL ANALYSIS
+        </Text>
       </View>
-      
-      <ScrollView style={{ 
-        padding: 10,
-        maxHeight: expanded ? undefined : 150
-      }}>
-        {loading ? (
-          <View style={{ padding: 20, alignItems: 'center' }}>
-            <ActivityIndicator size="small" color={themeColor} />
-          </View>
-        ) : analysis ? (
-          <>
-            <ThemedText style={{
-              fontSize: expanded ? 16 : 14,
-              color: '#E0E0E0',
-              lineHeight: expanded ? 24 : 20,
-              fontStyle: 'italic',
-              textShadowColor: themeColor,
-              textShadowOffset: { width: 0, height: 0 },
-              textShadowRadius: expanded ? 4 : 2
+
+      {/* Content */}
+      <View style={{ padding: 15 }}>
+        {(loading || aiGenerating) ? (
+          <View style={{ 
+            padding: 20,
+            alignItems: 'center'
+          }}>
+            <MaterialIcons 
+              name="hourglass-empty" 
+              size={24} 
+              color={secondaryColor}
+              style={{ marginBottom: 8 }}
+            />
+            <Text style={{ 
+              color: '#AAAAAA',
+              fontSize: 14
             }}>
-              {analysis}
-            </ThemedText>
-          </>
-        ) : (
-          <ThemedText style={{ color: '#666', fontStyle: 'italic' }}>
-            No analysis available yet. Complete your daily entry to receive insights.
-          </ThemedText>
-        )}
-      </ScrollView>
+              Analyzing journal entries...
+            </Text>
+          </View>
+        ) : response ? (
+          <Text style={{ 
+            color: '#BBBBBB',
+            fontSize: 14,
+            lineHeight: 20
+          }}>
+            {response}
+          </Text>
+        ) : null}
+      </View>
     </View>
   );
 }
