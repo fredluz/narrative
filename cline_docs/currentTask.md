@@ -1,61 +1,39 @@
-# Current Task: Finalize Clerk Auth & Supabase RLS Integration - COMPLETE (Pending Testing)
+# Current Task: Refactor Authentication Screen
 
 ## Objective
-- Ensure Supabase Row Level Security (RLS) works correctly with Clerk authentication by aligning database schema and application code.
-- Complete the migration from Supabase Auth to Clerk using the recommended "Native Integration" approach.
+- Modify the main authentication screen (`/auth`) to display separate "Sign In" and "Sign Up" buttons instead of directly embedding the Clerk sign-in component.
+- Create dedicated screens (`/auth/signin` and `/auth/signup`) to host the respective Clerk `SignIn` and `SignUp` components.
+- Ensure the new buttons on the main auth screen match the application's UI aesthetic, referencing styles from `KanbanBoard.tsx`.
 
 ## Context
-- Debugging revealed that Supabase was still using its own session token, not the Clerk JWT, causing RLS failures.
-- Attempts to force token usage via `accessToken` or custom `fetch` in `lib/supabase.ts` were unsuccessful or incompatible.
-- The correct approach is "Native Integration": Use Clerk for app session management, but explicitly sign into Supabase using a Clerk ID token after Clerk sign-in to establish an authorized Supabase context for RLS.
-- Encountered `AuthApiError: Custom OIDC provider "oidc" not allowed`, indicating Supabase needs configuration to trust Clerk.
+- The previous implementation showed the Clerk `SignIn` component directly on `app/auth/index.tsx`.
+- The goal is to provide a clearer entry point for users to choose between signing in and signing up.
+
+## Implementation
+- **`app/auth/index.tsx`:**
+    - Removed the direct import and usage of the Clerk `SignIn` component.
+    - Added two `TouchableOpacity` components for "Sign In" and "Sign Up".
+    - Styled these buttons based on the primary action button style observed in `KanbanBoard.tsx` (using `themeColor`, padding, border-radius, etc.).
+    - Implemented `onPress` handlers using `useRouter` to navigate to `/auth/signin` and `/auth/signup`.
+    - Kept the existing matrix background and ASCII art.
+- **`app/auth/signin.tsx`:**
+    - Created this new file.
+    - Imported and rendered the Clerk `SignIn` component (using the `@clerk/clerk-expo/web` import path).
+    - Added basic container styling.
+- **`app/auth/signup.tsx`:**
+    - Created this new file.
+    - Imported and rendered the Clerk `SignUp` component (using the `@clerk/clerk-expo/web` import path).
+    - Added basic container styling.
 
 ## Progress
-- [x] **Authentication Migration:** Completed initial refactoring of components/hooks to use Clerk `useAuth`. Removed obsolete Supabase Auth files/code.
-- [x] **Database Schema Update:** Added `clerk_id text` column to relevant tables (`tasks`, `quests`, `profiles`, etc.). *(User confirmed)*
-- [x] **RLS Policy Update:** Enabled RLS and updated policies for relevant tables to check `(select auth.jwt()->>'sub') = clerk_id`. *(User confirmed)*
-- [x] **Service Function Update:** Modified `create`/`insert`/`update`/`query` functions in relevant service files to correctly use the `clerk_id` column.
-- [x] **Supabase Client Config:** Reverted `lib/supabase.ts` to a simple configuration suitable for native integration.
-- [x] **Supabase Auth Handshake:** Implemented logic in `app/_layout.tsx` to call `supabase.auth.signInWithIdToken` on Clerk sign-in and `supabase.auth.signOut` on Clerk sign-out.
-- [ ] **Supabase OIDC Provider Config:** Configure Clerk as a custom OIDC provider in Supabase Authentication settings, ensuring the Issuer URL is correct and the "Subject Claim" is set to `sub`. *(Pending User Action)*
-- [ ] **Clerk JWT Template:** Ensure minimal JWT template named `supabase` exists in Clerk dashboard. *(Pending User Action)*
+- [x] **Refactor `app/auth/index.tsx`:** Replaced Clerk component with styled navigation buttons.
+- [x] **Create `app/auth/signin.tsx`:** Implemented the dedicated sign-in screen.
+- [x] **Create `app/auth/signup.tsx`:** Implemented the dedicated sign-up screen.
+- [x] **Fix Redirect Loop:** Adjusted `app/_layout.tsx` to correctly identify routes within `/auth` directory.
+- [x] **Apply Custom Fonts:** Used Clerk's `appearance` prop to apply 'Inter' and 'Poppins' fonts to `SignIn` and `SignUp` components.
+- [x] **Testing:** Verified navigation from `/auth` to `/auth/signin` and `/auth/signup` works, redirect loop is fixed, and Clerk components render correctly. *(User confirmed)*
+- [ ] **Documentation Update:** Update `projectRoadmap.md` and `codebaseSummary.md`.
 
-## Next Steps (Summary)
-1.  Configure Clerk as OIDC Provider in Supabase Dashboard. *(User Action)*
-2.  Ensure minimal `supabase` JWT template exists in Clerk Dashboard. *(User Action)*
-3.  Test the new authentication flow and RLS policies thoroughly.
-4.  (Optional/Later) Backfill `clerk_id` for existing data.
-
-## Remaining Integration Tasks (Detailed)
-
-### 1. Configure Supabase OIDC Provider *(User Action)*
-
-*   **Goal:** Allow Supabase to trust and validate JWTs issued by Clerk.
-*   **Location:** Supabase Dashboard -> Authentication -> Providers -> OIDC (or JWT).
-*   **Action:**
-    1.  Enable the OIDC provider.
-    2.  Set the **Issuer URL** to your Clerk application's Issuer URL.
-    3.  Ensure the **Subject Claim** (or similar field) is set to `sub`.
-    4.  Configure Client ID/Secret if required (check Supabase docs).
-    5.  Consider disabling nonce check if needed.
-    6.  Save the configuration.
-
-### 3. Implement Supabase Auth Handshake - DONE (Code Added)
-
-*   ~~**Goal:** Synchronize Supabase Auth state with Clerk Auth state using the native integration pattern.~~
-*   ~~**File:** `app/_layout.tsx`~~
-*   ~~**Action:** Added `useEffect` hook to handle `signInWithIdToken` and `signOut` based on Clerk's `isSignedIn` state.~~
-
-### 4. Testing - PENDING
-
-*   **Action:** Thoroughly test all authentication flows and data operations *after* completing steps 1 & 2:
-    *   Sign up, Sign in, Sign out.
-    *   Creating, viewing, editing, deleting tasks, quests, journal entries, checkups, chat messages.
-    *   Ensure users can only see/modify their own data (RLS check).
-    *   Verify that operations fail appropriately for unauthenticated users.
-    *   Check console logs for any errors during the Supabase sign-in/sign-out process.
-
-### 5. Backfill `clerk_id` (Optional/Later)
-
-*   **Goal:** Populate the `clerk_id` column for existing rows created before this change.
-*   **Action:** Requires a mapping between the old Supabase `user_id` (uuid) and the corresponding Clerk User ID (text). This might involve a custom script or manual updates if the mapping isn't readily available (e.g., in Clerk user metadata).
+## Next Steps
+- Update `projectRoadmap.md` and `codebaseSummary.md`.
+- Task complete.

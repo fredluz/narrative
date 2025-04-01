@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, Dimensions, StyleSheet } from 'react-native'; // Removed TouchableOpacity, ScrollView
+import { View, Text, Dimensions, StyleSheet, TouchableOpacity } from 'react-native'; // Added TouchableOpacity
 import { useRouter } from 'expo-router';
-import { useTheme } from '@/contexts/ThemeContext'; // Keep for potential styling
 import { colors } from '@/app/styles/global';
-import { SignedIn, SignedOut, useAuth, } from '@clerk/clerk-expo'; 
-import { SignIn, SignUp } from '@clerk/clerk-expo/web'; // Import SignIn component from Clerk
+import { SignedIn, SignedOut, useAuth } from '@clerk/clerk-expo';
+// Removed SignIn import as it's moved to its own screen
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useTheme } from '@/contexts/ThemeContext'; // Import useTheme
+
 const asciiArt = `
 ███╗   ██╗                                          
  ███╗   ██╗   █████╗   ███████╗  ███████╗   █████╗   ██████╗  ██╗  ██╗   ██╗  ███████╗
@@ -19,21 +21,144 @@ const asciiArt = `
          ╚═╝  ╚═══╝  ╚═╝  ╚═╝  ╚═╝  ╚══╝ ╚═╝  ╚══╝ ╚═╝  ╚═╝    ╚═╝    ╚═╝     ╚══╝     ╚═══════╝`;
 
 // Extended char set (incl. Chinese)
-const CHAR_SET =
-  'qwertyuiopasdfghjklçzxcvbnm,.?!@€@£§€{[]}«»~^-_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789我你他是嘛汉字测试';
+const CHAR_SET = 'qwertyuiopasdfghjklçzxcvbnm,.?!@€@£§€{[]}«»~^-_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789我你他是嘛汉字测试';
+
+const createStyles = (themeColor: string) => StyleSheet.create({
+  container: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  backgroundContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: -1,
+  },
+  rowContainer: {
+    flexDirection: 'row',
+    width: '100%',
+  },
+  leftCol: {
+    flex: 1,
+    textAlign: 'left',
+  },
+  rightCol: {
+    flex: 1,
+    textAlign: 'right',
+  },
+  rowText: {
+    fontFamily: 'monospace',
+    fontSize: 18,
+    color: '#FFFFFF',
+    opacity: 0.8,
+    lineHeight: 15,
+  },
+  content: {
+    width: '100%',
+    maxWidth: 600,
+    padding: 20,
+    alignItems: 'center',
+    zIndex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderRadius: 10,
+  },
+  title: {
+    fontSize: 48,
+    fontWeight: 'bold',
+    color: '#FFF',
+    fontFamily: 'monospace',
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  subtitle: {
+    fontSize: 18,
+    fontFamily: 'monospace',
+    color: '#CCC',
+    marginBottom: 40,
+    textAlign: 'center',
+  },
+  loadingText: {
+    fontSize: 18,
+    color: '#FFF',
+    fontFamily: 'monospace',
+  },
+  signInText: { // Kept for potential future use, but not used by buttons
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontFamily: 'monospace',
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  asciiTitle: {
+    color: themeColor,
+    fontSize: 8,
+    fontFamily: 'monospace',
+    marginBottom: 20,
+    opacity: 0.8,
+  },
+  // Styles for the new buttons
+  authButton: {
+    backgroundColor: themeColor, // Use theme color
+    marginTop: 15,
+    paddingHorizontal: 30, // More horizontal padding
+    paddingVertical: 15, // More vertical padding
+    borderRadius: 8, // Slightly more rounded
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 }, // Slightly larger shadow
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5, // Increased elevation
+    width: '80%', // Make buttons wider
+    alignItems: 'center', // Center text
+  },
+  authButtonText: {
+    color: '#FFFFFF', // White text
+    fontWeight: '600', // Semi-bold
+    fontSize: 16,
+  },
+});
 
 export default function AuthScreen() {
   const router = useRouter();
-  // const { themeColor } = useTheme(); // Keep theme if needed for Clerk styling later
-  const { isLoaded, isSignedIn } = useAuth(); // Use Clerk's auth state
-  const { themeColor } = useTheme(); // Use theme color from context
-  // Track window dims for Matrix effect
+  const { isLoaded, isSignedIn } = useAuth();
+  const { themeColor } = useTheme(); // Get themeColor from context
+  const [localThemeColor, setLocalThemeColor] = useState(themeColor || '#2c8c0f'); // Use themeColor or default
   const [screenDims, setScreenDims] = useState(Dimensions.get('window'));
-  // Only store half as many columns
   const [matrixIndices, setMatrixIndices] = useState<number[][]>([]);
 
+  // Update localThemeColor if themeColor from context changes
   useEffect(() => {
-    // Orientation / size changes
+    if (themeColor) {
+      setLocalThemeColor(themeColor);
+    }
+  }, [themeColor]);
+
+  // Load theme color from AsyncStorage on mount (keep for initial load before context)
+  useEffect(() => {
+    const loadThemeColor = async () => {
+      try {
+        // Only load from storage if themeColor from context isn't available yet
+        if (!themeColor) {
+          const savedColor = await AsyncStorage.getItem('themeColor');
+          if (savedColor) {
+            setLocalThemeColor(savedColor);
+          }
+        }
+      } catch (error) {
+        console.error('Error loading theme color:', error);
+      }
+    };
+    loadThemeColor();
+  }, [themeColor]); // Depend on themeColor from context
+
+  // Generate styles with current theme color
+  const styles = createStyles(localThemeColor);
+
+  // Orientation / size changes
+  useEffect(() => {
     const handleChange = ({ window }: any) => setScreenDims(window);
     const subscription = Dimensions.addEventListener('change', handleChange);
     return () => subscription?.remove?.();
@@ -130,108 +255,30 @@ export default function AuthScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Matrix: wave + reflection */}
       <View style={styles.backgroundContainer}>{renderMatrix()}</View>
-      {/* ASCII Art Title */}
-      <Text style={styles.asciiTitle}>{asciiArt}</Text>
-      {/* Content Area */}
+      <Text style={[styles.asciiTitle, { color: themeColor }]}>{asciiArt}</Text>
       <View style={styles.content}>
-        {/* Clerk handles the actual Sign In/Sign Up UI via its Provider configuration */}
-        {/* We show the Matrix background when signed out */}
         <SignedOut>
            <Text style={styles.subtitle}>Your Digital Journey</Text>
-           {/* Clerk's Sign In Button */}
-           <SignIn />
-          </SignedOut>
-        {/* SignedIn might just show a loading indicator briefly before redirect */}
+           {/* Replace SignIn component with buttons */}
+           <TouchableOpacity
+             style={[styles.authButton]}
+             onPress={() => router.push('/auth/signin')}
+           >
+             <Text style={styles.authButtonText}>Sign In</Text>
+           </TouchableOpacity>
+           <TouchableOpacity
+             style={styles.authButton}
+             onPress={() => router.push('/auth/signup')}
+           >
+             <Text style={styles.authButtonText}>Sign Up</Text>
+           </TouchableOpacity>
+        </SignedOut>
         <SignedIn>
+          {/* Show loading or redirect */}
           <Text style={styles.loadingText}>Loading...</Text>
         </SignedIn>
       </View>
     </View>
   );
 }
-
-// Styles
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  backgroundContainer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: -1,
-  },
-  // Each row has 2 columns side by side
-  rowContainer: {
-    flexDirection: 'row',
-    width: '100%',
-  },
-  // each half is forced to share horizontal space
-  leftCol: {
-    flex: 1,
-    textAlign: 'left',
-  },
-  rightCol: {
-    flex: 1,
-    textAlign: 'right',
-  },
-  // base styling for row text
-  rowText: {
-    fontFamily: 'monospace',
-    fontSize: 18,
-    color: '#FFFFFF',
-    opacity: 0.8,
-    lineHeight: 15,
-  },
-  content: {
-    width: '100%',
-    maxWidth: 600,
-    padding: 20,
-    alignItems: 'center',
-    zIndex: 1, // Ensure content is above matrix
-    backgroundColor: 'rgba(0,0,0,0.6)', // Semi-transparent background for readability
-    borderRadius: 10,
-  },
-  title: { // Added title style
-    fontSize: 48, // Larger title
-    fontWeight: 'bold',
-    color: '#FFF', // White title
-    fontFamily: 'monospace', // Consistent font
-    marginBottom: 10,
-    textAlign: 'center',
-  },
-  subtitle: {
-    fontSize: 18,
-    fontFamily: 'monospace',
-    color: '#CCC', // Lighter grey subtitle
-    marginBottom: 40, // More space below subtitle
-    textAlign: 'center',
-  },
-  loadingText: { // Style for loading text when signed in
-      fontSize: 18,
-      color: '#FFF',
-      fontFamily: 'monospace',
-  },
-  // Button styles
-  
-  signInText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontFamily: 'monospace',
-    fontWeight: 'bold',
-    textAlign: 'center',
-  },
-  asciiTitle: {
-    color: '#FFFFFF',
-    fontSize: 8,
-    fontFamily: 'monospace',
-    marginBottom: 20,
-    opacity: 0.8,
-  }
-});

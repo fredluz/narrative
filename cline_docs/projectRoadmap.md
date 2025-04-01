@@ -30,3 +30,4 @@
 - 2025-03-31: Created `cline_docs` directory.
 - 2025-03-31: Completed initial documentation setup (`projectRoadmap.md`, `currentTask.md`, `techStack.md`, `codebaseSummary.md`).
 - 2025-03-31: Migrated authentication from Supabase Auth to Clerk. Configured Supabase client for Clerk JWTs. Refactored components, hooks, and services. Cleaned up obsolete auth files.
+- 2025-04-01: Fixed signed-out redirect logic in `app/_layout.tsx` to correctly navigate users to `/auth`.

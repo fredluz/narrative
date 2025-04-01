@@ -1,4 +1,4 @@
-import { Slot, useRouter, useSegments } from 'expo-router';
+import { Slot, useRouter, useSegments } from 'expo-router'; // Re-added useSegments
 import * as SplashScreen from 'expo-splash-screen';
 import React, { useCallback, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
@@ -9,9 +9,8 @@ import { SupabaseProvider } from '@/contexts/SupabaseContext'; // Keep SupabaseP
 import { QuestUpdateProvider } from '@/contexts/QuestUpdateContext';
 import { SuggestionProvider } from '@/contexts/SuggestionContext';
 import { TriangularSpinner } from '@/components/loading/TriangularSpinner';
-import { ClerkProvider, useAuth } from '@clerk/clerk-expo';
+import { ClerkProvider, useAuth } from '@clerk/clerk-expo'; // Removed SignedIn, SignedOut
 import * as SecureStore from 'expo-secure-store';
-import { supabase } from '@/lib/supabase'; // Import Supabase client
 
 // Retrieve Clerk Publishable Key from environment variables
 const CLERK_PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
@@ -51,15 +50,17 @@ const tokenCache = {
 // Keep the splash screen visible while we fetch resources
 SplashScreen.preventAutoHideAsync();
 
+// Removed RedirectToAuth component
+
 function InitialLayout() {
   console.log(`[InitialLayout] COMPONENT FUNCTION CALLED at ${new Date().toISOString()}`);
   const renderCount = useRef(0);
   renderCount.current += 1;
 
-  const { isLoaded: isClerkLoaded, isSignedIn, getToken } = useAuth(); // Use Clerk auth state, add getToken
+  const { isLoaded: isClerkLoaded, isSignedIn } = useAuth(); // Use Clerk auth state
   const { themeColor } = useTheme();
-  const router = useRouter();
-  const segments = useSegments();
+  const segments = useSegments(); // Need segments for the redirect check
+  const router = useRouter(); // Need router for the redirect check
 
   const [fontsLoaded] = useFonts({
     Inter_400Regular,
@@ -75,7 +76,32 @@ function InitialLayout() {
     console.log(`[InitialLayout] STATE CHECK - Clerk Loaded: ${isClerkLoaded}, Signed In: ${isSignedIn}, Fonts Loaded: ${fontsLoaded} at ${new Date().toISOString()}`);
   }, [isClerkLoaded, isSignedIn, fontsLoaded]);
 
-  // Removed Supabase auth sync effect - accessToken in supabase client handles this now
+  // Effect to handle redirects based on auth state
+  useEffect(() => {
+    // Wait for both Clerk AND fonts to be loaded before attempting navigation
+    if (!isClerkLoaded || !fontsLoaded) {
+      return; 
+    }
+
+    // Check if the current route segment is within the 'auth' directory
+    const inAuthGroup = segments[0] === 'auth'; 
+
+    console.log(`[InitialLayout] Auth Redirect Check: isSignedIn=${isSignedIn}, inAuthGroup=${inAuthGroup}, segments=${segments.join('/')}`);
+
+    if (isSignedIn && inAuthGroup) {
+      // If signed in and in auth group, redirect to the main app page (e.g., '/')
+      console.log("[InitialLayout] Redirecting authenticated user away from /auth to /");
+      router.replace('/'); 
+    } else if (!isSignedIn && !inAuthGroup) {
+      // If signed out and NOT in auth group, redirect to the auth page
+      console.log("[InitialLayout] Redirecting unauthenticated user to /auth");
+      router.replace('/auth'); // Ensure '/auth' is your correct sign-in route
+    }
+    // Implicit else:
+    // - If signed in and NOT in auth group: Stay where you are (already in the app).
+    // - If signed out and IN auth group: Stay where you are (already on the sign-in page).
+
+  }, [isClerkLoaded, fontsLoaded, isSignedIn, segments, router]); // Add fontsLoaded to dependency array
 
   // Hide splash screen when both fonts and Clerk are loaded
   const onLayoutRootView = useCallback(async () => {
@@ -94,7 +120,10 @@ function InitialLayout() {
 
   return (
     <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
-      <Slot />
+      {/* Always render Slot after loading, redirection handled elsewhere or by effect above */}
+      {!showLoadingOverlay && <Slot />}
+
+      {/* Loading overlay remains the same */}
       {showLoadingOverlay && (
         <View style={layoutStyles.overlay}>
           <TriangularSpinner size={40} color={themeColor || '#fff'} />
