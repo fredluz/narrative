@@ -3,7 +3,8 @@ import OpenAI from 'openai';
 import { GoogleGenerativeAI, GenerativeModel } from '@google/generative-ai';
 import { ChatCompletionMessageParam, ChatCompletion } from 'openai/resources/chat/completions';
 import { QuestAgent } from './QuestAgent';
-import { SuggestionAgent, ConversationData, TaskStatusChangeResult } from './SuggestionAgent';
+import { SuggestionAgent } from './SuggestionAgent';
+import { UpdateAgent, TaskStatusChangeResult } from './UpdateAgent';
 import * as chatDataUtils from '@/hooks/useChatData';
 import { PersonalityType, getPersonality } from './PersonalityPrompts';
 import { personalityService } from '../personalityService';
@@ -25,6 +26,7 @@ export class ChatAgent {
   private openai: OpenAI;
   private questAgent: QuestAgent;
   private suggestionAgent: SuggestionAgent;
+  private updateAgent: UpdateAgent;
   private genAI: GoogleGenerativeAI;
 
   // --------- Constructor ---------
@@ -36,10 +38,11 @@ export class ChatAgent {
     });
     this.questAgent = new QuestAgent();
     this.suggestionAgent = SuggestionAgent.getInstance();
+    this.updateAgent = UpdateAgent.getInstance();
     this.genAI = new GoogleGenerativeAI(process.env.EXPO_PUBLIC_GEMINI_API_KEY || '');
 
     console.log("🤖 [ChatAgent] Initialized with DeepSeek for main responses.");
-    console.log("🤖 [ChatAgent] SuggestionAgent configured (assumed Gemini for status checks/suggestions).");
+    console.log("🤖 [ChatAgent] SuggestionAgent and UpdateAgent configured for suggestions and status updates.");
   }
 
   // --------- generateChatResponse ---------
@@ -193,33 +196,37 @@ export class ChatAgent {
 
 
                 // --- 4. Define Concurrent Promises ---
-                console.log('[ChatAgent] Starting concurrent: Task Status Change Check (Assumed Gemini) + Main Response (DeepSeek)'); // Added log for clarity
+                console.log('[ChatAgent] Starting concurrent: Task Status Check (UpdateAgent) + Main Response (DeepSeek)');
 
-                const statusChangePromise = this.suggestionAgent.detectTaskStatusChangeIntent(message, userId, activeTasks)
+                // Use UpdateAgent instead of SuggestionAgent for task status change detection
+                const statusChangePromise = this.updateAgent.processCheckupForStatusUpdates(message, userId, activeTasks)
+                    .then(() => {
+                        // Since processCheckupForStatusUpdates doesn't return a result, we need to handle this differently
+                        // For now, just return null since we're handling the update inside the agent
+                        return null;
+                    })
                     .catch((err: any) => {
-                        // <<< FIX: Added error logging back
                         console.error("[ChatAgent] Error during concurrent status change detection:", err);
                         return null; // Ensure null is returned on error
                     });
-        
-                console.log('\n=== SENDING TO DEEPSEEK LLM ==='); // Added log for clarity
-                console.log(`FULL PROMPT:\n${JSON.stringify(messages)}`); // Added log for clarity
+
+                console.log('\n=== SENDING TO DEEPSEEK LLM ===');
+                console.log(`FULL PROMPT:\n${JSON.stringify(messages)}`);
                 const responsePromise = this.openai.chat.completions.create({
                     model: "deepseek-chat",
                     messages: messages,
-                    // <<< FIX: Added temperature and max_tokens back
                     temperature: 0.7,
                     max_tokens: 1020
                 }).catch((err: any) => {
-                    // <<< FIX: Added error logging back
                     console.error("[ChatAgent] Error during concurrent main response generation (DeepSeek):", err);
                     return null; // Ensure null is returned on error
                 });
 
         // --- 5. Run Concurrently ---
-        // ... (Promise.all remains the same) ...
         const [statusResult, dsResponse] = await Promise.all([ statusChangePromise, responsePromise ]);
-        statusChangeResult = statusResult;
+        
+        // Fix the typing issue - ensure proper casting from potential null
+        statusChangeResult = statusResult as TaskStatusChangeResult | null;
         deepseekResponse = dsResponse;
 
         // --- 6. Process Results ---
@@ -437,20 +444,35 @@ Write a reflective journal entry from my perspective about what we discussed, ma
 private async generateSuggestionsFromChatSession(messages: ChatMessage[], userId: string): Promise<void> {
   if (!messages || messages.length === 0 || !userId) { return; }
   try {
-      const conversationData: ConversationData = {
-        messages: messages.map((msg) => ({
-          role: msg.is_user ? "user" as const : "assistant" as const,
-          content: msg.message,
-          timestamp: msg.created_at
-        })),
-        metadata: {
-          startTime: messages[0]?.created_at || new Date().toISOString(),
-          endTime: messages[messages.length - 1]?.created_at || new Date().toISOString(), 
-          totalMessages: messages.length
-        }
-      };
-      await this.suggestionAgent.analyzeConversation(conversationData, userId);
-  } catch (error: any) { console.error('Error in suggestion generation:', error); }
+      console.log("[ChatAgent] Generating suggestions from chat session");
+      
+      // Extract content from chat messages, focusing on user messages
+      const userMessages = messages
+          .filter(msg => msg.is_user)
+          .map(msg => msg.message);
+      
+      if (userMessages.length === 0) {
+          console.log("[ChatAgent] No user messages found in chat session");
+          return;
+      }
+      
+      // Combine user messages into a single content string
+      // This will be analyzed as if it were a checkup entry
+      const combinedContent = userMessages.join("\n");
+      console.log(`[ChatAgent] Combining ${userMessages.length} user messages for suggestion analysis`);
+      
+      // Use the new analyzeCheckupForSuggestions method instead of analyzeConversation
+      await this.suggestionAgent.analyzeCheckupForSuggestions(combinedContent, userId);
+      
+      // Fetch active tasks for the update agent
+      const activeTasks = await fetchActiveTasks(userId);
+      
+      // Also process for potential status updates with UpdateAgent
+      await this.updateAgent.processCheckupForStatusUpdates(combinedContent, userId, activeTasks);
+      
+  } catch (error: any) { 
+      console.error('[ChatAgent] Error in suggestion generation:', error); 
+  }
 }
 
 } // End of ChatAgent class

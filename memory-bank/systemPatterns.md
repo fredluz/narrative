@@ -63,3 +63,49 @@ graph LR
 *   Data flow and state synchronization between `useJournal`, `JournalPanel`, and `journalService`.
 *   Robustness of the daily entry generation, specifically the final step of linking checkups via DB update after the main entry is saved.
 *   Apparent redundancy in triggering suggestion analysis for manual checkups (event emission + direct call).
+
+## Key Agents and Services
+
+- **JournalAgent**: Responsible for generating AI insights for journal entries and checkup entries.
+- **SuggestionAgent**: Generates task and quest suggestions from checkup content and provides functionality to find the best quest for a task, check for duplicates, and more.
+- **UpdateAgent**: Detects and applies task status updates (InProgress, Done) based on checkup content analysis.
+- **ChatAgent**: Handles conversation analysis and message generation for the chat interface.
+
+## System Flows
+
+### Checkup Processing Flow
+
+1. User creates a checkup entry in the journal
+2. The checkup is saved to the database via `journalService.saveCheckupEntry()`
+3. After saving, the `journalService` concurrently triggers:
+   - **SuggestionAgent**: Analyzes the checkup to generate task/quest suggestions
+   - **UpdateAgent**: Analyzes the checkup to detect task status updates
+
+```
+User Input (Checkup) → journalService.saveCheckupEntry()
+                      ↓
+        ┌─────────────────────────┐
+        │                         │
+        ↓                         ↓
+SuggestionAgent.analyzeCheckup    UpdateAgent.processCheckup
+(Task/Quest Suggestions)          (Task Status Updates)
+        │                         │
+        ↓                         ↓
+globalSuggestionStore             Database Update
+(User Review)                     (Immediate)
+```
+
+### Suggestion Flow
+
+1. `SuggestionAgent.analyzeCheckupForSuggestions()` processes checkup content
+2. Generates both new quest suggestions (with associated tasks) and standalone task suggestions
+3. Processes standalone tasks through duplicate/continuation detection
+4. All suggestions are added to `globalSuggestionStore` for user review
+5. When user accepts a suggestion, it's saved to the database
+
+### Task Status Update Flow
+
+1. `UpdateAgent.processCheckupForStatusUpdates()` analyzes checkup content
+2. Detects if the user indicates they've started or completed a task
+3. If high-confidence detection (>0.88), updates the task status directly
+4. Changes are applied immediately without requiring user confirmation

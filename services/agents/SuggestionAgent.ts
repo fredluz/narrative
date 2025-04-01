@@ -126,19 +126,6 @@ export interface TaskStatusChangeResult {
 
 type Suggestion = TaskSuggestion | QuestSuggestion;
 
-interface TaskGroup {
-  content: string;
-  context: TaskContext;
-}
-
-interface QuestPattern {
-  content: string;
-  context: {
-    sourceMessage: string;
-    relatedMessages: string[];
-    confidence: number;
-  };
-}
 export interface TaskCompletionResult {
   isCompletion: boolean;
   existingTaskId: number | null;
@@ -178,144 +165,6 @@ export class SuggestionAgent {
     }
     return SuggestionAgent.instance;
   }
-
-  /**
-   * NEW: Analyzes content specifically for task completion intent.
-   * @param content The user message content.
-   * @param userId The user's ID.
-   * @returns TaskCompletionResult indicating if completion was detected and for which task.
-   */
-    // --- NEW: Merged detectTaskStatusChangeIntent ---
-    public async detectTaskStatusChangeIntent(
-      content: string,
-      userId: string,
-      // Accepts pre-fetched ACTIVE tasks (ToDo or InProgress)
-      activeTasksList?: Task[]
-    ): Promise<TaskStatusChangeResult> {
-      // Removed performance logger calls
-      try {
-        console.log('🕵️ [SuggestionAgent] Concurrent Status Change check w/ Gemini Flash:', content);
-  
-        // Use provided list or fetch active tasks if not provided
-        const activeTasks = activeTasksList ?? await fetchActiveTasks(userId);
-  
-        if (!activeTasks || activeTasks.length === 0) {
-           console.log('[SuggestionAgent] No Active (ToDo/InProgress) tasks found for status change check.');
-          // Correct property name: isStatusChangeDetected
-          return { isStatusChangeDetected: false, existingTaskId: null, newStatus: null, confidence: 0 };
-        }
-        console.log(`[SuggestionAgent] Checking against ${activeTasks.length} Active tasks for status change intent.`);
-  
-        // Get personality for prompt style (optional)
-        // const personalityType = await personalityService.getUserPersonality(userId);
-        // const personality = getPersonality(personalityType);
-  
-        const prompt = `
-  Analyze the user's message STRICTLY to determine if they are stating that they have either:
-  1.  COMPLETED an existing task (which is currently 'ToDo' or 'InProgress'). The target status would be 'Done'.
-  2.  STARTED WORKING ON or ARE CURRENTLY WORKING ON an existing task (which is currently 'ToDo'). The target status would be 'InProgress'.
-  
-  User Message: "${content}"
-  
-  Existing Active Tasks ('ToDo' or 'InProgress'):
-  ${activeTasks.map(task => `Task ID: ${task.id} | Title: ${task.title} | Current Status: ${task.status}`).join('\n')}
-  
-  CRITICAL EVALUATION:
-  - **Completion ('Done'):** Does the message clearly state a task is FINISHED, DONE, or COMPLETED? Match against 'ToDo' OR 'InProgress' tasks.
-  - **Starting ('InProgress'):** Does the message clearly state the user *began* work or is *currently* working on a specific task? Match ONLY against 'ToDo' tasks. Intent must be *present* action ("Starting X", "Working on X now"), not future plans ("I will start X").
-  - Identify the single MOST LIKELY task and the corresponding action (Done or InProgress).
-  - If the user mentions completing a task, prioritize that ('Done') over starting another task mentioned in the same message.
-  
-  Reply ONLY with a JSON object in this EXACT format:
-  {
-    "isStatusChangeDetectedDetected": true/false, // true ONLY if a specific task status change is clearly indicated
-    "existingTaskId": task_id_or_null, // The numeric ID of the affected task, or null
-    "newStatus": "Done" | "InProgress" | null, // The NEW status ('Done' or 'InProgress'), or null
-    "confidence": 0.0_to_1.0, // Confidence score (must be > 0.88 for detection)
-    "reason": "Brief explanation for the decision"
-  }`;
-  
-        // Use Gemini Flash model instance from constructor or get it here
-        const structuredModel = this.genAI.getGenerativeModel({ // Or use this.model if already configured
-          model: "gemini-2.0-flash",
-          generationConfig: {
-            temperature: 0.15, // Low temp for extraction
-            responseMimeType: "application/json",
-          }
-          // safetySettings can be added here too if needed per-call
-          // safetySettings: this.safetySettings // If safetySettings is defined in this class
-        });
-  
-        const result = await structuredModel.generateContent(prompt);
-        // Use helper if available, otherwise basic trim
-        const responseText = this.cleanResponseText(result.response.text());
-  
-        // Parse and Validate the result
-        try {
-          const parsed = JSON.parse(responseText);
-          const isStatusChangeDetectedDetected = parsed.isStatusChangeDetectedDetected === true &&
-                                   parsed.confidence > 0.88 && // Confidence threshold
-                                   parsed.existingTaskId != null &&
-                                   (parsed.newStatus === 'Done' || parsed.newStatus === 'InProgress');
-  
-          if (!isStatusChangeDetectedDetected) {
-             console.log(`🚫 [SuggestionAgent] Concurrent Check: No high-confidence status change detected.`);
-             // Correct property name: isStatusChangeDetectedDetected
-             return { isStatusChangeDetected: false, existingTaskId: null, newStatus: null, confidence: parsed.confidence || 0, reason: parsed.reason };
-          }
-  
-          const taskId = Number(parsed.existingTaskId);
-          const newStatus = parsed.newStatus as ('Done' | 'InProgress');
-  
-          // Find the original task to validate the transition
-          const originalTask = activeTasks.find(t => t.id === taskId);
-  
-          if (!originalTask) {
-              console.warn(`[SuggestionAgent] Detected change for Task ID ${taskId}, but task not found in provided active list.`);
-              // Correct property name: isStatusChangeDetected
-              return { isStatusChangeDetected: false, existingTaskId: null, newStatus: null, confidence: 0, reason: "Detected task ID not found" };
-          }
-  
-          // --- Validation Logic ---
-          let isValidTransition = false;
-          if (newStatus === 'Done') {
-              // Can complete 'ToDo' or 'InProgress'
-              isValidTransition = (originalTask.status === 'ToDo' || originalTask.status === 'InProgress');
-          } else if (newStatus === 'InProgress') {
-              // Can only start 'ToDo' tasks
-              isValidTransition = (originalTask.status === 'ToDo');
-          }
-  
-          if (isValidTransition) {
-              console.log(`✅ [SuggestionAgent] Concurrent Check: Valid status change to '${newStatus}' confirmed for Task ID: ${taskId} (Original: ${originalTask.status}). Confidence: ${parsed.confidence}. Reason: ${parsed.reason}`);
-              // Correct property name: isStatusChangeDetectedDetected
-              return {
-                  isStatusChangeDetected: true,
-                  existingTaskId: taskId,
-                  newStatus: newStatus,
-                  confidence: parsed.confidence,
-                  reason: parsed.reason
-              };
-          } else {
-              console.warn(`[SuggestionAgent] Detected change for Task ID ${taskId} to '${newStatus}', but this is NOT a valid transition from its current status '${originalTask.status}'. Ignoring.`);
-               // Correct property name: isStatusChangeDetected
-              return { isStatusChangeDetected: false, existingTaskId: null, newStatus: null, confidence: 0, reason: `Invalid transition from ${originalTask.status} to ${newStatus}` };
-          }
-  
-        } catch (parseError) {
-          console.error('Error parsing concurrent status change result:', parseError, 'Raw:', responseText);
-           // Correct property name: isStatusChangeDetected
-          return { isStatusChangeDetected: false, existingTaskId: null, newStatus: null, confidence: 0 };
-        }
-  
-      } catch (error) {
-          console.error('Error in detectTaskStatusChangeIntent (Concurrent):', error);
-           // Correct property name: isStatusChangeDetected
-          return { isStatusChangeDetected: false, existingTaskId: null, newStatus: null, confidence: 0 };
-      }
-      // Removed finally block
-
-    }
 
   /**
    * Generates a task suggestion from content
@@ -1134,7 +983,6 @@ IMPORTANT:
     // If no code block, return the original text
     return text;
   }
-// REPLACE the ENTIRE acceptQuestSuggestion method in the SuggestionAgent class
 
   /**
    * MODIFIED: Creates a quest and potentially links related tasks afterward.
@@ -1177,38 +1025,32 @@ IMPORTANT:
   }
 
   /**
-   * Analyzes a complete conversation for task and quest suggestions
-   * @param conversation Structured conversation data from chat session
+   * Analyzes checkup content to generate task and quest suggestions
+   * @param checkupContent The content of the checkup entry
    * @param userId The user's ID
+   * @returns Promise that resolves when analysis is complete
    */
-  // REPLACE the ENTIRE analyzeConversation method in the SuggestionAgent class
-
-  /**
-   * OVERHAULED: Analyzes a complete conversation for task and quest suggestions, generating quests first.
-   * @param conversation Structured conversation data from chat session
-   * @param userId The user's ID
-   */
-  public async analyzeConversation(conversation: ConversationData, userId: string): Promise<void> {
-    performanceLogger.startOperation('analyzeConversation (New Order)');
-    console.log(`\n=== SuggestionAgent.analyzeConversation (New Order) ===`);
-    console.log(`Analyzing conversation with ${conversation.messages.length} messages for user ${userId}`);
+  public async analyzeCheckupForSuggestions(checkupContent: string, userId: string): Promise<void> {
+    performanceLogger.startOperation('analyzeCheckupForSuggestions');
+    console.log(`\n=== SuggestionAgent.analyzeCheckupForSuggestions ===`);
+    console.log(`Analyzing checkup content for user ${userId}: "${checkupContent.substring(0, 100)}${checkupContent.length > 100 ? '...' : ''}"`);
 
     try {
       const currentDate = new Date().toISOString().split('T')[0];
       const personalityType = await personalityService.getUserPersonality(userId);
       const personality = getPersonality(personalityType);
 
-      // **NEW Combined Prompt**
+      // Combined prompt to generate both quests and tasks from checkup content
       const prompt = `You are ${personality.name}. ${personality.description}
 Current date is: ${currentDate}
 
-Analyze this entire conversation to identify:
-1.  Potential new **Quests** (larger projects or goals).
-2.  **Tasks** that belong to those **new Quests**.
-3.  Standalone **Tasks** that don't seem to fit a new Quest (they might fit existing ones later).
+Analyze this checkup entry to identify:
+1. Potential new **Quests** (larger projects or goals).
+2. **Tasks** that belong to those **new Quests**.
+3. Standalone **Tasks** that don't seem to fit a new Quest (they might fit existing ones later).
 
-Conversation History:
-${conversation.messages.map(msg => `${msg.role.toUpperCase()}: ${msg.content}`).join('\n')}
+Checkup Entry Content:
+${checkupContent}
 
 Generate a JSON object with this EXACT structure:
 {
@@ -1258,24 +1100,24 @@ IMPORTANT RULES:
 - Ensure all dates are ${currentDate} or later.
 - Write descriptions in your characteristic ${personality.name} voice.`;
 
-      console.log('🚀 [SuggestionAgent] Sending combined analysis prompt to AI...');
+      console.log('🚀 [SuggestionAgent] Sending analysis prompt to AI...');
       const response = await this.openai.chat.completions.create({
-        model: "deepseek-chat", // Or a model good at complex JSON generation
+        model: "deepseek-chat", 
         messages: [{ role: "system", content: prompt }],
         temperature: 0.4,
-        max_tokens: 3500, // Increase if needed for complex conversations
+        max_tokens: 3500,
         response_format: { type: "json_object" }
       });
 
       const responseText = response.choices[0].message?.content;
       if (!responseText) {
-        throw new Error('Empty response from AI during combined analysis');
+        throw new Error('Empty response from AI during checkup analysis');
       }
 
-      console.log('✅ [SuggestionAgent] Received combined analysis response. Parsing...');
+      console.log('✅ [SuggestionAgent] Received analysis response. Parsing...');
       const parsed = JSON.parse(responseText);
       const timestamp = new Date().toISOString();
-      const sourceContent = conversation.messages.map(m=>m.content).join('\n'); // Use full convo as source
+      const sourceContent = checkupContent; // Use checkup content as source
 
       // --- Process Quests FIRST ---
       const suggestedQuestsData = parsed.suggestedQuests || [];
@@ -1338,8 +1180,7 @@ IMPORTANT RULES:
       const standaloneTasksData = parsed.standaloneTasks || [];
       console.log(`Processing ${standaloneTasksData.length} standalone tasks...`);
       for (const taskData of standaloneTasksData) {
-
-          // If not a completion action, proceed to create suggestion
+          // Create standalone task suggestion
           const clientTaskId = taskData.clientTaskId || `task-${timestamp}-${Math.random().toString(36).substring(2, 10)}`;
           const taskSuggestion: TaskSuggestion = {
               id: clientTaskId,
@@ -1405,329 +1246,10 @@ IMPORTANT RULES:
           globalSuggestionStore.addSuggestion(taskToAdd);
       }
 
-
     } catch (error) {
-      console.error('❌ Error in analyzeConversation (New Order):', error);
+      console.error('❌ Error in analyzeCheckupForSuggestions:', error);
     } finally {
-      performanceLogger.endOperation('analyzeConversation (New Order)');
-    }
-  }
-
-  /**
-   * Identifies potential task groups from a conversation
-   * @param conversation The conversation data to analyze
-   * @returns Array of task groups
-   */
-  private async identifyTaskGroups(conversation: ConversationData): Promise<TaskGroup[]> {
-    try {
-      console.log('🔍 Identifying potential tasks from conversation');
-      
-      const currentDate = new Date().toISOString().split('T')[0];
-      
-      const prompt = `Analyze this conversation to identify potential tasks that should be tracked in a task management system.
-
-Focus on identifying:
-1. Direct user commitments ("I will...", "I need to...")
-2. User agreeing to AI suggestions
-3. Explicit task discussions
-4. Implicit tasks embedded in conversation
-5. Important deadlines or scheduled activities
-
-For each task, extract:
-1. The core action or task statement
-2. The message that contains this task
-3. Any related messages that provide context
-4. A confidence score (0-1) indicating how likely this is a real task
-5. Any dependencies or related tasks
-6. The timing (immediate, short-term, or long-term)
-
-Current date: ${currentDate}
-
-Conversation:
-${conversation.messages.map(msg => 
-  `${msg.role.toUpperCase()}: ${msg.content}`
-).join('\n')}
-
-Return your findings in this exact JSON format:
-{
-  "tasks": [
-    {
-      "content": "Core task statement or action",
-      "sourceMessage": "The original full message containing the task",
-      "relatedMessages": ["First related message", "Second related message"],
-      "confidence": 0.8,
-      "dependencies": ["Optional related task"],
-      "timing": "immediate | short-term | long-term"
-    }
-  ]
-}`;
-
-      console.log('Sending task identification prompt to AI');
-
-      const response = await this.openai.chat.completions.create({
-        model: "deepseek-chat",
-        messages: [
-          { role: "system", content: prompt }
-        ],
-        temperature: 0.3,
-        max_tokens: 2000,
-        response_format: { type: "json_object" }
-      });
-
-      try {
-        // Get the response content
-        const responseText = response.choices[0].message?.content || '{}';
-        console.log('Task identification response received, parsing...');
-        
-        // Parse the JSON response
-        const parsed = JSON.parse(responseText);
-        
-        // Check for tasks array in the response with a fallback to empty array
-        const tasks = parsed.tasks || [];
-        
-        console.log(`Found ${tasks.length} potential tasks in conversation`);
-        
-        // Map the tasks to our TaskGroup format
-        return tasks.map((task: any) => ({
-          content: task.content || '',
-          context: {
-            sourceMessage: task.sourceMessage || '',
-            relatedMessages: task.relatedMessages || [],
-            confidence: task.confidence || 0.5,
-            dependencies: task.dependencies,
-            timing: task.timing
-          }
-        }));
-      } catch (error) {
-        console.error('Error parsing task groups:', error);
-        console.error('Response content:', response.choices[0].message?.content);
-        // Return empty array on error
-        return [];
-      }
-    } catch (error) {
-      console.error('Error identifying task groups:', error);
-      return [];
-    }
-  }
-
-  /**
-   * Identifies potential quest patterns from a conversation
-   * @param conversation The conversation data to analyze
-   * @returns Array of quest patterns
-   */
-  private async identifyQuestPatterns(conversation: ConversationData): Promise<QuestPattern[]> {
-    try {
-      console.log('🔍 Identifying potential quests from conversation');
-      
-      const currentDate = new Date().toISOString().split('T')[0];
-      
-      const prompt = `Analyze this conversation to identify potential quests (larger goals or projects that could span multiple tasks).
-
-Focus on identifying:
-1. Long-term goals or projects mentioned by the user
-2. Multi-step projects or initiatives
-3. Larger objectives that might involve collaboration with others
-4. Projects that will involve multiple separate tasks
-5. User's expressed intentions about future achievements
-6. AI suggestions that the user shows interest in pursuing
-
-For each potential quest pattern, determine:
-1. The core goal or objective (what would define success?)
-2. All related messages that discuss this goal
-3. Any specific tasks or steps mentioned
-4. Timeline indicators (immediate, short-term, long-term)
-5. User's level of commitment (0-1 confidence score)
-
-Current date: ${currentDate}
-
-Conversation:
-${conversation.messages.map(msg => 
-  `${msg.role.toUpperCase()}: ${msg.content}`
-).join('\n')}
-
-Return your findings in this exact JSON format:
-{
-  "quests": [
-    {
-      "content": "Core quest description or project goal",
-      "sourceMessage": "The original full message containing the quest idea",
-      "relatedMessages": ["First related message", "Second related message"],
-      "confidence": 0.8
-    }
-  ]
-}`;
-
-      console.log('Sending quest identification prompt to AI');
-
-      const response = await this.openai.chat.completions.create({
-        model: "deepseek-chat",
-        messages: [
-          { role: "system", content: prompt }
-        ],
-        temperature: 0.3,
-        max_tokens: 2000,
-        response_format: { type: "json_object" }
-      });
-
-      try {
-        // Get the response content
-        const responseText = response.choices[0].message?.content || '{}';
-        console.log('Quest identification response received, parsing...');
-        
-        // Parse the JSON response
-        const parsed = JSON.parse(responseText);
-        
-        // Check for quests array in the response with a fallback to empty array
-        const quests = parsed.quests || parsed.questPatterns || [];
-        
-        console.log(`Found ${quests.length} potential quests in conversation`);
-        
-        // Map the quests to our QuestPattern format
-        return quests.map((quest: any) => ({
-          content: quest.content || '',
-          context: {
-            sourceMessage: quest.sourceMessage || '',
-            relatedMessages: quest.relatedMessages || [],
-            confidence: quest.confidence || 0.5
-          }
-        }));
-      } catch (error) {
-        console.error('Error parsing quest patterns:', error);
-        console.error('Response content:', response.choices[0].message?.content);
-        // Return empty array on error
-        return [];
-      }
-    } catch (error) {
-      console.error('Error identifying quest patterns:', error);
-      return [];
-    }
-  }
-
-  /**
-   * Analyzes content to detect if the user is indicating they've started or completed a task.
-   * @param content The user message content.
-   * @param userId The user's ID.
-   * @param activeTasksList Optional pre-fetched list of active tasks
-   * @returns TaskStatusChangeResult indicating if a status change was detected and for which task.
-   */
-  public async detectTaskStatusChange(
-    content: string,
-    userId: string,
-    activeTasksList?: Task[] // Accepts pre-fetched list
-  ): Promise<TaskStatusChangeResult> {
-    performanceLogger.startOperation('detectTaskStatusChange');
-    try {
-      console.log('🕵️ [SuggestionAgent] Analyzing task status change intent:', content);
-
-      const activeTasks = activeTasksList ?? await fetchActiveTasks(userId);
-
-      if (activeTasks.length === 0) {
-        console.log('No active tasks found for status change check.');
-        return { isStatusChangeDetected: false, existingTaskId: null, newStatus: null, confidence: 0 };
-      }
-
-      console.log(`Comparing against ${activeTasks.length} active tasks for status change intent.`);
-
-      // Get personality for the prompt style
-      const personalityType = await personalityService.getUserPersonality(userId);
-      const personality = getPersonality(personalityType);
-
-      const prompt = `
-Analyze the user's message STRICTLY to determine if they are indicating a STATUS CHANGE for one of the EXISTING tasks listed below. Focus ONLY on identifying the task ID and the new status.
-
-User Message: "${content}"
-
-Existing Active Tasks:
-${activeTasks.map(task => `Task ID: ${task.id} | Title: ${task.title} | Current Status: ${task.status}`).join('\n')}
-
-Look for TWO types of status changes:
-1. STARTED WORKING: User indicates they've begun working on a task (change from 'ToDo' to 'InProgress')
-   - Example: "I'm starting to work on the report now"
-   - Example: "Just began the data analysis task"
-   
-2. COMPLETED: User indicates they've finished a task (change to 'Done')
-   - Example: "I finished writing the email"
-   - Example: "Just completed that presentation"
-
-Reply ONLY with a JSON object in this EXACT format:
-{
-  "isStatusChangeDetected": true/false, // true ONLY if a specific existing task ID was mentioned with status change intent
-  "existingTaskId": task_id_or_null, // The numeric ID of the affected task, or null
-  "newStatus": "InProgress"/"Done"/null, // The new status to set, or null if no change
-  "confidence": 0.0_to_1.0, // Confidence score (must be > 0.85 for isStatusChangeDetected to be true)
-  "reason": "Brief explanation of why this status change was detected"
-}`;
-
-      // Using Gemini for structured output
-      const structuredModel = this.genAI.getGenerativeModel({
-        model: "gemini-2.0-flash", 
-        generationConfig: {
-          temperature: 0.3,
-          responseMimeType: "application/json",
-        }
-      });
-
-      // Generate content
-      const result = await structuredModel.generateContent(prompt);
-      const responseText = this.cleanResponseText(result.response.text().trim());
-
-      if (!responseText) {
-        console.log('Empty response from AI for status change detection.');
-        return { isStatusChangeDetected: false, existingTaskId: null, newStatus: null, confidence: 0 };
-      }
-
-      try {
-        const parsed = JSON.parse(responseText);
-        const isStatusChangeDetected = parsed.isStatusChangeDetected === true && 
-                              parsed.confidence > 0.85 && 
-                              parsed.existingTaskId != null &&
-                              (parsed.newStatus === 'InProgress' || parsed.newStatus === 'Done');
-        
-        const taskId = isStatusChangeDetected ? Number(parsed.existingTaskId) : null;
-        
-        // Ensure taskId is actually found in the activeTasks list
-        const existingTask = activeTasks.find(t => t.id === taskId);
-        
-        // Additional validation: ensure the status change makes sense for the current status
-        let validStatusTransition = false;
-        if (existingTask && isStatusChangeDetected) {
-          if (parsed.newStatus === 'InProgress' && existingTask.status === 'ToDo') {
-            validStatusTransition = true;
-          } else if (parsed.newStatus === 'Done' && 
-                    (existingTask.status === 'ToDo' || existingTask.status === 'InProgress')) {
-            validStatusTransition = true;
-          }
-        }
-
-        if (isStatusChangeDetected && existingTask && validStatusTransition) {
-          console.log(`✅ [SuggestionAgent] Status change detected for Task ID: ${taskId} to ${parsed.newStatus}`);
-          console.log(`Reason: ${parsed.reason || 'Not provided'}`);
-          return { 
-            isStatusChangeDetected: true, 
-            existingTaskId: taskId, 
-            newStatus: parsed.newStatus, 
-            confidence: parsed.confidence,
-            reason: parsed.reason 
-          };
-        } else {
-          console.log(`🚫 [SuggestionAgent] No high-confidence status change detected.`);
-          return { 
-            isStatusChangeDetected: false, 
-            existingTaskId: null, 
-            newStatus: null, 
-            confidence: parsed.confidence || 0 
-          };
-        }
-      } catch (parseError) {
-        console.error('Error parsing status change result:', parseError, 'Raw:', responseText);
-        return { isStatusChangeDetected: false, existingTaskId: null, newStatus: null, confidence: 0 };
-      }
-
-    } catch (error) {
-      console.error('Error in detectTaskStatusChange:', error);
-      return { isStatusChangeDetected: false, existingTaskId: null, newStatus: null, confidence: 0 };
-    } finally {
-      performanceLogger.endOperation('detectTaskStatusChange');
+      performanceLogger.endOperation('analyzeCheckupForSuggestions');
     }
   }
 }

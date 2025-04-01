@@ -1,5 +1,8 @@
 import { supabase } from '../lib/supabase';
 import { JournalAgent } from './agents/JournalAgent'; // Ensure this imports the updated JournalAgent
+import { SuggestionAgent } from './agents/SuggestionAgent';
+import { UpdateAgent } from './agents/UpdateAgent';
+import { fetchActiveTasks } from './tasksService';
 
 // Interface for daily entries from journal_entries table
 export interface JournalEntry {
@@ -360,6 +363,43 @@ export const journalService = {
       }
 
       console.log('[journalService] ✅ Checkup entry saved with ID:', data.id);
+      
+      // Trigger concurrent processing with SuggestionAgent and UpdateAgent
+      try {
+        console.log('[journalService] 🔄 Triggering concurrent agents processing for checkup content...');
+        // Fetch active tasks once to be used by both agents
+        const activeTasks = await fetchActiveTasks(userId);
+        
+        // Get agent instances
+        const updateAgent = UpdateAgent.getInstance();
+        const suggestionAgent = SuggestionAgent.getInstance();
+        
+        // Process with both agents concurrently
+        Promise.allSettled([
+          updateAgent.processCheckupForStatusUpdates(content, userId, activeTasks),
+          suggestionAgent.analyzeCheckupForSuggestions(content, userId)
+        ]).then(([updateResult, suggestionResult]) => {
+          // Log results/errors from each promise
+          if (updateResult.status === 'rejected') {
+            console.error("[journalService] UpdateAgent failed:", updateResult.reason);
+          } else {
+            console.log("[journalService] ✅ UpdateAgent completed successfully");
+          }
+          
+          if (suggestionResult.status === 'rejected') {
+            console.error("[journalService] SuggestionAgent failed:", suggestionResult.reason);
+          } else {
+            console.log("[journalService] ✅ SuggestionAgent completed successfully");
+          }
+        });
+        
+        // Don't await the promise so the function can return immediately
+        console.log('[journalService] 🔄 Agents triggered in background, continuing...');
+      } catch (agentError) {
+        // Log but don't throw, as this shouldn't block the checkup from being saved
+        console.error('[journalService] Error triggering agents:', agentError);
+      }
+
       return data;
     } catch (err) {
       // If the operation was aborted, throw an AbortError
