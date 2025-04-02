@@ -179,7 +179,18 @@ export function useJournal() {
             const today = new Date();
             // Prevent going past today
             return newDate <= today ? newDate : prevDate;
-       });
+        });
+    };
+
+    // Function to directly set the current date
+    const goToDate = (newDate: Date) => {
+        const today = new Date();
+        // Prevent going past today
+        if (newDate <= today) {
+            setCurrentDate(newDate);
+        } else {
+            setCurrentDate(today); // Or just don't update if future date is selected
+        }
     };
 
     return {
@@ -192,6 +203,7 @@ export function useJournal() {
         saveCurrentCheckup, // Renamed from saveEntry for clarity
         goToPreviousDay,
         goToNextDay,
+        goToDate, // Expose the new function
         loading,
         error,
         refreshEntries: fetchRecentCheckups, // Expose refresh function

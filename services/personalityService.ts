@@ -12,11 +12,10 @@ export const personalityService = {
 
       if (error) throw error;
       
-      // Use 'johnny' as default personality
-      return (data?.ai_personality as PersonalityType) || 'johnny';
+      return (data?.ai_personality as PersonalityType) || 'narrator';
     } catch (error) {
       console.error('Error getting personality:', error);
-      return 'johnny'; // Default to Johnny Silverhand if there's an error
+      return 'narrator'; // Default to narrator if there's an error
     }
   },
 

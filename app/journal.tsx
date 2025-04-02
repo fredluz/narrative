@@ -21,6 +21,7 @@ export default function JournalScreen() {
     // Removed refreshEntries (assuming useJournal handles refresh internally)
     goToNextDay,
     goToPreviousDay,
+    goToDate, // Add the new function
     dailyEntry,
     loading: journalLoading, // Use loading state from useJournal
     error: journalError, // Use error state from useJournal
@@ -58,24 +59,8 @@ export default function JournalScreen() {
 
     setSelectedDate(date); // Keep local state for UI highlighting
 
-    // Calculate difference in days (ignoring time)
-    const startOfSelectedDay = new Date(date.setHours(0, 0, 0, 0));
-    const startOfCurrentDay = new Date(currentDate.setHours(0, 0, 0, 0));
-    const timeDiff = startOfSelectedDay.getTime() - startOfCurrentDay.getTime();
-    const daysDiff = Math.round(timeDiff / (1000 * 60 * 60 * 24)); // Use Math.round for robustness
-
-    if (daysDiff < 0) {
-      // Selected date is in the past
-      for (let i = 0; i < Math.abs(daysDiff); i++) {
-        goToPreviousDay();
-      }
-    } else if (daysDiff > 0) {
-      // Selected date is in the future
-      for (let i = 0; i < daysDiff; i++) {
-        goToNextDay();
-      }
-    }
-    // If daysDiff is 0, no change needed (handled by initial check)
+    // Directly call goToDate from the hook
+    goToDate(date);
   };
 
   // Removed toggleCheckupExpansion callback

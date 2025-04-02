@@ -1,8 +1,8 @@
 import React from 'react';
-import { View, Text } from 'react-native';
+// Import ScrollView from react-native, not gesture-handler for this basic use case
+import { View, Text, ScrollView } from 'react-native'; 
 import TriangularSpinner from '../loading/TriangularSpinner';
 import { MaterialIcons } from '@expo/vector-icons';
-import { ScrollView } from 'react-native-gesture-handler';
 
 interface AIResponseProps {
   response: string | null;
@@ -27,15 +27,18 @@ export function AIResponse({
   }
 
   return (
-    <View style={{
-      flex: 1,
+    // Main container: Limit height, remove flex: 1, add overflow hidden
+    <View style={{ 
+      maxHeight: '33%', 
       backgroundColor: '#252525',
       borderRadius: 6,
       borderWidth: 1,
       borderColor: '#333333',
+      overflow: 'hidden', // Keep content within bounds
     }}>
-      {/* Content */}
+      {/* Inner content container: Add flex: 1 to fill the limited height */}
       <View style={{ 
+        flex: 1, // Allow this view to fill the maxHeight
         padding: 12,
         backgroundColor: 'rgba(15, 15, 15, 0.8)',
         borderLeftWidth: 3,
@@ -58,15 +61,18 @@ export function AIResponse({
             </Text>
           </View>
         ) : response ? (
-          <Text style={{ 
-            color: secondaryColor,
-            fontSize: 15,
-            lineHeight: 22,
+          // Wrap response Text in a ScrollView
+          <ScrollView style={{ flex: 1 }}> 
+            <Text style={{ 
+              color: secondaryColor,
+              fontSize: 15,
+              lineHeight: 22,
             opacity: 0.9,
             letterSpacing: 0.2
           }}>
-            {response}
-          </Text>
+              {response}
+            </Text>
+          </ScrollView>
         ) : null}
       </View>
     </View>

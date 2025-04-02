@@ -497,10 +497,10 @@ export const journalService = {
       const { response: dailyResponse, analysis: dailyAnalysis } = await journalAgent.processEndOfDay(allTodaysCheckups, userId);
 
       // Create the daily entry
-      const entryTimestamp = new Date().toISOString(); // Use current time for the summary entry
+      const entryTimestamp = `${date}T12:00:00Z`; // Use noon UTC of the target date
       const dailyEntryData = {
-          created_at: entryTimestamp,
-          updated_at: entryTimestamp,
+          created_at: entryTimestamp, // Use target date timestamp
+          updated_at: entryTimestamp, // Use target date timestamp
           user_entry: userOnlyFormattedContent, // Store ONLY the user's formatted checkups
           title: `Daily Summary - ${date}`,
           tags: null, // Or derive tags if needed

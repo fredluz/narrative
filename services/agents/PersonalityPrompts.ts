@@ -400,6 +400,6 @@ export type PersonalityType = keyof typeof personalities;
 export type PromptType = keyof typeof personalities[PersonalityType]['prompts'];
 
 // Function to get the appropriate personality based on the current selection
-export function getPersonality(type: PersonalityType = 'johnny') {
+export function getPersonality(type: PersonalityType = 'narrator') {
   return personalities[type];
 }

@@ -73,8 +73,9 @@ export default {
 
 			// --- Prepare data for OpenAI API ---
 			const openAIData = new FormData();
-			openAIData.append('file', audioFile, audioFile.name || 'audio.webm'); // Pass filename if available
-			openAIData.append('model', 'gpt-4o-mini-transcribe'); // Specify the model
+			// Force the filename to end with .webm to potentially help OpenAI identify the format
+			openAIData.append('file', audioFile, 'audio.webm');
+			openAIData.append('model', 'whisper-1'); // Specify the model
 
 			// --- Call OpenAI API ---
 			console.log('Sending request to OpenAI transcription API...');

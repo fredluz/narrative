@@ -327,322 +327,332 @@ export function JournalPanel({
     ? `TODAY'S JOURNAL - ${formattedHeaderDate}`
     : `JOURNAL - ${formattedHeaderDate}`;
   return (
-    <Card style={{
-      backgroundColor: '#1E1E1E',
-      borderRadius: 8,
-      overflow: 'hidden',
-      borderWidth: 1,
-      borderColor: '#333333',
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.2,
-      shadowRadius: 3,
-      elevation: 2,
-      flex: fullColumnMode ? 1 : undefined,
-      marginTop: fullColumnMode ? 0 : 20,
-      marginBottom: fullColumnMode ? 0 : 20,
-    }}>
-      {/* Enhanced header with theme styling */}
-      <View style={{ 
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: 15,
-        borderBottomWidth: 1,
-        borderBottomColor: '#333333',
-        backgroundColor: '#252525',
+      <Card style={{
+        backgroundColor: '#1E1E1E',
+        borderRadius: 8,
+        overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: '#333333',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 3,
+        elevation: 2,
+        flex: fullColumnMode ? 1 : undefined,
+        marginTop: fullColumnMode ? 0 : 20,
+        marginBottom: fullColumnMode ? 0 : 20,
       }}>
+        {/* Enhanced header with theme styling */}
         <View style={{ 
-          flexDirection: 'row', 
+          flexDirection: 'row',
           alignItems: 'center',
-          paddingBottom: 8,
-          borderBottomWidth: 2,
-          borderBottomColor: themeColor
+          justifyContent: 'space-between',
+          padding: 15,
+          borderBottomWidth: 1,
+          borderBottomColor: '#333333',
+          backgroundColor: '#252525',
         }}>
-          <Text style={{ 
-            fontWeight: 'bold',
-            color: '#EEEEEE',
-            fontSize: 18,
+          <View style={{ 
+            flexDirection: 'row', 
+            alignItems: 'center',
+            paddingBottom: 8,
+            borderBottomWidth: 2,
+            borderBottomColor: themeColor
           }}>
-            {headerTitle}
-          </Text>
-          <View style={{
-            height: 2,
-            width: 24,
-            backgroundColor: themeColor,
-            marginLeft: 8,
-            borderRadius: 2,
-          }} />
-        </View>
-
-        <View style={{ flexDirection: 'row', gap: 8 }}>
-          <TouchableOpacity
-            style={{
-              padding: 8,
-              borderRadius: 6,
-              backgroundColor: '#333333',
-              borderWidth: 1,
-              borderColor: '#444444',
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 1 },
-              shadowOpacity: 0.2,
-              shadowRadius: 2,
-              elevation: 1,
-            }}
-            onPress={goToPreviousDay}
-          >
-            <MaterialIcons name="chevron-left" size={24} color={themeColor} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={{
-              padding: 8,
-              borderRadius: 6,
-              backgroundColor: '#333333',
-              borderWidth: 1,
-              borderColor: '#444444',
-              opacity: isToday ? 0.5 : 1
-            }}
-            onPress={goToNextDay}
-            disabled={isToday}
-          >
-            <MaterialIcons name="chevron-right" size={24} color={themeColor} />
-          </TouchableOpacity>
-
-          {/* Go to Journal Archive Button */}
-          <TouchableOpacity
-            style={{
-              padding: 8,
-              borderRadius: 6,
-              backgroundColor: '#333333',
-              borderWidth: 1,
-              borderColor: '#444444',
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 1 },
-              shadowOpacity: 0.2,
-              shadowRadius: 2,
-              elevation: 1,
-            }}
-            onPress={() => router.push('/journal')} // Navigate to Journal Archive
-          >
-            <MaterialIcons name="auto-stories" size={24} color={themeColor} /> {/* Icon for archive */}
-          </TouchableOpacity>
-
-          {/* Add Daily Entry Save Button Here */}
-          <TouchableOpacity
-            style={{
-              padding: 8,
-              borderRadius: 6,
-              backgroundColor: '#333333',
-              borderWidth: 1,
-              borderColor: '#444444',
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 1 },
-              shadowOpacity: 0.2,
-              shadowRadius: 2,
-              elevation: 1,
-              opacity: hasDailyEntry || isLoading ? 0.5 : 1, // Disable visually if entry exists or loading
-            }}
-            onPress={handleDailyEntry}
-            disabled={hasDailyEntry || isLoading} // Disable if entry exists or any loading is active
-          >
-            {/* Use localLoading specifically for the daily entry generation indicator */}
-            {localLoading ? (
-              <ActivityIndicator size="small" color={secondaryColor} /> // Use secondaryColor for consistency
-            ) : (
-              <MaterialIcons name="nightlight-round" size={24} color={secondaryColor} /> // Changed icon and color
-            )}
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      <View style={{ flex: 1, backgroundColor: '#1A1A1A', padding: 15, position: 'relative' }}>
-        <View style={{ flex: 1, flexDirection: 'column' }}>
-          {errorToShow ? (
-            <View style={{
-              margin: 10,
-              padding: 10,
-              backgroundColor: '#3A2222',
-              borderRadius: 5,
-              borderLeftWidth: 2,
-              borderLeftColor: '#FF6B6B',
+            <Text style={{ 
+              fontWeight: 'bold',
+              color: '#EEEEEE',
+              fontSize: 18,
             }}>
-              <Text style={{ color: '#FF6B6B', fontSize: 14 }}>
-                {errorToShow}
-                <Text 
-                  style={{ textDecorationLine: 'underline', marginLeft: 8 }}
-                  onPress={() => { setLocalError(null); refreshJournalEntries(); }}
-                >
-                  Try again
+              {headerTitle}
+            </Text>
+            <View style={{
+              height: 2,
+              width: 24,
+              backgroundColor: themeColor,
+              marginLeft: 8,
+              borderRadius: 2,
+            }} />
+          </View>
+  
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <TouchableOpacity
+              style={{
+                padding: 8,
+                borderRadius: 6,
+                backgroundColor: '#333333',
+                borderWidth: 1,
+                borderColor: '#444444',
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 1 },
+                shadowOpacity: 0.2,
+                shadowRadius: 2,
+                elevation: 1,
+              }}
+              onPress={goToPreviousDay}
+            >
+              <MaterialIcons name="chevron-left" size={24} color={themeColor} />
+            </TouchableOpacity>
+  
+            <TouchableOpacity
+              style={{
+                padding: 8,
+                borderRadius: 6,
+                backgroundColor: '#333333',
+                borderWidth: 1,
+                borderColor: '#444444',
+                opacity: isToday ? 0.5 : 1
+              }}
+              onPress={goToNextDay}
+              disabled={isToday}
+            >
+              <MaterialIcons name="chevron-right" size={24} color={themeColor} />
+            </TouchableOpacity>
+  
+            {/* Go to Journal Archive Button */}
+            <TouchableOpacity
+              style={{
+                padding: 8,
+                borderRadius: 6,
+                backgroundColor: '#333333',
+                borderWidth: 1,
+                borderColor: '#444444',
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 1 },
+                shadowOpacity: 0.2,
+                shadowRadius: 2,
+                elevation: 1,
+              }}
+              onPress={() => router.push('/journal')} // Navigate to Journal Archive
+            >
+              <MaterialIcons name="auto-stories" size={24} color={themeColor} /> {/* Icon for archive */}
+            </TouchableOpacity>
+  
+            {/* Add Daily Entry Save Button Here */}
+            <TouchableOpacity
+              style={{
+                padding: 8,
+                borderRadius: 6,
+                backgroundColor: '#333333',
+                borderWidth: 1,
+                borderColor: '#444444',
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 1 },
+                shadowOpacity: 0.2,
+                shadowRadius: 2,
+                elevation: 1,
+                opacity: hasDailyEntry || isLoading ? 0.5 : 1, // Disable visually if entry exists or loading
+              }}
+              onPress={handleDailyEntry}
+              disabled={hasDailyEntry || isLoading} // Disable if entry exists or any loading is active
+            >
+              {/* Use localLoading specifically for the daily entry generation indicator */}
+              {localLoading ? (
+                <ActivityIndicator size="small" color={secondaryColor} /> // Use secondaryColor for consistency
+              ) : (
+                <MaterialIcons name="nightlight-round" size={24} color={secondaryColor} /> // Changed icon and color
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>  
+        {/* Main content container */}
+        <View style={{ flex: 1, backgroundColor: '#1A1A1A', padding: 15, position: 'relative' }}>
+          <View style={{ flex: 1, flexDirection: 'column' }}>
+            {errorToShow ? (
+              <View style={{
+                margin: 10,
+                padding: 10,
+                backgroundColor: '#3A2222',
+                borderRadius: 5,
+                borderLeftWidth: 2,
+                borderLeftColor: '#FF6B6B',
+              }}>
+                <Text style={{ color: '#FF6B6B', fontSize: 14 }}>
+                  {errorToShow}
+                  <Text 
+                    style={{ textDecorationLine: 'underline', marginLeft: 8 }}
+                    onPress={() => { setLocalError(null); refreshJournalEntries(); }}
+                  >
+                    Try again
+                  </Text>
                 </Text>
-              </Text>
-            </View>
-          ) : (
-            <View style={{ flex: 1, flexDirection: 'column', gap: 10 }}>
-              <View style={{ flex: 1, minHeight: 0, flexDirection: 'column', gap: 15 }}>
-                <ScrollView style={{ flex: 1 }}>
-                  {!showAnalysis && checkups.length > 0 ? (
-                    <View style={{ padding: 12 }}>
-                      {checkups.map((checkup, index) => (
-                        <View key={checkup.id} style={{ marginBottom: index === checkups.length - 1 ? 0 : 12 }}>
-                          <CheckupItem
-                            checkup={checkup}
-                            themeColor={themeColor}
-                            secondaryColor={secondaryColor}
-                            onPress={() => toggleCheckupExpansion(checkup.id)}
-                            isExpanded={expandedCheckupId === checkup.id}
-                          />
-                        </View>
-                      ))}
-                    </View>
-                  ) : (
-                    !showAnalysis && !isLoading && (
-                      <View style={{ 
-                        flex: 1,
-                        padding: 32,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        backgroundColor: '#1E1E1E',
-                        borderRadius: 4
-                      }}>
-                        <MaterialIcons name="history" size={30} color="#444444" />
-                        <Text style={{ color: '#AAAAAA', marginTop: 10, fontSize: 14 }}>
-                          No check-ins logged for today yet
-                        </Text>
-                      </View>
-                    )
-                  )}
-                </ScrollView>
-                {/* Journal Input Section - Fills remaining space */}
-                {!showAnalysis && (
-                  <View style={{
-                    flex: 1,
-                    backgroundColor: '#252525',
-                    borderRadius: 6,
-                    borderWidth: 1,
-                    borderColor: '#333333',
-                  }}>
-                    {/* Journal Entry Header */}
-                    <View style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      padding: 12,
-                      borderBottomWidth: 1,
-                      borderBottomColor: '#333333'
-                    }}>
-                      <Text style={{ 
-                        color: '#EEEEEE', 
-                        fontWeight: 'bold', 
-                        fontSize: 14
-                      }}>
-                        JOURNAL ENTRY
-                      </Text>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                        {/* Microphone Button */}
-                        <TouchableOpacity
-                          style={{
-                            padding: 8,
-                            borderRadius: 6,
-                            backgroundColor: recordingStatus === 'recording' ? themeColor : '#333333', // Highlight when recording
-                            borderWidth: 1,
-                            borderColor: '#444444',
-                            opacity: isLoading && recordingStatus !== 'recording' ? 0.5 : 1, // Dim if generally loading but not recording
-                          }}
-                          onPress={recordingStatus === 'recording' ? stopRecordingAndTranscribe : startRecording}
-                          disabled={isLoading && recordingStatus !== 'recording'} // Disable if generally loading but not recording
-                        >
-                          {recordingStatus === 'transcribing' ? (
-                            <ActivityIndicator size="small" color={secondaryColor} />
-                          ) : (
-                            <MaterialIcons
-                              name={recordingStatus === 'recording' ? "stop-circle" : "mic"}
-                              size={24}
-                              color={recordingStatus === 'recording' ? '#FFFFFF' : secondaryColor} // White icon when recording, secondary otherwise
-                            />
-                          )}
-                        </TouchableOpacity>
-
-                        {/* Save Button */}
-                        <TouchableOpacity
-                          style={{
-                            padding: 8,
-                      borderRadius: 6,
-                      backgroundColor: '#333333',
-                      borderWidth: 1,
-                      borderColor: '#444444',
-                      shadowColor: '#000',
-                      shadowOffset: { width: 0, height: 1 },
-                      shadowOpacity: 0.2,
-                      shadowRadius: 2,
-                      elevation: 1,
-                          opacity: (!localEntryText.trim() || isLoading) ? 0.5 : 1, // Grey out if disabled
-                        }}
-                        onPress={handleSaveCheckup}
-                          disabled={!localEntryText.trim() || isLoading || recordingStatus !== 'idle'} // Disable if text is empty, loading, or recording/transcribing
-                        >
-                          {localLoading ? ( // Use localLoading for this specific button's indicator
-                            <ActivityIndicator size="small" color={themeColor} />
-                          ) : journalLoading ? ( // Show indicator if journal hook is loading generally
-                             <ActivityIndicator size="small" color={themeColor} />
-                          ) : (
-                            <MaterialIcons name="save" size={24} color={themeColor} />
-                          )}
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-                    <View style={{ flex: 1, padding: 12 }}>
-                      <TextInput
-                        style={{
-                          flex: 1,
-                          color: '#EEEEEE',
-                          fontSize: 16,
-                          padding: 12,
-                          backgroundColor: '#1E1E1E',
-                          borderRadius: 6,
-                          borderWidth: 1,
-                          borderColor: '#333333',
-                          textAlignVertical: 'top'
-                        }}
-                        multiline
-                        placeholder="Write your journal entry here..."
-                        placeholderTextColor="#666666"
-                        value={localEntryText}
-                        onChangeText={handleEntryChange}
-                        editable={!isLoading}
-                      />
-                      {/* Removed extra /> above this line */}
-                    </View>
-                    {/* Removed misplaced </ScrollView> above this line */}
-                  </View>
-                )}
               </View>
+            ) : (
+              <View style={{ flex: 1, flexDirection: 'column', gap: 10 }}>
+                <View style={{ minHeight: 0, flexDirection: 'column', gap: 15 }}>
+                  {/* Checkup List Section */}
+                  <ScrollView style={{ maxHeight: '25%', flexGrow: 0, flexShrink: 1 }}>
+                    {!showAnalysis && checkups.length > 0 ? (
+                      <View style={{ padding: 12 }}>
+                        {checkups.map((checkup, index) => (
+                          <View key={checkup.id} style={{ marginBottom: index === checkups.length - 1 ? 0 : 12 }}>
+                            <CheckupItem
+                              checkup={checkup}
+                              themeColor={themeColor}
+                              secondaryColor={secondaryColor}
+                              onPress={() => toggleCheckupExpansion(checkup.id)}
+                              isExpanded={expandedCheckupId === checkup.id}
+                            />
+                          </View>
+                        ))}
+                      </View>
+                    ) : (
+                      !showAnalysis && !isLoading && (
+                        <View style={{ 
+                          padding: 32,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          backgroundColor: '#1E1E1E',
+                          borderRadius: 4
+                        }}>
+                          <MaterialIcons name="history" size={30} color="#444444" />
+                          <Text style={{ color: '#AAAAAA', marginTop: 10, fontSize: 14 }}>
+                            No check-ins logged for today yet
+                          </Text>
+                        </View>
+                      )
+                    )}
+                  </ScrollView>
+  
+                  {/* Journal Entry Section */}
+                  {!showAnalysis && (
+                    <View style={{
+                      flexGrow: 0,
+                      backgroundColor: '#252525',
+                      borderRadius: 6,
+                      borderWidth: 1,
+                      maxHeight:'25%',
+                      borderColor: '#333333',
+                    }}>
+                      <View style={{
+                        
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: 12,
+                        borderBottomWidth: 1,
+                        borderBottomColor: '#333333'
+                      }}>
+                        <Text style={{ 
+                          color: '#EEEEEE', 
+                          fontWeight: 'bold', 
+                          fontSize: 14
+                        }}>
+                          JOURNAL ENTRY
+                        </Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                          <TouchableOpacity
+                            style={{
+                              padding: 8,
+                              borderRadius: 6,
+                              backgroundColor: recordingStatus === 'recording' ? themeColor : '#333333',
+                              borderWidth: 1,
+                              borderColor: '#444444',
+                              opacity: isLoading && recordingStatus !== 'recording' ? 0.5 : 1,
+                            }}
+                            onPress={recordingStatus === 'recording' ? stopRecordingAndTranscribe : startRecording}
+                            disabled={isLoading && recordingStatus !== 'recording'}
+                          >
+                            {recordingStatus === 'transcribing' ? (
+                              <ActivityIndicator size="small" color={secondaryColor} />
+                            ) : (
+                              <MaterialIcons
+                                name={recordingStatus === 'recording' ? "stop-circle" : "mic"}
+                                size={24}
+                                color={recordingStatus === 'recording' ? '#FFFFFF' : secondaryColor}
+                              />
+                            )}
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={{
+                              padding: 8,
+                              borderRadius: 6,
+                              backgroundColor: '#333333',
+                              borderWidth: 1,
+                              borderColor: '#444444',
+                              shadowColor: '#000',
+                              shadowOffset: { width: 0, height: 1 },
+                              shadowOpacity: 0.2,
+                              shadowRadius: 2,
+                              elevation: 1,
+                              opacity: (!localEntryText.trim() || isLoading) ? 0.5 : 1,
+                            }}
+                            onPress={handleSaveCheckup}
+                            disabled={!localEntryText.trim() || isLoading || recordingStatus !== 'idle'}
+                          >
+                            {localLoading ? (
+                              <ActivityIndicator size="small" color={themeColor} />
+                            ) : journalLoading ? (
+                              <ActivityIndicator size="small" color={themeColor} />
+                            ) : (
+                              <MaterialIcons name="save" size={24} color={themeColor} />
+                            )}
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                      <View style={{ flexShrink: 1, padding: 12 }}>
+                        <TextInput
+                          style={{
+                            flexGrow: 1,
+                            color: '#EEEEEE',
+                            fontSize: 16,
+                            padding: 12,
+                            backgroundColor: '#1E1E1E',
+                            borderRadius: 6,
+                            borderWidth: 1,
+                            borderColor: '#333333',
+                            textAlignVertical: 'top'
+                          }}
+                          multiline
+                          placeholder="Write your journal entry here..."
+                          placeholderTextColor="#666666"
+                          value={localEntryText}
+                          onChangeText={handleEntryChange}
+                          editable={!isLoading}
+                        />
+                      </View>
+                    </View>
+                  )}
+  
+                  {/* AI Response Section - Now as a sibling to Journal Entry */}
+                  {!showAnalysis && (latestAiResponse || journalLoading) && (
+                    <View style={{ marginTop: 15 }}>
+                      <AIResponse 
+                        response={latestAiResponse} 
+                        loading={journalLoading} 
+                        aiGenerating={journalLoading}
+                        secondaryColor={secondaryColor} 
+                      />
+                    </View>
+                  )}
+                </View>
+              </View>
+            )}
+          </View>
+  
+          {/* Loading Overlay */}
+          {showDailyEntryOverlay && (
+            <View style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: 'rgba(0, 0, 0, 0.7)',
+              justifyContent: 'center',
+              alignItems: 'center',
+              zIndex: 10,
+              borderRadius: 8,
+              margin: -15
+            }}>
+              <ActivityIndicator size="large" color={secondaryColor} />
+              <Text style={{ color: secondaryColor, marginTop: 10, fontWeight: 'bold' }}>
+                Generating Daily Summary...
+              </Text>
             </View>
           )}
         </View>
-
-        {/* Loading Overlay for Daily Entry Generation - Show until navigation */}
-        {showDailyEntryOverlay && (
-          <View style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.7)', // Semi-transparent overlay
-            justifyContent: 'center',
-            alignItems: 'center',
-            zIndex: 10, // Ensure it's on top
-            borderRadius: 8, // Match card's border radius if needed inside padding
-            margin: -15 // Adjust if padding affects overlay coverage
-          }}>
-            <ActivityIndicator size="large" color={secondaryColor} />
-            <Text style={{ color: secondaryColor, marginTop: 10, fontWeight: 'bold' }}>
-              Generating Daily Summary...
-            </Text>
-          </View>
-        )}
-      </View>
-    </Card>
-  );
-}
+      </Card>
+    );
+  }
+  
