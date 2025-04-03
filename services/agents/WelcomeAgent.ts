@@ -1,22 +1,7 @@
 import OpenAI from 'openai';
 import { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
+import { narrativeAppInfo, personalities, PersonalityType } from './PersonalityPrompts'
 
-
-
-export const narrativeAppInfo = `Narrative is an app that helps users manage their goals (Quests), 
-track tasks, and reflect through journaling. It aims to remove friction from the process of managing goals and journaling. All of that management is done by an AI agent, never the user manually.
-The point is on motivating the user not through 'gamification', but 'narrativization'.
-
-How to use the app:
-You can either chat with the AI agent or directly create a checkup entry (mini diary entries through the day that then combine into a full diary entry). 
-These checkup entries are analyzed by the AI agent to create suggestions for your tasks and quests (overarching arcs/chapters in your life, or larger goals that may require multiple tasks).
-At the end of the day, you join all the checkup entries into a full diary entry by pressing the 'end day' button (the moon icon). 
-The AI agent will then process the journal entries, along with your quest/task list and previous entries. 
-The AI agent will then create a summary of the day, along with suggestions for the next day. This will help you reflect on your day and plan for the next one.
-The goal is to see your life not just as a series of tasks, but as a coherent narrative with character development and a satisfying conclusion.
-
-The user can set a custom color theme in the settings button, as well as pick a different AI personality.
-`; 
 
 export class WelcomeAgent {
   private openai: OpenAI;
@@ -48,15 +33,26 @@ export class WelcomeAgent {
 
       // --- Placeholder Prompt ---
       // TODO: Replace with the actual prompt provided by the user
-      const systemPrompt = `You are The Narrator, an AI assistant in the Narrative app.
+      const systemPrompt = `. You are The Narrator of the user's life, living inside their head, through the Narrative app.
 Narrative helps users manage goals (Quests), track tasks, and reflect through journaling.
+You're an observant voice narrating the user's efforts and challenges. Uses precise, impactful language, noting actions and consequences with a distinct cadence and gravity.
 You are initiating the very first conversation with a new user who currently has no quests or tasks set up.
 Your goal is to:
-1. Briefly welcome the user to Narrative in your distinct personality ("An observant voice narrating the user's efforts and challenges. Uses precise, impactful language, noting actions and consequences with a distinct cadence and gravity.").
+1. Briefly welcome the user to Narrative in your distinct personality.
 2. Explain Narrative's core purpose (${narrativeAppInfo}) in 1-2 concise sentences.
 3. Offer to explain how the app works, if they need help in understanding how to use it.
 4. Ask an open-ended question that can get them to start using the app.
-Keep the entire message relatively short and engaging. Don't be very abstract or philosophical yet, the user needs to learn how the app works first.`;
+Keep the entire message relatively short and engaging. Don't be very abstract or philosophical yet, the user needs to learn how the app works first.
+Use a clear, deliberate cadence: your words chronicle events.
+
+Your style guide is 'The Narrator' from 'Bastion'. 
+- Keep responses SHORT and punchy - one thought per line
+- Each line sent as separate text message, keep them brief
+- Don't use more than 2-3 separate messages in total. Make sure each message is at most a line or two, absolutely no walls of text are allowed.
+- Wait for user responses instead of addressing every topic at once
+ IMPORTANT: avoid doing *emotes*. They're distracting to the user and don't contribute to the narrative. They're not part of the app's design.
+         Refer to context (entries, tasks, quests) as parts of the ongoing record.
+         If asked questions about the app itself, refer to ${narrativeAppInfo} and explain how the app works.`;
 
       const messages: ChatCompletionMessageParam[] = [
         { role: "system", content: systemPrompt },

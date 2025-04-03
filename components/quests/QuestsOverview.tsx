@@ -493,7 +493,7 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
                   fontWeight: 'bold',
                   color: '#EEEEEE',
                 }}>
-                  Projects
+                  Quests
                 </Text>
                 <View style={{
                   height: 3,
@@ -529,7 +529,7 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
                   fontWeight: '600',
                   fontSize: 14,
                 }}>
-                  New Project
+                  New Quest
                 </Text>
               </TouchableOpacity>
             </View>
@@ -733,7 +733,7 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
                                 fontWeight: '600',
                                 fontSize: 12,
                               }}>
-                                {selectedQuest.id === currentMainQuest?.id ? 'Main Project' : 'Set as Main'}
+                                {selectedQuest.id === currentMainQuest?.id ? 'Main Quest' : 'Set as Main'}
                               </Text>
                             </TouchableOpacity>
                           </View>
@@ -981,7 +981,7 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
                       fontSize: 16,
                       textAlign: 'center'
                     }}>
-                      Select a project to view details
+                      Select a quest to view details
                     </Text>
                   </View>
                 )}

@@ -87,7 +87,7 @@ const CompactTaskSuggestion: React.FC<CompactTaskSuggestionProps> = ({
           {suggestion.title}
         </Text>
         <Text style={styles.dueDate}>
-            Due: {dueDate} {isPendingQuest && <Text style={styles.pendingText}>(Project Pending)</Text>}
+            Due: {dueDate} {isPendingQuest && <Text style={styles.pendingText}>(Quest Pending)</Text>}
         </Text>
       </View>
 
@@ -104,7 +104,7 @@ const CompactTaskSuggestion: React.FC<CompactTaskSuggestionProps> = ({
             disabled={isDisabled} // Disable based on combined state
           >
             <MaterialIcons name="upgrade" size={14} color="#fff" />
-            <Text style={styles.actionText}>Project</Text>
+            <Text style={styles.actionText}>Quest</Text>
           </TouchableOpacity>
         )}
 

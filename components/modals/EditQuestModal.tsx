@@ -138,7 +138,7 @@ export function EditQuestModal({
               textShadowOffset: { width: 0.5, height: 0.5 },
               textShadowRadius: 2
             }}>
-              Edit Project
+              Edit Quest
             </Text>
             <TouchableOpacity onPress={onClose}>
               <MaterialIcons name="close" size={24} color="#AAA" />
@@ -158,7 +158,7 @@ export function EditQuestModal({
                 color: '#FFF',
               }}
               placeholderTextColor="#666"
-              placeholder="Enter project title"
+              placeholder="Enter quest title"
             />
 
             <Text style={{ color: '#AAA', fontSize: 14, marginBottom: 5 }}>Tagline</Text>
@@ -176,7 +176,7 @@ export function EditQuestModal({
               }}
               multiline={true}
               placeholderTextColor="#666"
-              placeholder="Enter a brief description of this project"
+              placeholder="Enter a brief description of this quest"
             />
 
             <Text style={{ color: '#AAA', fontSize: 14, marginBottom: 5 }}>Description</Text>
@@ -194,7 +194,7 @@ export function EditQuestModal({
               }}
               multiline={true}
               placeholderTextColor="#666"
-              placeholder="Enter a detailed description of this project"
+              placeholder="Enter a detailed description of this quest"
             />
 
             <Text style={{ color: '#AAA', fontSize: 14, marginBottom: 5 }}>Start Date *</Text>
@@ -270,7 +270,7 @@ export function EditQuestModal({
                   color={formData.is_main ? secondaryColor : '#777'}
                 />
               </TouchableOpacity>
-              <Text style={{ color: '#AAA', marginLeft: 10 }}>Set as main Project</Text>
+              <Text style={{ color: '#AAA', marginLeft: 10 }}>Set as main Quest</Text>
             </View>
 
             {/* Add Delete Button section before the Cancel/Update buttons */}

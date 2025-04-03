@@ -74,7 +74,7 @@ export function KanbanBoard({ mainQuest, onViewAllQuests, userId: propUserId }: 
           fontSize: 18,
           fontWeight: 'bold',
         }}>
-          No Main Project Selected
+          No Main Quest Selected
         </Text>
         <TouchableOpacity
           onPress={() => router.push('/quests')}
@@ -98,7 +98,7 @@ export function KanbanBoard({ mainQuest, onViewAllQuests, userId: propUserId }: 
             textShadowOffset: { width: 0, height: 1 },
             textShadowRadius: 2
           }}>
-            Select Main Project
+            Select Main Quest
           </Text>
         </TouchableOpacity>
       </View>
@@ -165,7 +165,7 @@ export function KanbanBoard({ mainQuest, onViewAllQuests, userId: propUserId }: 
               color: '#EEEEEE',
               fontWeight: 'bold',
             }}>
-              MAIN PROJECT
+              MAIN QUEST
             </Text>
             <View style={{
               height: 3,
@@ -220,13 +220,13 @@ export function KanbanBoard({ mainQuest, onViewAllQuests, userId: propUserId }: 
               style={{ marginRight: 6 }}
             />
             <Text style={{ color: '#AAAAAA', fontSize: 14, fontWeight: '500' }}>
-              View All Projects
+              View All Quests
             </Text>
           </TouchableOpacity>
 
           <View style={{ alignItems: 'center', paddingVertical: 20 }}>
             <MaterialIcons name="dashboard" size={30} color="#444444" />
-            <Text style={{ color: '#AAAAAA', marginTop: 10, fontSize: 14 }}>No tasks assigned to this project</Text>
+            <Text style={{ color: '#AAAAAA', marginTop: 10, fontSize: 14 }}>No tasks assigned to this quest</Text>
           </View>
         </View>
       </Card>
@@ -265,7 +265,7 @@ export function KanbanBoard({ mainQuest, onViewAllQuests, userId: propUserId }: 
             color: '#EEEEEE',
             fontWeight: 'bold',
           }}>
-            MAIN PROJECT
+            MAIN QUEST
           </Text>
           <View style={{
             height: 3,
@@ -316,7 +316,7 @@ export function KanbanBoard({ mainQuest, onViewAllQuests, userId: propUserId }: 
         >
           <MaterialIcons name="assignment" size={18} color="#AAAAAA" style={{ marginRight: 6 }} />
           <Text style={{ color: '#AAAAAA', fontSize: 14, fontWeight: '500' }}>
-            View All Projects
+            View All Quests
           </Text>
         </TouchableOpacity>
 

@@ -386,14 +386,13 @@ export class ChatAgent {
       const personalityType = await personalityService.getUserPersonality(userId);
       const personality = getPersonality(personalityType);
 
-      const checkupEntrySystem = `You are helping to create a journal entry based on the user's chat with ${personality.name}.
+      const checkupEntrySystem = `You are helping to register the information of the user's chat with ${personality.name}.
 Current time is ${currentTime}.
-Write from the user's perspective, focusing only on what the user said.
-Match the user's writing style from the provided examples.
+Write from the user's perspective, focusing ONLY ON WHAT THE USER SAID. Make sure to write down tasks and goals, and their timerange (IF SPECIFIED).
+Never add anything that isn't explicitly said by the user, even if you *think* it is implied.
 Start the entry with "[${currentTime}] ".
-Be concise, capturing key thoughts/feelings.
-Do NOT mention this is AI-generated.
-Do NOT include ${personality.name}'s responses in the summary.`.trim();
+Do NOT include information from ${personality.name}'s responses in the summary. Never assume the user agrees with that the AI Agent said.
+ONLY WRITE DOWN EXACTLY WHAT THE USER EXPLICITLY SAID.`.trim();
 
       // Format the full conversation
       const fullConversation = messages.map(msg => {
@@ -408,8 +407,7 @@ Here's our FULL chat conversation:
 ${fullConversation}
 
 Write a reflective journal entry from my perspective about what we discussed, matching my writing style from the examples.
- Don't make shit up, I'll sue you if you put words in my mouth. But make it a nice, well-written journal entry about my conversation with ${personality.name}.
- It should describe what we talked about and reflect my thoughts and feelings on the conversation, just like if I was writing a journal entry about a conversation I had.
+ Don't make shit up, I'll sue you if you put words in my mouth. But make it a nice, well-written journal entry about my conversation with ${personality.name}. Never add anything that isn't explicitly said by me, even if you *think* it is implied (it isn't).
  Start with "[${currentTime}] ".`;
 
       console.log('Prompt for checkup entry:', checkupEntrySystem, prompt);
@@ -421,7 +419,7 @@ Write a reflective journal entry from my perspective about what we discussed, ma
               { role: "system", content: checkupEntrySystem },
               { role: "user", content: prompt }
           ],
-          temperature: 0.4, // Lower temperature for more consistent output
+          temperature: 0.3, // Lower temperature for more consistent output
           max_tokens: 600 // Reasonable length for a journal entry
       });
 

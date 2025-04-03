@@ -295,6 +295,9 @@ export function ChatInterface({
             case 'bigBoss':
               setPersonalityName('BOSS');
               break;
+            case 'narrator':
+              setPersonalityName('NARRATOR');
+              break;
             default:
               setPersonalityName('ASSISTANT');
           }
