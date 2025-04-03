@@ -465,7 +465,7 @@ export const SuggestionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       if (quest) {
         addSuggestionToQueue(quest);
         removeTaskSuggestion(task.id);
-      }
+     }
     },
     
     clearSuggestions: clearSuggestionQueue,

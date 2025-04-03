@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { 
-    View, 
-    Text, 
-    TouchableOpacity, 
+import React, { useState, useEffect, useContext } from 'react'; // Added useContext
+import {
+    View,
+    Text,
+    TouchableOpacity,
     ScrollView,
     ActivityIndicator,
     Dimensions,
@@ -18,6 +18,8 @@ import styles, { colors } from '@/app/styles/global';
 import { useTasks, updateTaskStatus, getNextStatus, TaskStatus } from '@/services/tasksService';
 import { useQuestUpdate } from '@/contexts/QuestUpdateContext';
 import { useAuth } from '@clerk/clerk-expo'; // Import useAuth from Clerk
+// import { useChatData } from '@/hooks/useChatData'; // Remove direct import
+import { useChat } from '@/contexts/ChatContext'; // Import useChat hook
 
 interface TaskListProps {
   compactMode?: boolean;
@@ -33,6 +35,7 @@ export function TaskList({ compactMode = false, userId: propUserId }: TaskListPr
   const [containerHeight, setContainerHeight] = useState<number>(0);
   const [availableSpace, setAvailableSpace] = useState<number>(0);
   const [localError, setLocalError] = useState<string | null>(null);
+  const [welcomeMessageSentThisSession, setWelcomeMessageSentThisSession] = useState(false); // Add session flag
 
   // Determine which userId to use: the one from props or the logged-in user's ID
   // Default to the logged-in user if propUserId is not provided
@@ -40,6 +43,7 @@ export function TaskList({ compactMode = false, userId: propUserId }: TaskListPr
 
   // Only call useTasks if we have a valid targetUserId
   const { tasks, loading, error, reload: loadTasks } = useTasks(targetUserId ?? ''); // Pass empty string if null/undefined to satisfy hook, but guard usage
+  const { triggerWelcomeMessage, messages } = useChat(); // Get the trigger function and messages from context
 
   // Clear local error when tasks reload
   useEffect(() => {
@@ -60,6 +64,21 @@ export function TaskList({ compactMode = false, userId: propUserId }: TaskListPr
       resetUpdate();
     }
   }, [shouldUpdate, targetUserId, loadTasks, resetUpdate]);
+
+  // Effect to trigger welcome message
+  useEffect(() => {
+    // Ensure we have the user ID, loading is done, tasks AND messages are empty, and message hasn't been sent this session
+    if (targetUserId && !loading && tasks.length === 0 && messages.length === 0 && !welcomeMessageSentThisSession) {
+      console.log("[TaskList] Conditions met (0 tasks, 0 messages): Triggering welcome message.");
+      if (triggerWelcomeMessage) {
+        triggerWelcomeMessage(); // Call the function from context
+        setWelcomeMessageSentThisSession(true); // Set flag to prevent re-triggering this session
+      } else {
+        console.error("[TaskList] triggerWelcomeMessage function is not available from useChat.");
+      }
+    }
+  }, [loading, tasks, messages, welcomeMessageSentThisSession, triggerWelcomeMessage, targetUserId]); // Add messages to dependencies
+
 
   const toggleTaskCompletion = async (taskId: number, currentStatus: string, taskUserId: string) => {
     // Use canUpdateTasks for permission check

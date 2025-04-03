@@ -1,21 +1,26 @@
-# Active Context: QuestLog (As of 2025-04-01 4:02 PM)
+# Active Context: QuestLog (As of 2025-04-03 5:32 PM)
 
 ## 1. Current Task
-Update Memory Bank (`activeContext.md`, `progress.md`) following the second refactor of `app/journal.tsx` (two-pane layout).
+Refine New User Welcome Message trigger condition.
 
 ## 2. Recent Changes
 *   Completed Memory Bank initialization and initial journal feature analysis.
 *   Identified the backend flow for daily entry generation.
 *   **First Refactor of `app/journal.tsx`:** Focused screen on consolidated daily entry, added AI response/analysis toggle, aligned styling. Fixed date selection bug.
-*   **Second Refactor of `app/journal.tsx` (Outlook-inspired):**
-    *   Implemented a two-pane layout: vertical date list on the left, main content on the right.
-    *   Split the right pane vertically: scrollable user summary on top, scrollable AI content (response/analysis) on the bottom.
-    *   Integrated the AI response/analysis toggle into the separator between the user and AI sections.
-    *   Corrected minor icon name issue (`find-in-page`).
+*   **Second Refactor of `app/journal.tsx` (Outlook-inspired):** Implemented a two-pane layout (date list left, content right), split content pane vertically (user summary top, AI bottom), integrated toggle.
+*   **New User Welcome Message:**
+    *   Created `services/agents/WelcomeAgent.ts` to generate a dynamic welcome message via LLM.
+    *   Modified `hooks/useChatData.ts` to add `triggerWelcomeMessage` function.
+    *   Modified `components/tasks/TaskList.tsx` to trigger the welcome message.
+*   **Chat Context Implementation:**
+    *   Created `contexts/ChatContext.tsx` defining `ChatContextType`, `ChatProvider`, and `useChat` hook. `ChatProvider` calls `useChatData` once.
+    *   Wrapped the application layout in `app/_layout.tsx` with `ChatProvider`.
+    *   Refactored `components/layouts/DesktopLayout.tsx` to use `useChat()` instead of `useChatData()`.
+    *   Refactored `components/tasks/TaskList.tsx` to use `useChat()` instead of `useChatData()`.
+*   **Welcome Message Trigger Refinement:** Updated the `useEffect` hook in `components/tasks/TaskList.tsx` to also check if `messages.length === 0` (obtained via `useChat`) before triggering the welcome message.
 
 ## 3. Next Steps
-1.  Update `progress.md` to reflect the completed two-pane layout refactor of `app/journal.tsx`.
-2.  Await user direction for the next task.
+1.  Await user direction for the next task.
 
 ## 4. Active Decisions & Considerations
 *   Need to understand the interaction between `useJournal` hook, `journalService`, `ChatAgent`, and `SuggestionAgent`/`SuggestionContext` to fully grasp the data flow and AI integration.
@@ -24,12 +29,14 @@ Update Memory Bank (`activeContext.md`, `progress.md`) following the second refa
 *   The refactored `app/journal.tsx` now displays the consolidated `JournalEntry` in a two-pane layout, fetched via the `useJournal` hook. Date selection updates the content correctly.
 *   The robustness of the checkup linking step in `journalService.saveDailyEntry` remains a point for potential future review.
 *   The apparent redundancy in triggering suggestion analysis for manual checkups remains a point for potential future review.
+*   The new welcome message relies on `TaskList` loading state and count; consider if this is the most robust trigger location long-term (vs. a higher-level layout component checking both tasks and quests).
+*   The use of React Context (`ChatContext`) is now the standard pattern for sharing chat state and functions across components.
 
 ## 5. Key Patterns & Preferences (Initial Observations)
-*   Use of React Hooks (`useState`, `useEffect`, `useCallback`, custom hooks like `useJournal`, `useAuth`, `useTheme`, `useSuggestions`).
-*   Context API for managing global state (`ThemeContext`, `SuggestionContext`).
+*   Use of React Hooks (`useState`, `useEffect`, `useCallback`, custom hooks like `useJournal`, `useAuth`, `useTheme`, `useSuggestions`, `useChat`).
+*   Context API for managing global state (`ThemeContext`, `SuggestionContext`, `ChatContext`).
 *   Service layer (`journalService`, `tasksService`, etc.) for abstracting data interactions (likely Supabase).
-*   Agent pattern (`ChatAgent`, `QuestAgent`, `SuggestionAgent`) for handling AI logic and interactions.
+*   Agent pattern (`ChatAgent`, `QuestAgent`, `SuggestionAgent`, `WelcomeAgent`) for handling AI logic and interactions.
 *   Clear separation between UI components (`components/`), services (`services/`), hooks (`hooks/`), and context (`contexts/`).
 
 ## 6. Learnings & Insights

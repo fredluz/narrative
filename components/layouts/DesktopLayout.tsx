@@ -11,7 +11,8 @@ import { useQuests } from '@/services/questsService';
 import styles from '@/app/styles/global';
 import { colors } from '@/app/styles/global';
 import { SettingsButton } from '@/components/ui/SettingsButton';
-import { useChatData } from '@/hooks/useChatData';
+// import { useChatData } from '@/hooks/useChatData'; // Remove direct import
+import { useChat } from '@/contexts/ChatContext'; // Import useChat hook
 import { useQuestUpdate } from '@/contexts/QuestUpdateContext';
 import { JournalPanel } from '@/components/journal/JournalPanel';
 import { useAuth } from '@clerk/clerk-expo'; // Import Clerk useAuth
@@ -66,10 +67,11 @@ export function DesktopLayout() {
   // Pass userId directly if needed by the hook, or let them use useAuth internally
   const { mainQuest, loading: questsLoading, error: questsError, reload: reloadQuests } = useQuests(); // Assuming useQuests handles auth internally or gets userId
   const { tasks, loading: tasksLoading, error: tasksError, reload: reloadTasks } = useTasks(); // Assuming useTasks handles auth internally or gets userId
+  // Use the context hook instead of the direct hook call
   const {
       messages, sendMessage, handleTyping, endSession, isTyping, deleteCurrentMessages,
-      sessionEnded, checkupCreated, error: chatError, authenticated // Get authenticated state from hook
-  } = useChatData(); // Assuming useChatData handles auth internally or gets userId
+      sessionEnded, checkupCreated, error: chatError, authenticated
+  } = useChat();
 
   // DEBUG: Track data loading states
   useEffect(() => {

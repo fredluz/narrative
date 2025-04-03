@@ -8,6 +8,7 @@ import { ThemeProvider as AppThemeProvider, useTheme } from '@/contexts/ThemeCon
 import { SupabaseProvider } from '@/contexts/SupabaseContext'; // Keep SupabaseProvider for DB client
 import { QuestUpdateProvider } from '@/contexts/QuestUpdateContext';
 import { SuggestionProvider } from '@/contexts/SuggestionContext';
+import { ChatProvider } from '@/contexts/ChatContext'; // Import ChatProvider
 import { TriangularSpinner } from '@/components/loading/TriangularSpinner';
 import { ClerkProvider, useAuth } from '@clerk/clerk-expo'; // Removed SignedIn, SignedOut
 import * as SecureStore from 'expo-secure-store';
@@ -179,8 +180,10 @@ export default function RootLayout() {
         <SupabaseProvider> {/* Keep SupabaseProvider for DB client */}
           <QuestUpdateProvider>
             <SuggestionProvider>
-              {/* InitialLayout handles font/auth loading and splash screen */}
-              <InitialLayout />
+              <ChatProvider> {/* Wrap with ChatProvider */}
+                {/* InitialLayout handles font/auth loading and splash screen */}
+                <InitialLayout />
+              </ChatProvider>
             </SuggestionProvider>
           </QuestUpdateProvider>
         </SupabaseProvider>

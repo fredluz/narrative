@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { ChatMessage } from '@/app/types';
 import { useTheme } from '@/contexts/ThemeContext';
 import { ChatAgent } from '@/services/agents/ChatAgent';
+import { WelcomeAgent } from '@/services/agents/WelcomeAgent'; // Import WelcomeAgent
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@clerk/clerk-expo'; // Import useAuth from Clerk
 import { updateTask } from '@/services/tasksService'; // Import updateTask
@@ -85,6 +86,7 @@ export function useChatData() {
   const [checkupCreated, setCheckupCreated] = useState(false);
   const [error, setError] = useState<string | null>(null); // Add error state for auth issues
   const chatAgent = new ChatAgent();
+  const welcomeAgent = WelcomeAgent.getInstance(); // Instantiate WelcomeAgent
   const inactivityTimerRef = useRef<NodeJS.Timeout | null>(null);
   const currentSessionMessagesRef = useRef<ChatMessage[]>([]);
   const pendingMessagesRef = useRef<ChatMessage[]>([]);
@@ -482,6 +484,64 @@ export function useChatData() {
     };
   }, []);
 
+  // --- New function to trigger welcome message ---
+  const triggerWelcomeMessage = useCallback(async () => {
+    const authenticatedUserId = userId; // Use userId from useAuth()
+    if (!authenticatedUserId) {
+      console.error('[useChatData] Cannot trigger welcome message: No user ID');
+      setError('Authentication required');
+      return;
+    }
+
+    console.log('[useChatData] Triggering welcome message generation...');
+    setIsTyping(true);
+    try {
+      const responseMessages = await welcomeAgent.generateWelcomeMessage(authenticatedUserId);
+
+      // Process each message with a delay, similar to sendMessage response handling
+      for (let i = 0; i < responseMessages.length; i++) {
+        const sendMessagePart = async () => {
+          const message = responseMessages[i];
+          const clientAiId = -(Date.now() + i); // Unique client-side ID
+          const aiMessage: ChatMessage = {
+            id: clientAiId,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            is_user: false,
+            message: message,
+            chat_session_id: currentSessionId || undefined,
+            clerk_id: authenticatedUserId
+          };
+
+          setMessages(prev => [...prev, aiMessage]);
+
+          if (i === responseMessages.length - 1) {
+            setIsTyping(false);
+            resetInactivityTimer(); // Reset timer after welcome message appears
+          }
+        };
+        // Use setTimeout to stagger messages
+        setTimeout(sendMessagePart, i * MESSAGE_STAGGER_DELAY);
+      }
+    } catch (error) {
+      console.error('[useChatData] Error triggering welcome message:', error);
+      setError('Failed to generate welcome message.');
+      setIsTyping(false);
+      // Optionally add an error message to the chat
+      const clientErrorId = -Date.now();
+      const errorMessage: ChatMessage = {
+        id: clientErrorId,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        is_user: false,
+        message: "Sorry, couldn't initiate the welcome chat. Please try sending a message.",
+        chat_session_id: currentSessionId || undefined,
+        clerk_id: authenticatedUserId
+      };
+      setMessages(prev => [...prev, errorMessage]);
+    }
+  }, [userId, welcomeAgent, currentSessionId, resetInactivityTimer]); // Add dependencies
+
   return {
     messages: getCurrentSessionMessages(), // Only return current session messages
     sendMessage,
@@ -493,6 +553,7 @@ export function useChatData() {
     error, // Expose error state for UI feedback
     authenticated: !!userId, // Use Clerk userId for authentication status
     syncMessages, // Expose sync function so you can trigger it externally if needed
-    deleteCurrentMessages // Expose the new function
+    deleteCurrentMessages, // Expose the new function
+    triggerWelcomeMessage // Expose the new welcome message trigger
   };
 }

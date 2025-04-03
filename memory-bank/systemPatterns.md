@@ -35,8 +35,8 @@ graph LR
 *   **Component-Based UI:** Leveraging React's component model for building the user interface. Specific UI libraries like `react-native-paper` are used.
 *   **State Management:**
     *   Local component state (`useState`).
-    *   Shared state via React Context API (`ThemeContext`, `SuggestionContext`, potentially others).
-    *   Custom Hooks (`useJournal`, `useAuth`, `useTheme`, `useSuggestions`) encapsulate related state logic and side effects, promoting reusability and separation of concerns.
+    *   Shared state via React Context API (`ThemeContext`, `SuggestionContext`, `ChatContext`). `ChatContext` provides a single instance of chat state (`messages`) and functions (`sendMessage`, `triggerWelcomeMessage`, etc.) managed by `useChatData` hook, ensuring consistency across components like `TaskList` and `ChatInterface`.
+    *   Custom Hooks (`useJournal`, `useAuth`, `useTheme`, `useSuggestions`, `useChat`) encapsulate related state logic and side effects, promoting reusability and separation of concerns. `useChat` consumes `ChatContext`.
 *   **Data Fetching & Services:** A dedicated service layer (`services/`) abstracts interactions with the backend (Supabase) and potentially external APIs. This keeps data logic separate from UI components.
 *   **AI Integration:** An "Agent" pattern (`services/agents/`) is used to encapsulate logic related to interacting with different AI models (DeepSeek, Gemini) for specific tasks (chat, suggestions, analysis).
 *   **Asynchronous Operations:** Extensive use of `async/await` for handling asynchronous tasks like API calls and database operations. Error handling (`try/catch`) is present but needs detailed review for consistency and robustness.
@@ -69,7 +69,8 @@ graph LR
 - **JournalAgent**: Responsible for generating AI insights for journal entries and checkup entries.
 - **SuggestionAgent**: Generates task and quest suggestions from checkup content and provides functionality to find the best quest for a task, check for duplicates, and more.
 - **UpdateAgent**: Detects and applies task status updates (InProgress, Done) based on checkup content analysis.
-- **ChatAgent**: Handles conversation analysis and message generation for the chat interface.
+- **ChatAgent**: Handles conversation analysis and message generation for the chat interface. Also involved in summarizing chat sessions for automatic checkup creation.
+- **WelcomeAgent**: Generates the initial welcome message and conversation starter for new users (detected by having zero tasks).
 
 ## System Flows
 
@@ -109,3 +110,39 @@ globalSuggestionStore             Database Update
 2. Detects if the user indicates they've started or completed a task
 3. If high-confidence detection (>0.88), updates the task status directly
 4. Changes are applied immediately without requiring user confirmation
+
+### New User Welcome Message Flow
+
+1.  `TaskList.tsx` component mounts and uses `useTasks` and `useChat` hooks.
+2.  `useTasks` finishes loading (`loading` becomes false).
+3.  An `useEffect` hook in `TaskList.tsx` checks if `tasks.length === 0`, `messages.length === 0` (from `useChat`), and a session flag (`welcomeMessageSentThisSession`) is false.
+4.  If all conditions are met, it calls `triggerWelcomeMessage()` obtained from the shared `ChatContext` via the `useChat` hook.
+5.  The `triggerWelcomeMessage` function (defined in `useChatData` and provided by `ChatContext`) calls `WelcomeAgent.generateWelcomeMessage()`.
+6.  `WelcomeAgent` uses a specific prompt and the user's personality to generate a welcome message via the LLM (DeepSeek).
+7.  The response strings are returned to the `triggerWelcomeMessage` function in `useChatData`.
+8.  `triggerWelcomeMessage` updates the shared `messages` state within `useChatData` (managed by the single instance within `ChatProvider`) using its standard mechanism (including typing indicator and stagger delay).
+9.  The `useEffect` in `TaskList.tsx` sets the `welcomeMessageSentThisSession` flag to true.
+10. `ChatInterface` (rendered via `DesktopLayout`), consuming the same `ChatContext` via `useChat`, receives the updated `messages` state and displays the new welcome message.
+
+```mermaid
+graph TD
+    A[TaskList Mounts] --> B{useTasks Loading};
+    B -- Data Loaded --> C{Tasks.length === 0?};
+    C -- Yes --> C1{Messages.length === 0?};
+    C -- No --> Z[End Flow];
+    C1 -- No --> Z;
+    C1 -- Yes --> D{Session Flag False?};
+    D -- No --> Z;
+    D -- Yes --> E[Call triggerWelcomeMessage() via useChat];
+    E --> F[ChatContext];
+    F --> G[useChatData Instance];
+    G --> H[WelcomeAgent.generateWelcomeMessage];
+    H --> I{LLM (DeepSeek)};
+    I --> H;
+    H --> G;
+    G -- Response --> F;
+    F -- Updates Shared State --> L[Shared Messages State];
+    L --> M[ChatInterface via useChat];
+    M --> N[Render Welcome Message];
+    E --> K[Set Session Flag True];
+```
