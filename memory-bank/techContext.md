@@ -1,4 +1,4 @@
-# Tech Context: QuestLog
+# Tech Context: Narrative
 
 ## 1. Core Technologies
 *   **Frontend Framework:** React Native / Expo

@@ -12,5 +12,6 @@ compatibility_date = "2024-04-03" # Use a recent date
 
 [secrets]
 CLERK_WEBHOOK_SIGNING_SECRET = ""
-SUPABASE_URL = "https://mpbvqueyjbqtdfqftqpd.supabase.co"
-SUPABASE_SERVICE_ROLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1wYnZxdWV5amJxdGRmcWZ0cXBkIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTczNzczMDYzNywiZXhwIjoyMDUzMzA2NjM3fQ.orpXiqUlenocEwAhbWend5rC0f3mXyXb7hg8tW05TtA"
+SUPABASE_URL = ""
+SUPABASE_SERVICE_ROLE_KEY = "
+

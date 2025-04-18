@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, FlatList, ScrollView, Dimensions, ActivityIndicator, LayoutChangeEvent } from 'react-native';
+import * as React from 'react';
+import { useState } from 'react';
+import { View, Text, TouchableOpacity, FlatList, ScrollView, Dimensions, ActivityIndicator, LayoutChangeEvent, Modal } from 'react-native';
 import { Card } from 'react-native-paper';
 import { MaterialIcons } from '@expo/vector-icons';
 import { format } from 'date-fns';
@@ -14,6 +15,10 @@ import { EditQuestModal } from '../modals/EditQuestModal';
 import { CreateTaskModal } from '../modals/CreateTaskModal';
 import { EditTaskModal } from '../modals/EditTaskModal';
 import { useAuth } from '@clerk/clerk-expo'; // Import useAuth from Clerk
+import { ChatQuestInterface } from './ChatQuestInterface';
+// import { ChatAgent } from '@/services/agents/ChatAgent'; // No longer needed
+import { CreateQuestAgent, GeneratedQuestData } from '@/services/agents/CreateQuestAgent'; // Import CreateQuestAgent
+import { PersonalityType } from '@/services/agents/PersonalityPrompts'; // Import PersonalityType if needed
 
 type QuestStatus = 'Active' | 'On-Hold' | 'Completed';
 type TaskStatus = 'ToDo' | 'InProgress' | 'Done';
@@ -425,8 +430,139 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
     reload(); // Reload quests to reflect the change
   };
 
+  // Add state for quest chat interface
+  const [isQuestChatVisible, setQuestChatVisible] = useState(false);
+  const [questChatMessages, setQuestChatMessages] = useState<any[]>([]); // Stores the full chat history for the modal session
+  const [questChatTyping, setQuestChatTyping] = useState(false);
+  const [questCreationPhase, setQuestCreationPhase] = useState<'idle' | 'asking' | 'generating'>('idle'); // Track conversation phase
+  const [initialQuestInput, setInitialQuestInput] = useState<string>(''); // Store the first user message
+
+  // CreateQuestAgent instance for quest chat
+  const createQuestAgentRef = React.useRef<CreateQuestAgent | null>(null);
+  if (!createQuestAgentRef.current) {
+    createQuestAgentRef.current = new CreateQuestAgent();
+  }
+
+  // Handler for sending a message in quest chat using CreateQuestAgent
+  const handleQuestChatSend = async (msg: string) => {
+    if (!userId) {
+      console.error("User not logged in. Cannot send message.");
+      // Optionally add an error message to the chat interface
+      setQuestChatMessages(prev => [
+        ...prev,
+        {
+          id: `error-${Date.now()}`,
+          message: 'Error: You must be logged in to create a quest.',
+          is_user: false,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }
+      ]);
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const userMessage = {
+      id: `user-${Date.now()}`,
+      message: msg,
+      is_user: true,
+      created_at: now,
+      updated_at: now,
+    };
+
+    const currentMessages = [...questChatMessages, userMessage];
+    setQuestChatMessages(currentMessages);
+    setQuestChatTyping(true);
+
+    // Format conversation history for the agent
+    // Explicitly type the mapped object to satisfy the agent's expected input type
+    const conversationHistory: { role: 'user' | 'agent'; content: string }[] = currentMessages.map(m => ({
+      role: m.is_user ? 'user' : 'agent',
+      content: m.message as string // Assuming message is always a string here
+    }));
+
+    // TODO: Get the actual personality type from context or user settings. Using 'narrator' as default for now.
+    const personalityType: PersonalityType = 'narrator'; // Use a valid default type
+
+    try {
+      if (questCreationPhase === 'idle' || questCreationPhase === 'generating') { // First message from user
+        setInitialQuestInput(msg); // Store initial input
+        const questions = await createQuestAgentRef.current!.askFollowUpQuestions(
+          msg,
+          personalityType,
+          userId
+        );
+        setQuestChatMessages(prev => [
+          ...prev,
+          ...questions.map((q: string, i: number) => ({
+            id: `ai-question-${Date.now()}-${i}`,
+            message: q,
+            is_user: false, // AI message
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          }))
+        ]);
+        setQuestCreationPhase('asking'); // Move to asking phase
+
+      } else if (questCreationPhase === 'asking') { // Second message from user (answering questions)
+        setQuestCreationPhase('generating'); // Move to generating phase while processing
+        // conversationHistory already includes the latest user answer
+        const generatedData = await createQuestAgentRef.current!.generateQuestData(
+          conversationHistory,
+          personalityType,
+          userId
+        );
+
+        // Pre-fill the main modal's form data
+        setQuestFormData({
+          title: generatedData.name,
+          tagline: generatedData.tagline || '',
+          description: generatedData.description,
+          status: generatedData.status || 'Active',
+          start_date: format(new Date(), 'yyyy-MM-dd'), // Default start date
+          is_main: generatedData.is_main || false,
+          clerk_id: userId,
+          // Timestamps will be set by handleCreateQuest in the modal
+        });
+
+        // Close chat, clear state, open the main create modal
+        setQuestChatVisible(false);
+        setQuestChatMessages([]);
+        setInitialQuestInput('');
+        setQuestCreationPhase('idle');
+        setCreateQuestModalVisible(true); // Open the standard modal for review
+      }
+
+    } catch (err) {
+       console.error('Error in quest chat interaction:', err);
+       setQuestChatMessages(prev => [
+         ...prev,
+         {
+           id: `ai-agent-error-${Date.now()}`,
+           message: `Sorry, there was an error: ${err instanceof Error ? err.message : 'Unknown error'}`,
+           is_user: false,
+           created_at: new Date().toISOString(),
+           updated_at: new Date().toISOString(),
+         }
+       ]);
+       // Reset phase on error to allow retry? Or keep modal open? Keeping open for now.
+       setQuestCreationPhase('idle'); // Reset phase on error
+    } finally {
+      setQuestChatTyping(false);
+    }
+  };
+
+  // Reset chat state when modal is opened
+  const openQuestChatModal = () => {
+    setQuestChatMessages([]);
+    setInitialQuestInput('');
+    setQuestCreationPhase('idle');
+    setQuestChatVisible(true);
+  };
+
+
   return (
-    <View style={[styles.container, { backgroundColor: '#121212', height: windowHeight }]}>
+    <View style={[styles.container, { backgroundColor: '#121212', height: windowHeight }]}> 
       <View style={styles.column}>
         <Card style={[{ 
           borderColor: '#333333', 
@@ -504,9 +640,9 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
                 }} />
               </View>
               
-              {/* Create Quest Button */}
+              {/* Create Quest Button - Opens Chat Modal */}
               <TouchableOpacity 
-                onPress={openCreateQuestModal}
+                onPress={openQuestChatModal} // Use the new handler
                 style={{
                   backgroundColor: '#333333',
                   paddingHorizontal: 12,
@@ -1000,6 +1136,7 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
             onSubmit={handleCreateQuest}
             isSubmitting={isSubmitting}
             userId={userId} // Pass Clerk userId
+            initialData={questFormData} // Pass the generated data here
           />
 
           <EditQuestModal
@@ -1036,6 +1173,27 @@ export function QuestsOverview({ quests, onSelectQuest, currentMainQuest }: Ques
             userId={userId} // Pass Clerk userId
           />
         </>
+      )}
+
+      {isQuestChatVisible && (
+        <Modal
+          visible={isQuestChatVisible}
+          animationType="slide"
+          transparent={true}
+          onRequestClose={() => setQuestChatVisible(false)}
+        >
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center' }}>
+            <View style={{ width: '95%', maxWidth: 600, height: '90%' }}>
+              <ChatQuestInterface
+                messages={questChatMessages}
+                onSendMessage={handleQuestChatSend}
+                isTyping={questChatTyping}
+                userId={userId || ''}
+                onClose={() => setQuestChatVisible(false)}
+              />
+            </View>
+          </View>
+        </Modal>
       )}
     </View>
   );

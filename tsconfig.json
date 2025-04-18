@@ -3,6 +3,7 @@
   "compilerOptions": {
     "strict": true,
     "jsx": "react-jsx",
+    "allowJs": true,
     "paths": {
       "@/*": [
         "./*"
@@ -12,6 +13,8 @@
   "include": [
     "**/*.ts",
     "**/*.tsx",
-    "types/env.d.ts"
+    "types/env.d.ts",
+    "app/styles/global.js",
+    "app/styles/global.d.ts"
   ]
 }

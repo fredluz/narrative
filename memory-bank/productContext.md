@@ -1,10 +1,10 @@
-# Product Context: QuestLog
+# Product Context: Narrative
 
 ## 1. Problem Space
 Users often struggle to maintain momentum on long-term goals and connect daily tasks to their larger aspirations. Additionally, integrating meaningful self-reflection into a busy schedule can be challenging. Existing productivity tools might focus heavily on task management or journaling, but rarely integrate both seamlessly with AI-driven insights.
 
 ## 2. Solution
-QuestLog provides an integrated platform where users can:
+Narrative provides an integrated platform where users can:
 *   Define high-level goals (Quests).
 *   Break Quests into manageable daily tasks.
 *   Log journal entries (checkups) throughout the day, either manually or automatically generated from AI chat interactions.

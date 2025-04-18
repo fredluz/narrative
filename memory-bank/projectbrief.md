@@ -1,7 +1,7 @@
-# Project Brief: QuestLog
+# Project Brief: Narrative
 
 ## 1. Project Name
-QuestLog
+Narrative
 
 ## 2. Project Goal
 To create a comprehensive personal productivity and journaling application that helps users manage tasks, track progress towards larger goals (Quests), and reflect on their daily activities and well-being through an integrated journal feature with AI assistance.

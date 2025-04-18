@@ -10,6 +10,9 @@ import {
 } from '@/services/questsService';
 import type { Quest, Task } from '@/app/types';
 import { globalSuggestionStore } from '@/services/globalSuggestionStore';
+// personalityService is not needed here anymore for fetching the prompt text directly
+// import { personalityService } from '@/services/personalityService'; 
+import { personalities, type PersonalityType } from './PersonalityPrompts'; // Import prompts object and type
 
 interface TaskRelevanceItem {
     taskId: number;
@@ -44,6 +47,15 @@ interface ContentAnalysis {
         analysis_sugg?: string;
     };
     confidence: number;
+}
+
+interface GeneratedQuestData {
+    name: string;
+    description: string;
+    tagline?: string;
+    status?: 'Active' | 'On-Hold' | 'Completed';
+    is_main?: boolean;
+    tags?: string[];
 }
 
 export class QuestAgent {
@@ -576,4 +588,90 @@ Generate suggested updates that the user can review. Reply ONLY with a JSON obje
         }
     }
 
+    // Update signature to accept PersonalityType
+    async generateQuestFromVoiceInput(transcript: string, personalityType: PersonalityType, userId: string): Promise<GeneratedQuestData> {
+        console.log('🎙️ Generating quest from voice transcript', { personalityType });
+
+        // Fetch the user's current quests and log title + description
+        const currentQuests = await getQuestsWithTasks(userId);
+        console.log(`✨ Current quests for user ${userId}:`);
+        const questList = currentQuests.forEach(q =>
+            console.log(`- ${q.title}: ${q.description || 'No description'}`)
+        );
+
+        const personalityInfo = personalities[personalityType]; // Get personality info from the imported object
+        try {
+            // Look up the personality prompt text using the provided type
+            // Use the new system prompt provided by the user
+            const systemPrompt = `
+            ${personalityInfo.prompts.analysis.system}
+
+`;
+
+            // Note: The personalityGuidance fetched earlier is not explicitly used in this new prompt structure.
+            // The new prompt defines its own voice ("mythmaker").
+            console.log(`[QuestAgent] Using new mythmaker system prompt for quest generation.`);
+
+            // Call DeepSeek API through OpenAI client
+            console.log('📤 Sending transcript to DeepSeek AI');
+            const result = await this.openai.chat.completions.create({
+                model: "deepseek-chat",
+                messages: [
+                    {
+                        role: "system",
+                        content: systemPrompt
+                    },
+                    {
+                        role: "user",
+                        content: transcript
+                    },
+                    {
+                        role: "user",
+                        content: `Current Quests: ${questList}`
+                    }
+                ],
+                temperature: 0.8,
+                max_tokens: 8000,
+                response_format: { type: "json_object" }
+            });
+            
+            const responseContent = result.choices[0]?.message?.content;
+            if (!responseContent) {
+                throw new Error("Empty response from AI");
+            }
+            
+            const cleanedResponse = this.cleanResponseText(responseContent);
+            console.log('📥 Received quest generation response', cleanedResponse);
+            
+            try {                const questData = JSON.parse(cleanedResponse) as GeneratedQuestData;
+                
+                // Validate the response format
+                if (!questData.name || typeof questData.name !== 'string') {
+                    throw new Error("Generated quest data missing valid 'name' field");
+                }
+                
+                if (!questData.description || typeof questData.description !== 'string') {
+                    throw new Error("Generated quest data missing valid 'description' field");
+                }
+                
+                return {
+                    name: questData.name,
+                    description: questData.description,
+                    tagline: questData.tagline || '',
+                    status: 'Active', // Default value
+                    is_main: false,   // Default value
+                    tags: []          // Default empty array
+                };
+            } catch (parseError) {
+                console.error('❌ Failed to parse AI response:', parseError);
+                throw new Error("Failed to parse the generated quest data. The AI response format was invalid.");
+            }
+        } catch (error) {
+            console.error('❌ Quest generation error:', error);
+            throw error;
+        }
+    }
 }
+
+// Export a singleton instance
+export const questAgent = new QuestAgent();

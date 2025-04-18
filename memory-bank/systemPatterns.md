@@ -1,7 +1,7 @@
-# System Patterns: QuestLog
+# System Patterns: Narrative
 
 ## 1. Architecture Overview
-QuestLog appears to follow a standard client-server architecture pattern, common for modern web/mobile applications:
+Narrative appears to follow a standard client-server architecture pattern, common for modern web/mobile applications:
 *   **Frontend:** React Native / Expo application handling UI rendering, state management, and user interactions.
 *   **Backend:** Supabase providing database services, authentication, and potentially serverless functions (though not explicitly confirmed yet).
 *   **External Services:** AI APIs (DeepSeek, Gemini) for chat responses, analysis, and suggestions.
