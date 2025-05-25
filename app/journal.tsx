@@ -1,7 +1,6 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { View, ScrollView, SafeAreaView, TouchableOpacity, ActivityIndicator, Text } from 'react-native'; // Added Text
+import { View, ScrollView, SafeAreaView, TouchableOpacity, ActivityIndicator, Text } from 'react-native';
 import { Card } from 'react-native-paper';
-// Removed JournalPanel import
 import { ThemedText } from '@/components/ui/ThemedText';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -16,9 +15,6 @@ export default function JournalScreen() {
   const { themeColor, secondaryColor } = useTheme();
   const {
     currentDate,
-    // Removed latestAiResponse (part of dailyEntry now)
-    // Removed checkups
-    // Removed refreshEntries (assuming useJournal handles refresh internally)
     goToNextDay,
     goToPreviousDay,
     goToDate, // Add the new function
@@ -27,43 +23,71 @@ export default function JournalScreen() {
     error: journalError, // Use error state from useJournal
   } = useJournal();
 
-  // Removed selectedSection state
-  // Removed quests state
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   // Removed loading state (using journalLoading)
   // Removed expandedCheckupId state
 
-  // Removed useEffect for loading quests
-  // Removed handleCreateTask callback
-
   // State for AI content toggle
   const [aiViewMode, setAiViewMode] = useState<'response' | 'analysis'>('response');
 
-  // Get dates for the quick date selector
-  const getDatesForSelector = () => {
-    const dates = [];
-    for (let i = 6; i >= 0; i--) {
-      const date = new Date();
-      date.setDate(date.getDate() - i);
-      dates.push(date);
-    }
-    return dates;
+  // New: State for month/year in date picker
+  const [pickerMonth, setPickerMonth] = useState(() => {
+    // Start with the month of the selected/current date
+    return selectedDate.getMonth();
+  });
+  const [pickerYear, setPickerYear] = useState(() => {
+    return selectedDate.getFullYear();
+  });
+
+  // Helper: Get days in month
+  const getDaysInMonth = (month: number, year: number) => {
+    return new Date(year, month + 1, 0).getDate();
   };
 
-  // Restored date selection logic to update useJournal's currentDate
-  const handleDateSelect = (date: Date) => {
-    // Prevent unnecessary updates if the date is already selected
-    if (date.toDateString() === currentDate.toDateString()) {
-      return;
-    }
-
-    setSelectedDate(date); // Keep local state for UI highlighting
-
-    // Directly call goToDate from the hook
-    goToDate(date);
+  // Helper: Get first day of week (0=Sun, 1=Mon, ...)
+  const getFirstDayOfWeek = (month: number, year: number) => {
+    return new Date(year, month, 1).getDay();
   };
 
-  // Removed toggleCheckupExpansion callback
+  // Helper: Generate grid of dates for the month
+  const getMonthGrid = (month: number, year: number) => {
+    const daysInMonth = getDaysInMonth(month, year);
+    const firstDay = getFirstDayOfWeek(month, year);
+    const grid: (Date | null)[] = [];
+    // Fill leading empty slots
+    for (let i = 0; i < firstDay; i++) grid.push(null);
+    // Fill days
+    for (let d = 1; d <= daysInMonth; d++) {
+      grid.push(new Date(year, month, d));
+    }
+    // Optionally fill trailing empty slots to complete the last week
+    while (grid.length % 7 !== 0) grid.push(null);
+    return grid;
+  };
+
+  // New: Month navigation handlers
+  const handlePrevMonth = () => {
+    if (pickerMonth === 0) {
+      setPickerMonth(11);
+      setPickerYear(y => y - 1);
+    } else {
+      setPickerMonth(m => m - 1);
+    }
+  };
+  const handleNextMonth = () => {
+    if (pickerMonth === 11) {
+      setPickerMonth(0);
+      setPickerYear(y => y + 1);
+    } else {
+      setPickerMonth(m => m + 1);
+    }
+  };
+
+  // When currentDate changes, update picker to match
+  useEffect(() => {
+    setPickerMonth(currentDate.getMonth());
+    setPickerYear(currentDate.getFullYear());
+  }, [currentDate]);
 
   // Format date display
   const formattedSelectedDate = selectedDate.toLocaleDateString('en-US', {
@@ -71,8 +95,6 @@ export default function JournalScreen() {
     month: 'long',
     day: 'numeric'
   });
-
-  // Removed getBrightAccent function
 
   // Keep selectedDate in sync with currentDate from the hook
   useEffect(() => {
@@ -138,6 +160,16 @@ export default function JournalScreen() {
     );
   };
 
+  // Add this function before the return statement
+  const handleDateSelect = (date: Date) => {
+    // Prevent unnecessary updates if the date is already selected
+    if (date.toDateString() === selectedDate.toDateString()) {
+      return;
+    }
+    setSelectedDate(date);
+    goToDate(date);
+  };
+
   return (
     <SafeAreaView style={journalStyles.container}>
       {/* Header Section - Moved outside main flex container */}
@@ -193,47 +225,79 @@ export default function JournalScreen() {
       </View>
 
       <View style={{ flex: 1, flexDirection: 'row', backgroundColor: '#1A1A1A' }}>
-        {/* Left Pane: Date List */}
+        {/* Left Pane: Date Picker */}
         <View style={{
-          width: 150,
+          width: 220,
           borderRightWidth: 1,
           borderRightColor: '#333333',
           backgroundColor: '#1E1E1E',
           paddingTop: 10,
+          paddingHorizontal: 6,
         }}>
-          <ScrollView showsVerticalScrollIndicator={false}>
-            {getDatesForSelector().map((date) => {
-              const isActive = date.toDateString() === selectedDate.toDateString();
-              return (
-                <TouchableOpacity
-                  key={date.toISOString()}
-                  style={{
-                    paddingVertical: 10,
-                    paddingHorizontal: 15,
-                    backgroundColor: isActive ? '#333333' : 'transparent',
-                    borderLeftWidth: isActive ? 3 : 0,
-                    borderLeftColor: themeColor, // Highlight active date
-                    marginBottom: 2, // Spacing between dates
-                  }}
-                  onPress={() => handleDateSelect(date)}
-                >
-                  <ThemedText style={{
-                    color: isActive ? themeColor : '#AAAAAA',
-                    fontSize: 13,
-                    fontWeight: isActive ? 'bold' : 'normal',
-                  }}>
-                    {date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                  </ThemedText>
-                  <ThemedText style={{
-                    color: isActive ? themeColor : '#888888',
-                    fontSize: 11,
-                  }}>
-                    {date.toLocaleDateString('en-US', { weekday: 'long' })}
-                  </ThemedText>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
+          {/* Month navigation */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+            <TouchableOpacity onPress={handlePrevMonth} style={{ padding: 6 }}>
+              <MaterialIcons name="chevron-left" size={22} color={themeColor} />
+            </TouchableOpacity>
+            <Text style={{ color: themeColor, fontWeight: 'bold', fontSize: 15 }}>
+              {new Date(pickerYear, pickerMonth).toLocaleString('en-US', { month: 'long', year: 'numeric' })}
+            </Text>
+            <TouchableOpacity onPress={handleNextMonth} style={{ padding: 6 }}>
+              <MaterialIcons name="chevron-right" size={22} color={themeColor} />
+            </TouchableOpacity>
+          </View>
+          {/* Weekday headers */}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
+            {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
+              <Text key={i} style={{ color: '#888', fontSize: 12, width: 24, textAlign: 'center' }}>{d}</Text>
+            ))}
+          </View>
+          {/* Calendar grid */}
+          <View>
+            {(() => {
+              const grid = getMonthGrid(pickerMonth, pickerYear);
+              const rows = [];
+              for (let i = 0; i < grid.length; i += 7) {
+                rows.push(grid.slice(i, i + 7));
+              }
+              return rows.map((week, rowIdx) => (
+                <View key={rowIdx} style={{ flexDirection: 'row', marginBottom: 2 }}>
+                  {week.map((date, colIdx) => {
+                    if (!date) {
+                      return <View key={colIdx} style={{ width: 24, height: 32, margin: 2 }} />;
+                    }
+                    const isActive = date.toDateString() === selectedDate.toDateString();
+                    const isToday = date.toDateString() === new Date().toDateString();
+                    return (
+                      <TouchableOpacity
+                        key={colIdx}
+                        onPress={() => handleDateSelect(date)}
+                        style={{
+                          width: 24,
+                          height: 32,
+                          margin: 2,
+                          borderRadius: 6,
+                          backgroundColor: isActive ? themeColor : isToday ? '#333' : 'transparent',
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                          borderWidth: isActive ? 2 : 0,
+                          borderColor: isActive ? secondaryColor : 'transparent',
+                        }}
+                      >
+                        <Text style={{
+                          color: isActive ? '#1A1A1A' : isToday ? themeColor : '#DDD',
+                          fontWeight: isActive || isToday ? 'bold' : 'normal',
+                          fontSize: 15,
+                        }}>
+                          {date.getDate()}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              ));
+            })()}
+          </View>
         </View>
 
         {/* Right Pane: Journal Content */}

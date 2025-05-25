@@ -381,7 +381,9 @@ export class JournalAgent {
     // Updated to accept CheckupEntry array and format XML-like context
     private async createEndOfDayPrompt(allTodaysCheckups: CheckupEntry[], userId: string): Promise<string> {
       console.log('🔧 Creating end-of-day prompt...');
-
+      // Get current personality for this call
+        const personalityType = await personalityService.getUserPersonality(userId);
+        const personality = getPersonality(personalityType);
       // Create the structured checkup log first
       const structuredCheckupLog = allTodaysCheckups.map(checkup => {
         const timestamp = new Date(checkup.created_at).toISOString(); // Use ISO string for consistency
@@ -463,7 +465,7 @@ Based on ALL the context (historical, quests, today's checkups log), provide a t
 3. Patterns in the **USER entries** compared to historical entries.
 4. Notable shifts in focus, mood, or goals evident in the **USER entries**.
 5. Actionable insights or recommendations for tomorrow based on the **user's day**.
-Maintain your characteristic personality.`;
+Maintain your characteristic personality as ${personality.name}.`;
 
       console.log('✅ End-of-day prompt created (length):', prompt.length);
       return prompt;

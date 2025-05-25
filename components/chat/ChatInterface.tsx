@@ -587,7 +587,7 @@ export function ChatInterface({
             
             {hasSuggestions && (
               <View style={{
-                maxHeight: 220, // Adjust as needed
+                flex: 1, // Allow this view to grow
                 borderTopWidth: 1,
                 borderTopColor: '#333333',
                 backgroundColor: '#232323',
@@ -618,7 +618,7 @@ export function ChatInterface({
                 <ScrollView
                   horizontal={false}
                   style={{
-                    maxHeight: 180, // Max height for the scrollable content
+                    // Remove maxHeight to allow full vertical scroll
                     backgroundColor: '#1A1A1A',
                   }}
                   contentContainerStyle={{

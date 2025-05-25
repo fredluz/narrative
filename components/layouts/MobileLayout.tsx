@@ -1,34 +1,67 @@
 import React from 'react';
-import { View, Text } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context'; // Install if needed
-import { ChatInterface } from '@/components/chat/ChatInterface';
-import { HamburgerMenu } from '@/components/ui/HamburgerMenu';
-import { useChatData } from '@/hooks/useChatData';
-import styles from '@/app/styles/global';
+import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, Platform } from 'react-native';
+import globalStyles, { colors } from '@/app/styles/global'; // Corrected import
 
-const MobileNavigation: React.FC = () => (
-  <View style={styles.mobileNavigation}>
-    <HamburgerMenu />
-  </View>
-);
+interface MobileLayoutProps {
+  children: React.ReactNode;
+  title?: string;
+  onOpenMenu?: () => void;
+}
 
-export function MobileLayout() {
-  const { messages, themeColor } = useChatData();
+const MobileLayout: React.FC<MobileLayoutProps> = ({ children, title = 'Screen', onOpenMenu }) => {
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#181818' }}>
-      <View style={styles.mobileHeader}>
-        <Text style={styles.mobileHeaderText}>QuestLog</Text>
+    <SafeAreaView style={styles.safeArea}>
+      <View style={styles.header}>
+        <TouchableOpacity onPress={onOpenMenu} style={styles.menuButton}>
+          <Text style={styles.menuButtonText}>☰</Text>
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>{title}</Text>
+        <View style={styles.headerActionPlaceholder} /> 
       </View>
-      
-      <View style={styles.mobileContent}>
-        <ChatInterface 
-          themeColor={themeColor} 
-          recentMessages={messages}
-        />
+      <View style={styles.content}>
+        {children}
       </View>
-      
-      <MobileNavigation />
     </SafeAreaView>
   );
-}
+};
+
+const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 15,
+    height: Platform.select({ ios: 50, android: 60, default: 60 }),
+    backgroundColor: colors.card,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  menuButton: {
+    padding: 10,
+    minWidth: 40,
+    alignItems: 'center',
+  },
+  menuButtonText: {
+    fontSize: 24,
+    color: colors.text,
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: colors.text,
+  },
+  headerActionPlaceholder: {
+    minWidth: 40,
+  },
+  content: {
+    flex: 1,
+    backgroundColor: colors.backgroundSecondary, 
+  },
+});
+
+export default MobileLayout;
