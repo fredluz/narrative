@@ -14,6 +14,7 @@ import { journalService } from '../journalService';
 // <<< FIX: Also import interfaces needed
 import { JournalEntry, CheckupEntry } from '../journalService';
 import { ChatMessage, Quest, Task } from '@/app/types';
+import { ConversationMessage } from './SuggestionAgent';
 
 // Helper function to format date
 const formatDate = (date: Date): string => {
@@ -317,9 +318,9 @@ export class ChatAgent {
       }
 
       // 4. Trigger Suggestion Analysis (Optional)
-      console.log(`[ChatAgent] Triggering post-session suggestion analysis for session ${sessionData.id}`);
-      this.generateSuggestionsFromChatSession(messages, userId)
-          .catch(suggestionError => { console.error(`[ChatAgent] Error triggering suggestion analysis:`, suggestionError); });
+      //      console.log(`[ChatAgent] Triggering post-session suggestion analysis for session ${sessionData.id}`);
+      //      this.generateSuggestionsFromChatSession(messages, userId)
+      //          .catch(suggestionError => { console.error(`[ChatAgent] Error triggering suggestion analysis:`, suggestionError); });
 
       return sessionData.id;
 
@@ -438,39 +439,5 @@ Write a reflective journal entry from my perspective about what we discussed, ma
     }
   }
 
-// --- generateSuggestionsFromChatSession ---
-private async generateSuggestionsFromChatSession(messages: ChatMessage[], userId: string): Promise<void> {
-  if (!messages || messages.length === 0 || !userId) { return; }
-  try {
-      console.log("[ChatAgent] Generating suggestions from chat session");
-      
-      // Extract content from chat messages, focusing on user messages
-      const userMessages = messages
-          .filter(msg => msg.is_user)
-          .map(msg => msg.message);
-      
-      if (userMessages.length === 0) {
-          console.log("[ChatAgent] No user messages found in chat session");
-          return;
-      }
-      
-      // Combine user messages into a single content string
-      // This will be analyzed as if it were a checkup entry
-      const combinedContent = userMessages.join("\n");
-      console.log(`[ChatAgent] Combining ${userMessages.length} user messages for suggestion analysis`);
-      
-      // Use the new analyzeCheckupForSuggestions method instead of analyzeConversation
-      await this.suggestionAgent.analyzeCheckupForSuggestions(combinedContent, userId);
-      
-      // Fetch active tasks for the update agent
-      const activeTasks = await fetchActiveTasks(userId);
-      
-      // Also process for potential status updates with UpdateAgent
-      await this.updateAgent.processCheckupForStatusUpdates(combinedContent, userId, activeTasks);
-      
-  } catch (error: any) { 
-      console.error('[ChatAgent] Error in suggestion generation:', error); 
-  }
-}
 
 } // End of ChatAgent class

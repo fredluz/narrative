@@ -6,7 +6,7 @@ import { WelcomeAgent } from '@/services/agents/WelcomeAgent'; // Import Welcome
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@clerk/clerk-expo'; // Import useAuth from Clerk
 import { updateTask } from '@/services/tasksService'; // Import updateTask
-
+import { SuggestionAgent } from '../services/agents/SuggestionAgent';
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -157,6 +157,14 @@ export function useChatData() {
           setCurrentSessionId(null);
           setSessionEnded(true);
           setCheckupCreated(true); // Mark that we've created a checkup
+
+          const suggestionAgent = SuggestionAgent.getInstance();
+          const chatSession = sessionMessagesWithUserId.map(msg => ({
+            role: msg.is_user ? "user" as const : "assistant" as const,
+            content: msg.message,
+            timestamp: msg.created_at
+          }));
+          await suggestionAgent.analyzeChatHistoryForSuggestions(chatSession, userId);
         } catch (error) {
           console.error('Error summarizing session:', error);
         }
@@ -211,6 +219,14 @@ export function useChatData() {
       ));
       setCurrentSessionId(null);
       setCheckupCreated(true); // Mark that we've created a checkup
+
+      const suggestionAgent = SuggestionAgent.getInstance();
+      const chatSession = sessionMessagesWithUserId.map(msg => ({
+        role: msg.is_user ? "user" as const : "assistant" as const,
+        content: msg.message,
+        timestamp: msg.created_at
+      }));
+      await suggestionAgent.analyzeChatHistoryForSuggestions(chatSession, userId);
     } catch (error) {
       console.error('Error summarizing session:', error);
       setError('Failed to end session: ' + (error instanceof Error ? error.message : 'Unknown error'));

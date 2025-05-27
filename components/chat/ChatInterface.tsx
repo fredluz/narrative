@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { Card } from 'react-native-paper';
 import { MaterialIcons } from '@expo/vector-icons';
-import styles, { colors } from '@/app/styles/global';
+import {styles, colors} from '@/app/styles/global';
 import { ChatMessage } from '@/app/types';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useSuggestions } from '@/contexts/SuggestionContext';

@@ -1025,6 +1025,245 @@ IMPORTANT:
   }
 
   /**
+   * Analyzes a full chat session (all messages, both user and assistant) to generate task and quest suggestions.
+   * Passes all quests and tasks to the LLM, and uses existing deduplication/assignment logic.
+   */
+  public async analyzeChatHistoryForSuggestions(
+    chatMessages: ConversationMessage[],
+    userId: string
+  ): Promise<void> {
+    console.log('starting analyzeChatHistoryForSuggestions');
+    try {
+      if (!userId || !chatMessages || chatMessages.length === 0) {
+        console.error('[SuggestionAgent] Missing userId or chatMessages for analysis');
+        return;
+      }
+ // Format chat session for prompt
+ const formattedConversation = chatMessages.map(msg =>
+  `${msg.role.toUpperCase()}: ${msg.content}`
+).join('\n');
+
+      // Fetch all quests (each quest includes its tasks, including "Misc" quest)
+      const allQuests = await fetchQuests(userId);
+   
+     
+      // Format quests and tasks for prompt
+      const formattedQuests =  JSON.stringify(allQuests, null, 2);
+      const currentDate = new Date().toISOString().split('T')[0];
+      const personalityType = await personalityService.getUserPersonality(userId);
+      const personality = getPersonality(personalityType);
+      // New prompt: allow suggesting new tasks for existing quests, new quests (with tasks), and standalone tasks
+      const prompt = `You are ${personality.name}. ${personality.description}
+Current date is: ${currentDate}. You are to extract actionable tasks and quests from a conversation.
+
+You have access to:
+- The full chat session (see below).
+- All existing quests and their tasks (see below).
+
+Your job:
+1. Suggest new tasks for any existing quest (reference by quest ID or title).
+2. Suggest new quests (with optional new tasks for those quests).
+3. Suggest standalone tasks (not belonging to any quest).
+
+For each new task, specify:
+- The quest it belongs to (by quest ID or title), or mark as standalone.
+
+Output a JSON object with this structure:
+{
+  "suggestedTasks": [
+    {
+      "title": "Task title",
+      "description": "Task description",
+      "quest_id": "existing quest ID",
+      "quest_title": "existing quest title",
+      "scheduled_for": "YYYY-MM-DD",
+      "deadline": "YYYY-MM-DD or null",
+      "priority": "high/medium/low",
+      "tags": ["tag1", "tag2"]
+    }
+    // ... more tasks
+  ],
+  "suggestedQuests": [
+    {
+      "title": "New Quest Title",
+      "tagline": "Short tagline",
+      "description": "Quest description",
+      "start_date": "YYYY-MM-DD",
+      "end_date": "YYYY-MM-DD",
+      "tasks": [
+        {
+          "title": "Task for new quest",
+          "description": "Task description",
+          "scheduled_for": "YYYY-MM-DD",
+          "deadline": "YYYY-MM-DD or null",
+          "priority": "high/medium/low",
+          "tags": ["tag1", "tag2"]
+        }
+        // ... more tasks for this new quest
+      ]
+    }
+    // ... more new quests
+  ]
+}
+
+IMPORTANT:
+- Only suggest tasks that are not already present in the existing quests/tasks.
+- Assign new tasks to the most relevant existing quest if possible.
+- If a task does not fit any existing quest, mark it as standalone.
+- Use the chat session and user context for inspiration.
+
+--- CHAT SESSION ---
+${formattedConversation}
+
+--- EXISTING QUESTS & TASKS ---
+${formattedQuests}
+
+IMPORTANT RULES:
+- Create Quests for significant, multi-step goals.
+- Create Tasks for specific, actionable items.
+- Assign tasks to "associatedTasks" ONLY IF they clearly belong to a NEWLY SUGGESTED Quest defined in the same response.
+- Tasks that seem independent or might relate to *existing* database quests go into "standaloneTasks".
+- Generate UNIQUE clientQuestId and clientTaskId for each item (e.g., use 'temp-quest-' + random string).
+- Ensure all dates are ${currentDate} or later.
+- Write content in your characteristic ${personality.name} voice.`;
+
+      console.log('Sending prompt to LLM');
+      console.log(prompt);
+      // Call LLM for suggestions
+      const response = await this.openai.chat.completions.create({
+        model: "deepseek-chat",
+        messages: [
+          { role: "system", content: prompt }
+        ],
+        temperature: 0.4,
+        max_tokens: 3500,
+        response_format: { type: "json_object" }
+      });
+
+      const responseText = response.choices[0].message?.content;
+      if (!responseText) {
+        throw new Error('Empty response from AI during chat history analysis');
+      }
+
+      const parsed = JSON.parse(responseText);
+      const timestamp = new Date().toISOString();
+      const sourceContent = formattedConversation;
+
+      // Process suggested quests (new quests)
+      const suggestedQuestsData = parsed.suggestedQuests || [];
+      for (const questData of suggestedQuestsData) {
+        const questSuggestion: QuestSuggestion = {
+          id: `quest-${timestamp}-${Math.random().toString(36).substring(2, 10)}`,
+          sourceContent,
+          timestamp,
+          type: 'quest',
+          title: questData.title,
+          tagline: questData.tagline,
+          description: questData.description,
+          status: 'Active',
+          start_date: questData.start_date,
+          end_date: questData.end_date,
+          is_main: false,
+          pendingTaskClientIds: []
+        };
+        globalSuggestionStore.addSuggestion(questSuggestion);
+        // If the quest has tasks, add them as well
+        if (Array.isArray(questData.tasks)) {
+          for (const taskData of questData.tasks) {
+            const taskSuggestion: TaskSuggestion = {
+              id: `task-${timestamp}-${Math.random().toString(36).substring(2, 10)}`,
+              sourceContent,
+              timestamp,
+              type: 'task',
+              title: taskData.title,
+              description: taskData.description,
+              scheduled_for: taskData.scheduled_for,
+              deadline: taskData.deadline,
+              location: taskData.location,
+              status: 'ToDo',
+              tags: taskData.tags || [],
+              priority: taskData.priority || 'medium',
+              subtasks: taskData.subtasks || undefined,
+              pendingQuestClientId: questSuggestion.id
+            };
+            globalSuggestionStore.addSuggestion(taskSuggestion);
+          }
+        }
+      }
+
+      // Process suggested tasks (for existing quests or standalone)
+      const suggestedTasksData = parsed.suggestedTasks || [];
+      for (const taskData of suggestedTasksData) {
+        // Try to match quest_id to an actual quest
+        let questId: number | undefined = undefined;
+        if (taskData.quest_id) {
+          // Try to match by ID
+          const match = allQuests.find(q => String(q.id) === String(taskData.quest_id));
+          if (match) questId = match.id;
+        } else if (taskData.quest_title) {
+          // Try to match by title
+          const match = allQuests.find(q => q.title.toLowerCase() === String(taskData.quest_title).toLowerCase());
+          if (match) questId = match.id;
+        }
+        const taskSuggestion: TaskSuggestion = {
+          id: `task-${timestamp}-${Math.random().toString(36).substring(2, 10)}`,
+          sourceContent,
+          timestamp,
+          type: 'task',
+          title: taskData.title,
+          description: taskData.description,
+          scheduled_for: taskData.scheduled_for,
+          deadline: taskData.deadline,
+          location: taskData.location,
+          status: 'ToDo',
+          tags: taskData.tags || [],
+          priority: taskData.priority || 'medium',
+          subtasks: taskData.subtasks || undefined,
+          quest_id: questId
+        };
+        // Deduplication/assignment logic (existing methods)
+        const similarityResult = await this.checkForDuplicatesBeforeShowing(taskSuggestion, userId);
+        if (similarityResult.isMatch && similarityResult.existingTask) {
+          if (similarityResult.isContinuation) {
+            const questContext = similarityResult.existingTask.quest_id ?
+              allQuests.find(q => q.id === similarityResult.existingTask?.quest_id) : undefined;
+            const enhancedSuggestion = await this.regenerateTaskWithContinuationContext(
+              { ...taskSuggestion, continuesFromTask: similarityResult.existingTask },
+              similarityResult.existingTask,
+              questContext
+            );
+            if (enhancedSuggestion) {
+              globalSuggestionStore.addSuggestion(enhancedSuggestion);
+            }
+          } else if (similarityResult.matchConfidence > 0.7) {
+            const editSuggestion = await this.convertToEditSuggestion(taskSuggestion, similarityResult.existingTask);
+            globalSuggestionStore.addSuggestion(editSuggestion);
+          } else {
+            // If questId is not set, try to find best quest
+            if (!questId) {
+              const bestQuestId = await this.findBestQuestForTask(taskSuggestion, userId);
+              taskSuggestion.quest_id = bestQuestId;
+            }
+            globalSuggestionStore.addSuggestion(taskSuggestion);
+          }
+        } else {
+          // If questId is not set, try to find best quest
+          if (!questId) {
+            const bestQuestId = await this.findBestQuestForTask(taskSuggestion, userId);
+            taskSuggestion.quest_id = bestQuestId;
+          }
+          globalSuggestionStore.addSuggestion(taskSuggestion);
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error in analyzeChatHistoryForSuggestions:', error);
+    } finally {
+      performanceLogger.endOperation('analyzeChatHistoryForSuggestions');
+    }
+  }
+
+
+  /**
    * Analyzes checkup content to generate task and quest suggestions
    * @param checkupContent The content of the checkup entry
    * @param userId The user's ID
@@ -1039,57 +1278,74 @@ IMPORTANT:
       const currentDate = new Date().toISOString().split('T')[0];
       const personalityType = await personalityService.getUserPersonality(userId);
       const personality = getPersonality(personalityType);
+      const allQuests = await fetchQuests(userId);
+      const formattedQuests = JSON.stringify(allQuests, null, 2);
 
       // Combined prompt to generate both quests and tasks from checkup content
       const prompt = `You are ${personality.name}. ${personality.description}
-Current date is: ${currentDate}
+Current date is: ${currentDate}. Your task is to analyze the Journal Entry and suggest new tasks and quests.
 
-Analyze this checkup entry to identify:
-1. Potential new **Quests** (larger chapters or arcs).
-2. **Tasks** that belong to those **new Quests**.
-3. Standalone **Tasks** that don't seem to fit a new Quest (they might fit existing ones later).
+You have access to:
+- The full Journal Entry (see below).
+- All existing quests and their tasks (see below).
 
-Checkup Entry Content:
-${checkupContent}
+Your job:
+1. Suggest new tasks for any existing quest (reference by quest ID or title).
+2. Suggest new quests (with optional new tasks for those quests).
+3. Suggest standalone tasks (not belonging to any quest).
 
-Generate a JSON object with this EXACT structure:
+For each new task, specify:
+- The quest it belongs to (by quest ID or title), or mark as standalone.
+
+Output a JSON object with this structure:
 {
+  "suggestedTasks": [
+    {
+      "title": "Task title",
+      "description": "Task description",
+      "quest_id": "existing quest ID",
+      "quest_title": "existing quest title",
+      "scheduled_for": "YYYY-MM-DD",
+      "deadline": "YYYY-MM-DD or null",
+      "priority": "high/medium/low",
+      "tags": ["tag1", "tag2"]
+    }
+    // ... more tasks
+  ],
   "suggestedQuests": [
     {
-      "clientQuestId": "temp-quest-UNIQUE_ID_1", // Generate a unique temporary ID
-      "title": "Concise Quest Title",
-      "tagline": "Short tagline for the Quest",
-      "description": "Detailed Quest description",
-      "start_date": "YYYY-MM-DD (optional, >= ${currentDate})",
-      "end_date": "YYYY-MM-DD (optional, >= start_date)",
-      "associatedTasks": [ // Tasks specifically identified as part of THIS NEW quest
+      "title": "New Quest Title",
+      "tagline": "Short tagline",
+      "description": "Quest description",
+      "start_date": "YYYY-MM-DD",
+      "end_date": "YYYY-MM-DD",
+      "tasks": [
         {
-          "clientTaskId": "temp-task-UNIQUE_ID_A", // Generate a unique temporary ID
-          "title": "Task Title",
+          "title": "Task for new quest",
           "description": "Task description",
-          "scheduled_for": "YYYY-MM-DD (>= ${currentDate})",
-          "deadline": "YYYY-MM-DD (optional, >= scheduled_for)",
+          "scheduled_for": "YYYY-MM-DD",
+          "deadline": "YYYY-MM-DD or null",
           "priority": "high/medium/low",
-          "tags": ["relevant", "tags"]
+          "tags": ["tag1", "tag2"]
         }
-        // ... more tasks for this quest
+        // ... more tasks for this new quest
       ]
     }
-    // ... more suggested quests
-  ],
-  "standaloneTasks": [ // Tasks identified that DON'T belong to a NEW quest above
-    {
-      "clientTaskId": "temp-task-UNIQUE_ID_Z", // Generate a unique temporary ID
-      "title": "Standalone Task Title",
-      "description": "Task description",
-      "scheduled_for": "YYYY-MM-DD (>= ${currentDate})",
-      "deadline": "YYYY-MM-DD (optional, >= scheduled_for)",
-      "priority": "high/medium/low",
-      "tags": ["relevant", "tags"]
-    }
-    // ... more standalone tasks
+    // ... more new quests
   ]
 }
+
+IMPORTANT:
+- Only suggest tasks that are not already present in the existing quests/tasks.
+- Assign new tasks to the most relevant existing quest if possible.
+- If a task does not fit any existing quest, mark it as standalone.
+- Use the Journal Entry and user context for inspiration.
+
+--- Journal Entry ---
+${checkupContent}
+
+--- EXISTING QUESTS & TASKS ---
+${formattedQuests}
 
 IMPORTANT RULES:
 - Create Quests for significant, multi-step goals.
@@ -1098,9 +1354,10 @@ IMPORTANT RULES:
 - Tasks that seem independent or might relate to *existing* database quests go into "standaloneTasks".
 - Generate UNIQUE clientQuestId and clientTaskId for each item (e.g., use 'temp-quest-' + random string).
 - Ensure all dates are ${currentDate} or later.
-- Write descriptions in your characteristic ${personality.name} voice.`;
+- Write content in your characteristic ${personality.name} voice.`;
 
       console.log('🚀 [SuggestionAgent] Sending analysis prompt to AI...');
+      console.log(prompt);
       const response = await this.openai.chat.completions.create({
         model: "deepseek-chat", 
         messages: [{ role: "system", content: prompt }],
@@ -1252,4 +1509,5 @@ IMPORTANT RULES:
       performanceLogger.endOperation('analyzeCheckupForSuggestions');
     }
   }
+
 }
